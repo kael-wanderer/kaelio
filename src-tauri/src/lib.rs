@@ -1981,6 +1981,22 @@ fn read_snapshot(snap_path: String) -> Result<String, String> {
     Ok(content.to_string())
 }
 
+#[tauri::command]
+fn save_session(data: String) -> Result<(), String> {
+    let path = kaelio_home()?.join("session.json");
+    fs::write(&path, &data).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn load_session() -> Result<String, String> {
+    let path = kaelio_home()?.join("session.json");
+    if path.exists() {
+        fs::read_to_string(&path).map_err(|e| e.to_string())
+    } else {
+        Ok("{}".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     raise_file_descriptor_limit();
@@ -2139,7 +2155,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_file, save_binary_base64, save_file, word_count, list_directory, get_home_dir, get_initial_file, export_pdf, export_docx, create_file, create_directory, delete_entry, rename_entry, list_files_recursive, save_recovery, get_recovery_files, read_recovery_content, delete_recovery, duplicate_entry, reveal_in_finder, export_html, load_custom_css, watch_file, unwatch_file, watch_folder, unwatch_folder, search_in_files, create_window, git_repo_info, git_status, git_diff_file, git_log, git_commit, git_push, git_pull, git_auto_sync, git_init, git_setup_sync, git_check_auth, git_discard_file, git_stage_file, git_file_at_commit, git_restore_file, git_conflict_info, git_resolve_conflict, save_snapshot, list_snapshots, read_snapshot])
+        .invoke_handler(tauri::generate_handler![read_file, save_binary_base64, save_file, word_count, list_directory, get_home_dir, get_initial_file, export_pdf, export_docx, create_file, create_directory, delete_entry, rename_entry, list_files_recursive, save_recovery, get_recovery_files, read_recovery_content, delete_recovery, duplicate_entry, reveal_in_finder, export_html, load_custom_css, watch_file, unwatch_file, watch_folder, unwatch_folder, search_in_files, create_window, git_repo_info, git_status, git_diff_file, git_log, git_commit, git_push, git_pull, git_auto_sync, git_init, git_setup_sync, git_check_auth, git_discard_file, git_stage_file, git_file_at_commit, git_restore_file, git_conflict_info, git_resolve_conflict, save_snapshot, list_snapshots, read_snapshot, save_session, load_session])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, _event| {

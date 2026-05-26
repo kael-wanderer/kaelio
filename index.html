@@ -216,7 +216,16 @@
           <div id="editor-pane"></div>
         </div>
         <div id="divider"></div>
-        <div id="preview-pane"></div>
+        <div id="preview-pane-wrapper">
+          <div id="preview-search-bar" class="hidden">
+            <input id="preview-search-input" type="text" placeholder="Search in preview…" spellcheck="false" />
+            <span id="preview-search-count"></span>
+            <button id="preview-search-prev" title="Previous match">&#x25B2;</button>
+            <button id="preview-search-next" title="Next match">&#x25BC;</button>
+            <button id="preview-search-close" title="Close">&times;</button>
+          </div>
+          <div id="preview-pane"></div>
+        </div>
       </div>
       <!-- Tab context menu -->
       <div id="tab-context-menu" class="hidden">

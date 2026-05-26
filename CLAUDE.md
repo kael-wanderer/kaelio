@@ -29,10 +29,10 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 - Rendering pipeline: markdown-it → callouts → checklists → KaTeX (math) → Mermaid (diagrams) → YAML frontmatter extraction
 - Git integration: state management (gitStatusMap, gitRepoInfo, autoSyncEnabled), non-blocking sync via fire-and-forget promises
 - 300ms debounce on content change before re-rendering preview
-- State: `currentFilePath`, `editor` (CM6 instance), `zoomLevel` — persisted in localStorage
+- State: `currentFilePath`, `editor` (CM6 instance), `zoomLevel` — persisted in localStorage; session data (tabs, scroll, cursor) persisted to `~/.kaelio/session.json` via Rust with localStorage as sync backup
 - Theme: Catppuccin Mocha dark palette via CSS variables (`--bg: #1e1e2e`, `--accent: #89b4fa`, etc.)
 - View modes: split | editor-only | preview-only
-- Key bindings: Cmd+O (open), Cmd+S (save), Cmd+P (toggle preview), Cmd+E (read mode), Cmd+B (sidebar)
+- Key bindings: Cmd+O (open), Cmd+S (save), Cmd+P (toggle preview), Cmd+E (read mode), Cmd+B (sidebar), Cmd+F (search — editor or preview depending on view mode)
 
 ### Backend (`src-tauri/`)
 - `src/lib.rs` (~2150 lines): all Tauri commands
@@ -40,6 +40,7 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 - Export: `export_pdf` (Pandoc + task_lists), `export_html` (custom renderer with callout/tag CSS), `export_docx`
 - Git commands (git2 crate): `git_repo_info`, `git_status`, `git_diff_file`, `git_log`, `git_commit`, `git_push`, `git_pull`, `git_auto_sync`, `git_setup_sync`, `git_check_auth`, `git_init`, `git_discard_file`, `git_stage_file`, `git_file_at_commit`, `git_restore_file`, `git_conflict_info`, `git_resolve_conflict`
 - Snapshot commands: `save_snapshot`, `list_snapshots`, `read_snapshot`
+- Session commands: `save_session`, `load_session` (read/write `~/.kaelio/session.json`)
 - Credential handling: SSH agent → SSH key files → system `git credential fill` (HTTPS)
 - Plugins: dialog, process, opener, updater
 

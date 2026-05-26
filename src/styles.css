@@ -702,6 +702,14 @@ body {
   background: var(--accent);
 }
 
+#preview-pane-wrapper {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--preview-bg);
+}
+
 #preview-pane {
   flex: 1;
   overflow: auto;
@@ -2619,6 +2627,72 @@ body {
 
 .cm-searchMatch-selected {
   background: rgba(137, 180, 250, 0.5) !important;
+}
+
+/* ── Preview search bar ── */
+
+#preview-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+#preview-search-bar.hidden {
+  display: none;
+}
+
+#preview-search-input {
+  flex: 1;
+  max-width: 280px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  outline: none;
+}
+
+#preview-search-input:focus {
+  border-color: var(--accent);
+}
+
+#preview-search-count {
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 50px;
+  text-align: center;
+}
+
+#preview-search-bar button {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+}
+
+#preview-search-bar button:hover {
+  background: var(--hover-bg);
+}
+
+mark.preview-search-match {
+  background: rgba(137, 180, 250, 0.25);
+  color: inherit;
+  border-radius: 2px;
+}
+
+mark.preview-search-match.active {
+  background: rgba(137, 180, 250, 0.55);
+  outline: 1px solid var(--accent);
 }
 
 /* ── Wikilinks ── */

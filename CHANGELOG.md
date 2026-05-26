@@ -6,6 +6,12 @@
 
 - Editor ↔ preview scroll sync: new toolbar toggle (⇅) keeps both panes aligned to the same source line when scrolling either side.
 - Click-to-cursor: clicking any heading, paragraph, list item, code block, callout, or table in the preview moves the editor cursor to the matching source line and scrolls it into view.
+- Preview search: Cmd+F in reading view (preview-only mode) opens a search bar with match highlighting, match count, and next/prev navigation (Enter / Shift+Enter).
+
+### Session Restore
+
+- Scroll position and cursor offset are now preserved across app restarts for all open tabs.
+- Session data (open tabs, active tab, scroll, cursor, folder) is persisted to `~/.kaelio/session.json` on disk, surviving app reinstalls and WebView storage resets. localStorage is used as a synchronous backup for reliability on close.
 
 ## 0.9.0
 

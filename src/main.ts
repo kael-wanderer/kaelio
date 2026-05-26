@@ -70,7 +70,15 @@ function getActiveTab(): Tab | null {
 
 let currentFilePath: string | null = null;
 let restoreLastSession = localStorage.getItem("kaelio-restore-session") !== "false";
-let currentFolderPath: string | null = restoreLastSession ? localStorage.getItem("kaelio-current-folder") : null;
+let currentFolderPath: string | null = null;
+
+interface SessionData {
+  openTabs?: { filePath: string | null; isActive: boolean; scrollTop?: number; previewScrollTop?: number; cursorOffset?: number }[];
+  lastFile?: string | null;
+  currentFolder?: string | null;
+  savedAt?: number;
+}
+let sessionData: SessionData = {};
 let editor: EditorView;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let zoomLevel = Number(localStorage.getItem("kaelio-zoom-level")) || 100;
@@ -1039,7 +1047,8 @@ function renderCsvPreview(previewPane: HTMLElement, content: string) {
 
 async function updatePreview(content: string) {
   const previewPane = $("#preview-pane");
-  if (!previewPane || previewPane.style.display === "none") return;
+  const previewWrapper = $("#preview-pane-wrapper");
+  if (!previewPane || (previewWrapper && previewWrapper.style.display === "none")) return;
 
   if (currentFilePath && (isImagePath(currentFilePath) || isSvgPath(currentFilePath))) {
     renderImagePreview(previewPane, currentFilePath);
@@ -1126,6 +1135,18 @@ async function updatePreview(content: string) {
       }
     });
   });
+  reapplyPreviewSearch();
+}
+
+function reapplyPreviewSearch() {
+  const bar = document.getElementById("preview-search-bar");
+  const input = document.getElementById("preview-search-input") as HTMLInputElement | null;
+  if (!bar || bar.classList.contains("hidden") || !input || !input.value) {
+    previewSearchMatches = [];
+    previewSearchIndex = -1;
+    return;
+  }
+  performPreviewSearch(input.value);
 }
 
 // --- Editor ↔ Preview scroll sync ---
@@ -1146,7 +1167,8 @@ function getPreviewLineElements(previewPane: HTMLElement): { line: number; el: H
 
 function syncPreviewToEditor() {
   const previewPane = document.getElementById("preview-pane");
-  if (!previewPane || !editor || previewPane.style.display === "none") return;
+  const previewWrapper = document.getElementById("preview-pane-wrapper");
+  if (!previewPane || !editor || (previewWrapper && previewWrapper.style.display === "none")) return;
   const items = getPreviewLineElements(previewPane);
   if (items.length === 0) return;
   const topY = editor.scrollDOM.getBoundingClientRect().top + 1;
@@ -1358,8 +1380,7 @@ function setFilename(path: string | null) {
   currentFilePath = path;
   const el = document.getElementById("filename");
   if (el) el.textContent = path ? path.split("/").pop()! : "No file open";
-  if (path) localStorage.setItem("kaelio-last-file", path);
-  else localStorage.removeItem("kaelio-last-file");
+  sessionData.lastFile = path;
   const tab = getActiveTab();
   if (tab) {
     tab.filePath = path;
@@ -2264,7 +2285,7 @@ function onContentChange(view: EditorView) {
 function initDividerDrag() {
   const divider = $("#divider");
   const editorWrapper = $("#editor-wrapper");
-  const previewPane = $("#preview-pane");
+  const previewPane = $("#preview-pane-wrapper");
   const container = $("#editor-container");
   if (!divider || !editorWrapper || !previewPane || !container) return;
 
@@ -2340,10 +2361,10 @@ type ViewMode = "split" | "editor" | "preview";
 let currentViewMode: ViewMode = (localStorage.getItem("kaelio-view-mode") as ViewMode) || "split";
 
 function setViewMode(mode: ViewMode) {
-  const previewPane = $("#preview-pane");
+  const previewWrapper = $("#preview-pane-wrapper");
   const divider = $("#divider");
   const editorWrapper = $("#editor-wrapper");
-  if (!previewPane || !divider || !editorWrapper) return;
+  if (!previewWrapper || !divider || !editorWrapper) return;
 
   currentViewMode = mode;
   localStorage.setItem("kaelio-view-mode", mode);
@@ -2352,19 +2373,20 @@ function setViewMode(mode: ViewMode) {
     editorWrapper.style.display = "";
     editorWrapper.style.flexBasis = "";
     divider.style.display = "";
-    previewPane.style.display = "";
-    previewPane.style.flexBasis = "";
+    previewWrapper.style.display = "";
+    previewWrapper.style.flexBasis = "";
     updatePreview(editor.state.doc.toString());
   } else if (mode === "editor") {
     editorWrapper.style.display = "";
     editorWrapper.style.flexBasis = "100%";
     divider.style.display = "none";
-    previewPane.style.display = "none";
+    previewWrapper.style.display = "none";
+    closePreviewSearch();
   } else if (mode === "preview") {
     editorWrapper.style.display = "none";
     divider.style.display = "none";
-    previewPane.style.display = "";
-    previewPane.style.flexBasis = "100%";
+    previewWrapper.style.display = "";
+    previewWrapper.style.flexBasis = "100%";
     updatePreview(editor.state.doc.toString());
   }
   updateActivityBarUI();
@@ -2763,7 +2785,11 @@ async function openFolder(folderPath?: string) {
     path = selected as string;
   }
   currentFolderPath = path;
-  localStorage.setItem("kaelio-current-folder", path);
+  sessionData.currentFolder = path;
+  sessionData.savedAt = Date.now();
+  const json = JSON.stringify(sessionData);
+  localStorage.setItem("kaelio-session", json);
+  invoke("save_session", { data: json }).catch(() => {});
   expandedDirs.clear();
   const sidebar = document.getElementById("sidebar");
   if (sidebar?.classList.contains("hidden")) {
@@ -3203,6 +3229,102 @@ function handleFileSearchKey(e: KeyboardEvent) {
   }
 }
 
+// --- Preview search (Cmd+F in preview pane) ---
+
+let previewSearchMatches: HTMLElement[] = [];
+let previewSearchIndex = -1;
+
+function openPreviewSearch() {
+  const bar = document.getElementById("preview-search-bar");
+  if (!bar) return;
+  bar.classList.remove("hidden");
+  const input = document.getElementById("preview-search-input") as HTMLInputElement;
+  input.value = "";
+  document.getElementById("preview-search-count")!.textContent = "";
+  clearPreviewSearchHighlights();
+  input.focus();
+}
+
+function closePreviewSearch() {
+  const bar = document.getElementById("preview-search-bar");
+  if (!bar) return;
+  bar.classList.add("hidden");
+  clearPreviewSearchHighlights();
+}
+
+function clearPreviewSearchHighlights() {
+  const pane = document.getElementById("preview-pane");
+  if (!pane) return;
+  pane.querySelectorAll("mark.preview-search-match").forEach(m => {
+    const parent = m.parentNode!;
+    parent.replaceChild(document.createTextNode(m.textContent || ""), m);
+    parent.normalize();
+  });
+  previewSearchMatches = [];
+  previewSearchIndex = -1;
+}
+
+function performPreviewSearch(query: string) {
+  clearPreviewSearchHighlights();
+  const countEl = document.getElementById("preview-search-count")!;
+  if (!query) { countEl.textContent = ""; return; }
+
+  const pane = document.getElementById("preview-pane");
+  if (!pane) return;
+
+  const lowerQuery = query.toLowerCase();
+  const walker = document.createTreeWalker(pane, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+
+  for (const node of textNodes) {
+    const text = node.textContent || "";
+    const lower = text.toLowerCase();
+    let idx = lower.indexOf(lowerQuery);
+    if (idx === -1) continue;
+
+    const parts: (string | HTMLElement)[] = [];
+    let last = 0;
+    while (idx !== -1) {
+      if (idx > last) parts.push(text.slice(last, idx));
+      const mark = document.createElement("mark");
+      mark.className = "preview-search-match";
+      mark.textContent = text.slice(idx, idx + query.length);
+      parts.push(mark);
+      last = idx + query.length;
+      idx = lower.indexOf(lowerQuery, last);
+    }
+    if (last < text.length) parts.push(text.slice(last));
+
+    const frag = document.createDocumentFragment();
+    for (const p of parts) {
+      frag.appendChild(typeof p === "string" ? document.createTextNode(p) : p);
+    }
+    node.parentNode!.replaceChild(frag, node);
+  }
+
+  previewSearchMatches = Array.from(pane.querySelectorAll("mark.preview-search-match"));
+  if (previewSearchMatches.length > 0) {
+    previewSearchIndex = 0;
+    previewSearchMatches[0].classList.add("active");
+    previewSearchMatches[0].scrollIntoView({ block: "center" });
+    countEl.textContent = `1 / ${previewSearchMatches.length}`;
+  } else {
+    previewSearchIndex = -1;
+    countEl.textContent = "No results";
+  }
+}
+
+function navigatePreviewSearch(delta: number) {
+  if (previewSearchMatches.length === 0) return;
+  previewSearchMatches[previewSearchIndex]?.classList.remove("active");
+  previewSearchIndex = (previewSearchIndex + delta + previewSearchMatches.length) % previewSearchMatches.length;
+  previewSearchMatches[previewSearchIndex].classList.add("active");
+  previewSearchMatches[previewSearchIndex].scrollIntoView({ block: "center" });
+  document.getElementById("preview-search-count")!.textContent =
+    `${previewSearchIndex + 1} / ${previewSearchMatches.length}`;
+}
+
 // --- Content search (sidebar) ---
 
 interface SearchResult {
@@ -3440,7 +3562,7 @@ function switchToTab(tabId: string) {
   // Update UI
   const el = document.getElementById("filename");
   if (el) el.textContent = newTab.filePath ? newTab.filePath.split("/").pop()! : "No file open";
-  if (newTab.filePath) localStorage.setItem("kaelio-last-file", newTab.filePath);
+  if (newTab.filePath) sessionData.lastFile = newTab.filePath;
 
   const indicator = document.getElementById("modified-indicator");
   if (indicator) indicator.classList.toggle("hidden", !newTab.isModified);
@@ -3557,7 +3679,7 @@ async function closeTab(tabId: string) {
 
     const el = document.getElementById("filename");
     if (el) el.textContent = newTab.filePath ? newTab.filePath.split("/").pop()! : "No file open";
-    if (newTab.filePath) localStorage.setItem("kaelio-last-file", newTab.filePath);
+    if (newTab.filePath) sessionData.lastFile = newTab.filePath;
 
     const indicator = document.getElementById("modified-indicator");
     if (indicator) indicator.classList.toggle("hidden", !newTab.isModified);
@@ -3620,9 +3742,26 @@ async function closeAllTabs() {
 
 function persistOpenTabs() {
   if (!isMainWindow) return;
-  localStorage.setItem("kaelio-open-tabs", JSON.stringify(
-    tabs.map(t => ({ filePath: t.filePath, isActive: t.id === activeTabId }))
-  ));
+  const active = getActiveTab();
+  if (active && editor) {
+    active.scrollTop = editor.scrollDOM.scrollTop;
+    const pp = document.getElementById("preview-pane");
+    if (pp) active.previewScrollTop = pp.scrollTop;
+  }
+  const tabData = tabs.map(t => ({
+    filePath: t.filePath,
+    isActive: t.id === activeTabId,
+    scrollTop: t.scrollTop,
+    previewScrollTop: t.previewScrollTop,
+    cursorOffset: t.editorState.selection.main.head,
+  }));
+  sessionData.openTabs = tabData;
+  sessionData.currentFolder = currentFolderPath;
+  sessionData.lastFile = currentFilePath;
+  sessionData.savedAt = Date.now();
+  const json = JSON.stringify(sessionData);
+  localStorage.setItem("kaelio-session", json);
+  invoke("save_session", { data: json }).catch(() => {});
 }
 
 // --- Selection count (#6) ---
@@ -4682,9 +4821,40 @@ function toggleShortcutsModal() {
 
 // --- Init ---
 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   const editorPane = $("#editor-pane");
   if (!editorPane) return;
+
+  // Load session — compare disk (survives reinstalls) vs localStorage (synchronous, always fresh)
+  let diskSession: SessionData = {};
+  let lsSession: SessionData = {};
+  try {
+    const raw = await invoke<string>("load_session");
+    diskSession = JSON.parse(raw) as SessionData;
+  } catch { /* first launch or corrupt file */ }
+  try {
+    const lsRaw = localStorage.getItem("kaelio-session");
+    if (lsRaw) lsSession = JSON.parse(lsRaw) as SessionData;
+  } catch { /* ignore */ }
+
+  // Use whichever source was saved most recently
+  if ((lsSession.savedAt ?? 0) > (diskSession.savedAt ?? 0) && lsSession.openTabs) {
+    sessionData = lsSession;
+  } else if (diskSession.openTabs) {
+    sessionData = diskSession;
+  } else {
+    // Legacy migration from old localStorage keys (one-time)
+    try {
+      const lsTabs = localStorage.getItem("kaelio-open-tabs");
+      if (lsTabs) sessionData.openTabs = JSON.parse(lsTabs);
+      sessionData.lastFile = localStorage.getItem("kaelio-last-file") || undefined;
+      sessionData.currentFolder = localStorage.getItem("kaelio-current-folder") || undefined;
+    } catch { /* ignore */ }
+  }
+
+  if (restoreLastSession && sessionData.currentFolder) {
+    currentFolderPath = sessionData.currentFolder;
+  }
 
   // Apply theme before creating editor
   document.documentElement.setAttribute("data-theme", currentThemeMode);
@@ -4730,6 +4900,37 @@ window.addEventListener("DOMContentLoaded", () => {
   }
   document.getElementById("btn-sync-scroll")?.addEventListener("click", toggleSyncScroll);
   updateSyncScrollButton();
+
+  // Preview search
+  document.getElementById("preview-search-close")?.addEventListener("click", closePreviewSearch);
+  document.getElementById("preview-search-prev")?.addEventListener("click", () => navigatePreviewSearch(-1));
+  document.getElementById("preview-search-next")?.addEventListener("click", () => navigatePreviewSearch(1));
+  const previewSearchInput = document.getElementById("preview-search-input") as HTMLInputElement | null;
+  if (previewSearchInput) {
+    let previewSearchDebounce: ReturnType<typeof setTimeout>;
+    previewSearchInput.addEventListener("input", () => {
+      clearTimeout(previewSearchDebounce);
+      previewSearchDebounce = setTimeout(() => performPreviewSearch(previewSearchInput.value), 150);
+    });
+    previewSearchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { e.preventDefault(); closePreviewSearch(); }
+      else if (e.key === "Enter" && e.shiftKey) { e.preventDefault(); navigatePreviewSearch(-1); }
+      else if (e.key === "Enter") { e.preventDefault(); navigatePreviewSearch(1); }
+    });
+  }
+
+  // Intercept Cmd+F for preview search when preview is visible
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "f" && !e.shiftKey && !e.altKey) {
+      const previewWrapper = document.getElementById("preview-pane-wrapper");
+      if (!previewWrapper || previewWrapper.style.display === "none") return;
+      if (currentViewMode === "preview") {
+        e.preventDefault();
+        e.stopPropagation();
+        openPreviewSearch();
+      }
+    }
+  }, true);
 
   // Dropdown menus
   document.querySelectorAll(".toolbar-dropdown").forEach(wrapper => {
@@ -5072,39 +5273,52 @@ window.addEventListener("DOMContentLoaded", () => {
     if (path) {
       await openFile(path);
     } else if (isMainWindow && restoreLastSession) {
-      // Restore tabs from previous session
+      // Restore tabs from previous session (from disk)
       try {
-        const saved = JSON.parse(localStorage.getItem("kaelio-open-tabs") || "[]") as { filePath: string | null; isActive: boolean }[];
-        const fileTabs = saved.filter(t => t.filePath);
+        const fileTabs = (sessionData.openTabs || []).filter(t => t.filePath);
         if (fileTabs.length > 0) {
-          let activeFilePath: string | null = null;
+          let activeSaved: typeof fileTabs[number] | null = null;
           for (const t of fileTabs) {
-            if (t.isActive) activeFilePath = t.filePath;
+            if (t.isActive) activeSaved = t;
           }
-          // Open first tab (replaces the initial sample tab)
-          await openFile(fileTabs[0].filePath!);
-          // Remove the initial sample tab
+          await openFile(fileTabs[0].filePath!, true);
           const sampleTab = tabs.find(t => !t.filePath);
           if (sampleTab) {
             tabs = tabs.filter(t => t.id !== sampleTab.id);
           }
-          // Open remaining tabs
           for (let i = 1; i < fileTabs.length; i++) {
-            await openFile(fileTabs[i].filePath!);
+            await openFile(fileTabs[i].filePath!, true);
           }
-          // Switch to the previously active tab
-          if (activeFilePath) {
-            const active = tabs.find(t => t.filePath === activeFilePath);
-            if (active) switchToTab(active.id);
+          for (const st of fileTabs) {
+            const tab = tabs.find(t => t.filePath === st.filePath);
+            if (!tab) continue;
+            tab.scrollTop = st.scrollTop ?? 0;
+            tab.previewScrollTop = st.previewScrollTop ?? 0;
+            if (st.cursorOffset !== undefined && st.cursorOffset > 0) {
+              const docLen = tab.editorState.doc.length;
+              const pos = Math.min(st.cursorOffset, docLen);
+              tab.editorState = tab.editorState.update({
+                selection: { anchor: pos },
+              }).state;
+            }
+          }
+          if (activeSaved?.filePath) {
+            const active = tabs.find(t => t.filePath === activeSaved!.filePath);
+            if (active) {
+              switchToTab(active.id);
+              requestAnimationFrame(() => {
+                editor.scrollDOM.scrollTop = active.scrollTop;
+                const pp = document.getElementById("preview-pane");
+                if (pp) pp.scrollTop = active.previewScrollTop;
+              });
+            }
           }
           renderTabs();
-        } else {
-          const lastFile = localStorage.getItem("kaelio-last-file");
-          if (lastFile) openFile(lastFile);
+        } else if (sessionData.lastFile) {
+          openFile(sessionData.lastFile);
         }
       } catch {
-        const lastFile = localStorage.getItem("kaelio-last-file");
-        if (lastFile) openFile(lastFile);
+        if (sessionData.lastFile) openFile(sessionData.lastFile);
       }
     }
   });
@@ -5237,4 +5451,11 @@ window.addEventListener("DOMContentLoaded", () => {
   applyTypography();
   applyExplorerTypography();
   updateActivityBarUI();
+
+  // Persist tab state to disk on close, app switch, and periodically
+  window.addEventListener("beforeunload", () => persistOpenTabs());
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) persistOpenTabs();
+  });
+  setInterval(() => persistOpenTabs(), 30000);
 });
