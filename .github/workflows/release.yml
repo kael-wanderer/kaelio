@@ -1,0 +1,162 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: universal-apple-darwin
+            label: macOS-universal
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            label: Windows-x64
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            label: Linux-x64
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target == 'universal-apple-darwin' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.target }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - run: npm ci
+
+      - name: Build Tauri app
+        run: npx tauri build --target ${{ matrix.target }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.label }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all bundles
+        uses: actions/download-artifact@v4
+        with:
+          path: bundles
+          merge-multiple: true
+
+      - name: List all files
+        run: find bundles -type f | sort
+
+      - name: Collect release files and generate latest.json
+        run: |
+          mkdir -p release-files
+          VERSION="${GITHUB_REF_NAME#v}"
+          REPO="${GITHUB_REPOSITORY}"
+          BASE="https://github.com/${REPO}/releases/download/v${VERSION}"
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Copy installers
+          find bundles -name "*.dmg" -exec cp {} release-files/ \;
+          find bundles -name "*.deb" -exec cp {} release-files/ \;
+          find bundles -name "*.rpm" -exec cp {} release-files/ \;
+          find bundles -name "*.AppImage" ! -name "*.sig" -exec cp {} release-files/ \;
+          find bundles -name "*-setup.exe" -exec cp {} release-files/ \;
+          find bundles -name "*.msi" ! -name "*.sig" ! -name "*.zip*" -exec cp {} release-files/ \;
+
+          # Copy updater bundles + sigs
+          find bundles -name "*.app.tar.gz" -exec cp {} release-files/ \;
+          find bundles -name "*.app.tar.gz.sig" -exec cp {} release-files/ \;
+          find bundles -name "*.AppImage.sig" -exec cp {} release-files/ \;
+          find bundles -name "*-setup.exe.sig" -exec cp {} release-files/ \;
+
+          echo "=== Release files ==="
+          ls -la release-files/
+
+          # Read signatures
+          cd release-files
+          MAC_SIG=$(cat *.app.tar.gz.sig 2>/dev/null || echo "")
+          LINUX_SIG=$(cat *.AppImage.sig 2>/dev/null || echo "")
+          WIN_SIG=$(cat *-setup.exe.sig 2>/dev/null || echo "")
+
+          MAC_FILE=$(ls *.app.tar.gz 2>/dev/null | grep -v '.sig' | head -1 || echo "")
+          LINUX_FILE=$(ls *.AppImage 2>/dev/null | grep -v '.sig' | head -1 || echo "")
+          WIN_FILE=$(ls *-setup.exe 2>/dev/null | grep -v '.sig' | head -1 || echo "")
+
+          echo "MAC_SIG=${MAC_SIG}"
+          echo "MAC_FILE=${MAC_FILE}"
+          echo "LINUX_SIG=${LINUX_SIG}"
+          echo "LINUX_FILE=${LINUX_FILE}"
+          echo "WIN_SIG=${WIN_SIG}"
+          echo "WIN_FILE=${WIN_FILE}"
+
+          cat > latest.json << ENDJSON
+          {
+            "version": "${VERSION}",
+            "notes": "Kaelio v${VERSION}",
+            "pub_date": "${DATE}",
+            "platforms": {
+              "darwin-aarch64": {
+                "signature": "${MAC_SIG}",
+                "url": "${BASE}/${MAC_FILE}"
+              },
+              "darwin-x86_64": {
+                "signature": "${MAC_SIG}",
+                "url": "${BASE}/${MAC_FILE}"
+              },
+              "linux-x86_64": {
+                "signature": "${LINUX_SIG}",
+                "url": "${BASE}/${LINUX_FILE}"
+              },
+              "windows-x86_64": {
+                "signature": "${WIN_SIG}",
+                "url": "${BASE}/${WIN_FILE}"
+              }
+            }
+          }
+          ENDJSON
+
+          echo "=== latest.json ==="
+          cat latest.json
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Extract release notes for this version from CHANGELOG.md
+          NOTES=$(awk "/^## ${VERSION}/{found=1; next} /^## [0-9]/{if(found) exit} found{print}" CHANGELOG.md 2>/dev/null | sed '/^$/N;/^\n$/d')
+          if [ -z "$NOTES" ]; then
+            NOTES="Download the installer for your platform below."
+          fi
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Kaelio v${VERSION}" \
+            --notes "$NOTES" \
+            release-files/*

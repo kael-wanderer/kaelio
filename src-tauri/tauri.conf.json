@@ -1,0 +1,97 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Kaelio",
+  "version": "0.9.1",
+  "identifier": "com.kael.kaelio",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Kaelio",
+        "width": 1200,
+        "height": 800,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/kael-wanderer/kaelio/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJGMTlFNDQ1OTg4RUY0MzYKUldRMjlJNllSZVFadjZlZEREM25KSm5YcDhRNnVTR3ZkUjFtcno2dVJaM0pVKzVJNVhmV2FXNmIK"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": false,
+    "externalBin": [
+      "binaries/pandoc",
+      "binaries/typst"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown"],
+        "mimeType": "text/markdown",
+        "description": "Markdown File"
+      },
+      {
+        "ext": ["yaml", "yml"],
+        "mimeType": "text/yaml",
+        "description": "YAML File"
+      },
+      {
+        "ext": ["txt"],
+        "mimeType": "text/plain",
+        "description": "Text File"
+      },
+      {
+        "ext": ["json"],
+        "mimeType": "application/json",
+        "description": "JSON File"
+      },
+      {
+        "ext": ["csv"],
+        "mimeType": "text/csv",
+        "description": "CSV File"
+      },
+      {
+        "ext": ["html", "htm"],
+        "mimeType": "text/html",
+        "description": "HTML File"
+      },
+      {
+        "ext": ["svg"],
+        "mimeType": "image/svg+xml",
+        "description": "SVG File"
+      },
+      {
+        "ext": ["png", "jpg", "jpeg", "gif", "webp"],
+        "mimeType": "image/*",
+        "description": "Image File"
+      }
+    ]
+  }
+}

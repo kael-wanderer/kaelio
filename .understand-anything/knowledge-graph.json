@@ -1,0 +1,2350 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "kaelio",
+    "languages": [
+      "typescript",
+      "rust",
+      "css",
+      "html",
+      "json",
+      "toml",
+      "yaml",
+      "markdown"
+    ],
+    "frameworks": [
+      "GitHub Actions",
+      "Serde",
+      "Tauri",
+      "Vite"
+    ],
+    "description": "Kaelio is a fast, lightweight desktop Markdown editor and project file reader built with Tauri 2, Rust, and vanilla TypeScript.",
+    "analyzedAt": "2026-05-23T04:00:04.406Z",
+    "gitCommitHash": "c1d0ada4160f30586f65ebb0b9e413ad9d750176"
+  },
+  "nodes": [
+    {
+      "id": "file:src/main.ts",
+      "type": "file",
+      "name": "main.ts",
+      "filePath": "src/main.ts",
+      "summary": "Monolithic frontend application (~5200 lines) implementing the entire Kaelio UI: CodeMirror 6 editor, split preview with markdown/KaTeX/Mermaid rendering, file and folder operations, Git integration, export pipeline, theme/typography system, tab management, and command palette.",
+      "tags": [
+        "entry-point",
+        "editor",
+        "ui-layer",
+        "monolithic"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:src/styles.css",
+      "type": "file",
+      "name": "styles.css",
+      "filePath": "src/styles.css",
+      "summary": "Complete CSS stylesheet (~2700 lines) defining the Kaelio UI appearance including layout, toolbar, sidebar, editor, preview, modals, themes, and responsive breakpoints.",
+      "tags": [
+        "stylesheet",
+        "theming",
+        "layout",
+        "css-variables"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:vite.config.ts",
+      "type": "file",
+      "name": "vite.config.ts",
+      "filePath": "vite.config.ts",
+      "summary": "Vite build configuration for Tauri dev server on port 1420 with HMR on 1421, ignoring src-tauri changes.",
+      "tags": [
+        "build-system",
+        "vite",
+        "configuration"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "tsconfig.json",
+      "summary": "TypeScript compiler config targeting ES2020 with strict mode, bundler module resolution, and noEmit for Vite-driven compilation.",
+      "tags": [
+        "configuration",
+        "typescript",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "package.json",
+      "summary": "NPM manifest defining Kaelio v0.9.1 with CodeMirror 6, markdown-it, Mermaid, KaTeX, and Tauri API dependencies.",
+      "tags": [
+        "configuration",
+        "dependencies",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:index.html",
+      "type": "file",
+      "name": "index.html",
+      "filePath": "index.html",
+      "summary": "HTML shell with all UI elements: toolbar, sidebar, editor/preview panes, modals (help, shortcuts, sync, conflict, history), command palette, and status bar.",
+      "tags": [
+        "entry-point",
+        "markup",
+        "ui-shell"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:src-tauri/src/lib.rs",
+      "type": "file",
+      "name": "lib.rs",
+      "filePath": "src-tauri/src/lib.rs",
+      "summary": "Rust backend (~2160 lines) exposing Tauri commands for file I/O, directory listing, Git operations (status, diff, log, commit, push, pull, conflict resolution), PDF/HTML/DOCX export via Pandoc, file watching, and snapshot versioning.",
+      "tags": [
+        "backend",
+        "tauri-commands",
+        "git-integration",
+        "file-ops",
+        "export"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:src-tauri/src/main.rs",
+      "type": "file",
+      "name": "main.rs",
+      "filePath": "src-tauri/src/main.rs",
+      "summary": "Rust binary entry point that invokes kaelio_lib::run() with Windows subsystem suppression.",
+      "tags": [
+        "entry-point",
+        "binary",
+        "rust"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:src-tauri/build.rs",
+      "type": "file",
+      "name": "build.rs",
+      "filePath": "src-tauri/build.rs",
+      "summary": "Tauri build script that runs tauri-build to generate platform-specific schemas and configs.",
+      "tags": [
+        "build-system",
+        "rust",
+        "tauri"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/main.ts:getDefaultBindings",
+      "type": "function",
+      "name": "getDefaultBindings",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        141,
+        160
+      ],
+      "summary": "Returns the registry of default keyboard shortcut definitions mapping IDs to key combos and action functions.",
+      "tags": [
+        "keybinding",
+        "configuration",
+        "shortcut"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/main.ts:setCustomBinding",
+      "type": "function",
+      "name": "setCustomBinding",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        174,
+        184
+      ],
+      "summary": "Stores a custom keybinding override in localStorage and persists it for future sessions.",
+      "tags": [
+        "keybinding",
+        "localStorage",
+        "persistence"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/main.ts:buildKeymap",
+      "type": "function",
+      "name": "buildKeymap",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        252,
+        262
+      ],
+      "summary": "Builds a CodeMirror keymap array from default + custom bindings using cm6KeyMatchesEvent for matching.",
+      "tags": [
+        "keybinding",
+        "codemirror",
+        "keymap"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/main.ts:applyBindings",
+      "type": "function",
+      "name": "applyBindings",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        266,
+        291
+      ],
+      "summary": "Applies the keymap to the editor via Compartment reconfiguration and registers global keydown listeners.",
+      "tags": [
+        "keybinding",
+        "codemirror",
+        "event-handler"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/main.ts:renderRecentFiles",
+      "type": "function",
+      "name": "renderRecentFiles",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        308,
+        327
+      ],
+      "summary": "Renders the recent files list from localStorage into the sidebar panel with click handlers to open files.",
+      "tags": [
+        "ui-rendering",
+        "recent-files",
+        "sidebar"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/main.ts:applyTheme",
+      "type": "function",
+      "name": "applyTheme",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        539,
+        562
+      ],
+      "summary": "Applies the current theme to the document, editor CodeMirror compartment, and Mermaid renderer; updates UI label and select.",
+      "tags": [
+        "theming",
+        "codemirror",
+        "ui-rendering"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/main.ts:setTheme",
+      "type": "function",
+      "name": "setTheme",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        570,
+        589
+      ],
+      "summary": "Sets the theme mode, handling custom theme JSON input via dialog for the 'custom' theme option.",
+      "tags": [
+        "theming",
+        "user-input",
+        "dialog"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/main.ts:applyTypography",
+      "type": "function",
+      "name": "applyTypography",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        382,
+        409
+      ],
+      "summary": "Applies font family and text size to the document, editor compartment, and sidebar; persists to localStorage.",
+      "tags": [
+        "typography",
+        "codemirror",
+        "ui-rendering"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/main.ts:updatePreview",
+      "type": "function",
+      "name": "updatePreview",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        1028,
+        1117
+      ],
+      "summary": "Core preview rendering pipeline: runs markdown through markdown-it, then callouts, checklists, KaTeX math, and Mermaid diagrams with 300ms debounce.",
+      "tags": [
+        "preview",
+        "markdown-it",
+        "rendering-pipeline",
+        "core"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:src/main.ts:openFile",
+      "type": "function",
+      "name": "openFile",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        1402,
+        1469
+      ],
+      "summary": "Opens a file by path: reads content via Tauri invoke, creates or switches to a tab, loads content into editor, and triggers preview render.",
+      "tags": [
+        "file-ops",
+        "tabs",
+        "core"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:src/main.ts:saveFile",
+      "type": "function",
+      "name": "saveFile",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        1351,
+        1388
+      ],
+      "summary": "Saves current editor content to disk via Tauri invoke, clears dirty flag, updates Git status, and handles errors.",
+      "tags": [
+        "file-ops",
+        "persistence",
+        "core"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/main.ts:newFile",
+      "type": "function",
+      "name": "newFile",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        1473,
+        1503
+      ],
+      "summary": "Creates a new untitled tab with sample content and opens a save dialog to persist it.",
+      "tags": [
+        "file-ops",
+        "tabs"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/main.ts:gitSync",
+      "type": "function",
+      "name": "gitSync",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        1721,
+        1739
+      ],
+      "summary": "Performs a full Git sync: commit current changes then push to remote; shows status and conflict UI.",
+      "tags": [
+        "git",
+        "sync",
+        "core"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/main.ts:gitManualCommit",
+      "type": "function",
+      "name": "gitManualCommit",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        1693,
+        1719
+      ],
+      "summary": "Reads commit message from input, stages all changes, and invokes the Rust git_commit command.",
+      "tags": [
+        "git",
+        "commit"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/main.ts:exportPDF",
+      "type": "function",
+      "name": "exportPDF",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        4177,
+        4237
+      ],
+      "summary": "Exports current markdown to PDF via Pandoc sidecar, processing task lists and applying custom CSS.",
+      "tags": [
+        "export",
+        "pdf",
+        "pandoc"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/main.ts:exportHTML",
+      "type": "function",
+      "name": "exportHTML",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        4239,
+        4280
+      ],
+      "summary": "Exports current markdown to standalone HTML using a custom renderer with callout and tag CSS.",
+      "tags": [
+        "export",
+        "html"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/main.ts:exportPreviewImage",
+      "type": "function",
+      "name": "exportPreviewImage",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        4282,
+        4330
+      ],
+      "summary": "Exports the preview pane as PNG or JPG using html-to-image library with configurable scale.",
+      "tags": [
+        "export",
+        "image"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/main.ts:exportDOCX",
+      "type": "function",
+      "name": "exportDOCX",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        4332,
+        4390
+      ],
+      "summary": "Exports markdown to DOCX via Pandoc sidecar, processing task lists for proper formatting.",
+      "tags": [
+        "export",
+        "docx",
+        "pandoc"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/main.ts:toggleSidebar",
+      "type": "function",
+      "name": "toggleSidebar",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        4450,
+        4465
+      ],
+      "summary": "Toggles the sidebar visibility, persisting the state to localStorage.",
+      "tags": [
+        "ui",
+        "sidebar",
+        "view-mode"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/main.ts:toggleCommandPalette",
+      "type": "function",
+      "name": "toggleCommandPalette",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        4660,
+        4675
+      ],
+      "summary": "Toggles the command palette modal, clearing input and re-rendering results.",
+      "tags": [
+        "ui",
+        "command-palette"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/main.ts:checkForUpdates",
+      "type": "function",
+      "name": "checkForUpdates",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        4730,
+        4765
+      ],
+      "summary": "Checks for app updates via Tauri updater plugin and prompts user to install if available.",
+      "tags": [
+        "auto-updater",
+        "tauri"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/main.ts:initScrollSync",
+      "type": "function",
+      "name": "initScrollSync",
+      "filePath": "src/main.ts",
+      "lineRange": [
+        1199,
+        1211
+      ],
+      "summary": "Sets up bidirectional scroll synchronization between editor and preview panes.",
+      "tags": [
+        "scroll-sync",
+        "ui",
+        "editor"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:read_file",
+      "type": "function",
+      "name": "read_file",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        125,
+        134
+      ],
+      "summary": "Tauri command: reads a file's content and metadata (path, size) as FileInfo struct.",
+      "tags": [
+        "file-ops",
+        "tauri-command",
+        "read"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:list_directory",
+      "type": "function",
+      "name": "list_directory",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        159,
+        188
+      ],
+      "summary": "Tauri command: lists directory contents recursively up to a depth limit, filtering hidden files.",
+      "tags": [
+        "file-ops",
+        "tauri-command",
+        "directory"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:search_in_files",
+      "type": "function",
+      "name": "search_in_files",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        273,
+        330
+      ],
+      "summary": "Tauri command: recursively searches text content in a folder matching a query string.",
+      "tags": [
+        "search",
+        "file-ops",
+        "tauri-command"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:export_pdf_blocking",
+      "type": "function",
+      "name": "export_pdf_blocking",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        499,
+        739
+      ],
+      "summary": "Tauri command: exports markdown to PDF via Pandoc sidecar with task list processing and custom CSS injection.",
+      "tags": [
+        "export",
+        "pdf",
+        "pandoc",
+        "tauri-command"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:export_docx",
+      "type": "function",
+      "name": "export_docx",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        742,
+        829
+      ],
+      "summary": "Tauri command: exports markdown to DOCX via Pandoc sidecar with task list processing.",
+      "tags": [
+        "export",
+        "docx",
+        "pandoc",
+        "tauri-command"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:export_html",
+      "type": "function",
+      "name": "export_html",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        896,
+        1034
+      ],
+      "summary": "Tauri command: exports markdown to standalone HTML with custom CSS for callouts and tags.",
+      "tags": [
+        "export",
+        "html",
+        "tauri-command"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:git_repo_info",
+      "type": "function",
+      "name": "git_repo_info",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        1360,
+        1389
+      ],
+      "summary": "Tauri command: returns repository info (branch, remote URL, ahead/behind counts) using git2.",
+      "tags": [
+        "git",
+        "tauri-command",
+        "repository"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:git_status",
+      "type": "function",
+      "name": "git_status",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        1392,
+        1419
+      ],
+      "summary": "Tauri command: returns file-level Git status (staged, modified, untracked) for a folder.",
+      "tags": [
+        "git",
+        "tauri-command",
+        "status"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:git_commit",
+      "type": "function",
+      "name": "git_commit",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        1507,
+        1538
+      ],
+      "summary": "Tauri command: stages specified files and creates a commit with the given message.",
+      "tags": [
+        "git",
+        "tauri-command",
+        "commit"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:git_pull",
+      "type": "function",
+      "name": "git_pull",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        1556,
+        1632
+      ],
+      "summary": "Tauri command: performs git pull with rebase, handles merge conflicts by writing conflict markers and returning conflict info.",
+      "tags": [
+        "git",
+        "tauri-command",
+        "sync",
+        "conflict-resolution"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:git_auto_sync",
+      "type": "function",
+      "name": "git_auto_sync",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        1635,
+        1700
+      ],
+      "summary": "Tauri command: auto-sync logic that commits changed files and pushes to remote on save.",
+      "tags": [
+        "git",
+        "tauri-command",
+        "auto-sync"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:git_conflict_info",
+      "type": "function",
+      "name": "git_conflict_info",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        1843,
+        1891
+      ],
+      "summary": "Tauri command: reads .ours/.merged/.theirs conflict marker files and returns content for resolution UI.",
+      "tags": [
+        "git",
+        "tauri-command",
+        "conflict-resolution"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:save_snapshot",
+      "type": "function",
+      "name": "save_snapshot",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        1902,
+        1928
+      ],
+      "summary": "Tauri command: saves a versioned snapshot of file content in ~/.kaelio/snapshots/ with timestamped filenames.",
+      "tags": [
+        "snapshots",
+        "versioning",
+        "tauri-command"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:watch_file",
+      "type": "function",
+      "name": "watch_file",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        1182,
+        1220
+      ],
+      "summary": "Tauri command: sets up a file system watcher on a single file using notify with macos_kqueue.",
+      "tags": [
+        "file-watching",
+        "tauri-command",
+        "notify"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:watch_folder",
+      "type": "function",
+      "name": "watch_folder",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        1234,
+        1271
+      ],
+      "summary": "Tauri command: sets up a recursive file system watcher on a folder, emitting events to the frontend.",
+      "tags": [
+        "file-watching",
+        "tauri-command",
+        "notify"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:run",
+      "type": "function",
+      "name": "run",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        1980,
+        2160
+      ],
+      "summary": "Tauri plugin entry point: registers all Tauri commands (file, git, export, snapshot), sets up context, and builds the app with custom menu.",
+      "tags": [
+        "tauri-command",
+        "entry-point",
+        "bootstrap"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:raise_file_descriptor_limit",
+      "type": "function",
+      "name": "raise_file_descriptor_limit",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        19,
+        36
+      ],
+      "summary": "Unix-specific: raises the file descriptor limit via libc getrlimit/setrlimit for large folder watching.",
+      "tags": [
+        "unix",
+        "file-descriptors",
+        "bootstrap"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:kaelio_home",
+      "type": "function",
+      "name": "kaelio_home",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        42,
+        53
+      ],
+      "summary": "Returns ~/.kaelio path, migrating from legacy ~/.mx folder on first access.",
+      "tags": [
+        "bootstrap",
+        "path-resolution"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:find_bundled_binary",
+      "type": "function",
+      "name": "find_bundled_binary",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        438,
+        461
+      ],
+      "summary": "Locates a bundled sidecar binary (Pandoc/Typst) by checking app resources dir and bundle path.",
+      "tags": [
+        "sidecar",
+        "binary-resolution"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:try_git_credential_fill",
+      "type": "function",
+      "name": "try_git_credential_fill",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        1288,
+        1315
+      ],
+      "summary": "Tries system git credential fill helper for HTTPS authentication before falling back to keychain.",
+      "tags": [
+        "git",
+        "authentication",
+        "credentials"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src-tauri/src/lib.rs:GitSyncResult",
+      "type": "class",
+      "name": "GitSyncResult",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        108,
+        114
+      ],
+      "summary": "Serde struct representing the result of a Git sync operation: committed, pushed, message, and any conflicts.",
+      "tags": [
+        "data-model",
+        "git",
+        "serde"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src-tauri/src/lib.rs:GitConflictInfo",
+      "type": "class",
+      "name": "GitConflictInfo",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        117,
+        122
+      ],
+      "summary": "Serde struct holding local, remote, and base content for conflict resolution UI.",
+      "tags": [
+        "data-model",
+        "git",
+        "conflict-resolution"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src-tauri/src/lib.rs:FileInfo",
+      "type": "class",
+      "name": "FileInfo",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        55,
+        60
+      ],
+      "summary": "Serde struct for file read response: path, content, and size.",
+      "tags": [
+        "data-model",
+        "file-ops"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src-tauri/src/lib.rs:DirEntry",
+      "type": "class",
+      "name": "DirEntry",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        62,
+        68
+      ],
+      "summary": "Serde struct for directory listing entry: name, path, is_dir flag, and extension.",
+      "tags": [
+        "data-model",
+        "file-ops"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src-tauri/src/lib.rs:GitRepoInfo",
+      "type": "class",
+      "name": "GitRepoInfo",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        83,
+        90
+      ],
+      "summary": "Serde struct for repository info: branch, remote URL, ahead/behind counts.",
+      "tags": [
+        "data-model",
+        "git"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src-tauri/src/lib.rs:GitLogEntry",
+      "type": "class",
+      "name": "GitLogEntry",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        92,
+        98
+      ],
+      "summary": "Serde struct for git log entries: commit ID, message, author, timestamp.",
+      "tags": [
+        "data-model",
+        "git"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src-tauri/src/lib.rs:GitDiffResult",
+      "type": "class",
+      "name": "GitDiffResult",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        100,
+        105
+      ],
+      "summary": "Serde struct for file diff: old content, new content, and unified patch string.",
+      "tags": [
+        "data-model",
+        "git",
+        "diff"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src-tauri/src/lib.rs:SnapshotInfo",
+      "type": "class",
+      "name": "SnapshotInfo",
+      "filePath": "src-tauri/src/lib.rs",
+      "lineRange": [
+        1939,
+        1943
+      ],
+      "summary": "Serde struct for version snapshot metadata: file path, content, and timestamp.",
+      "tags": [
+        "data-model",
+        "snapshots",
+        "versioning"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "Project overview for Kaelio covering features, repository structure, development setup, keyboard shortcuts, and release process.",
+      "tags": [
+        "documentation",
+        "entry-point",
+        "overview"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:CHANGELOG.md",
+      "type": "document",
+      "name": "CHANGELOG.md",
+      "filePath": "CHANGELOG.md",
+      "summary": "Version history tracking changes across v0.9.1, v0.9.0, and v1.1.x releases covering editor, export, git, and updater improvements.",
+      "tags": [
+        "documentation",
+        "changelog",
+        "versioning"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:CLAUDE.md",
+      "type": "document",
+      "name": "CLAUDE.md",
+      "filePath": "CLAUDE.md",
+      "summary": "Project-specific Claude Code guidance covering architecture, commands, frontend/backend structure, and build/release workflow.",
+      "tags": [
+        "documentation",
+        "configuration",
+        "entry-point"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:AGENTS.md",
+      "type": "document",
+      "name": "AGENTS.md",
+      "filePath": "AGENTS.md",
+      "summary": "AI agent guidance document mirroring CLAUDE.md with architecture overview, commands, and frontend/backend structure for Kaelio.",
+      "tags": [
+        "documentation",
+        "configuration",
+        "ai-agent"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/00-architecture-overview.md",
+      "type": "document",
+      "name": "00-architecture-overview.md",
+      "filePath": "docs/00-architecture-overview.md",
+      "summary": "High-level architecture document covering tech stack, process model, entry points, and cross-document references.",
+      "tags": [
+        "documentation",
+        "architecture",
+        "overview"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/01-editor-engine.md",
+      "type": "document",
+      "name": "01-editor-engine.md",
+      "filePath": "docs/01-editor-engine.md",
+      "summary": "Documents the CodeMirror 6 editor engine including extensions, keybindings, and content change flow.",
+      "tags": [
+        "documentation",
+        "editor",
+        "code-mirror"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/02-preview-pipeline.md",
+      "type": "document",
+      "name": "02-preview-pipeline.md",
+      "filePath": "docs/02-preview-pipeline.md",
+      "summary": "Describes the markdown preview pipeline: markdown-it rendering, KaTeX math, Mermaid diagrams, and render trigger logic.",
+      "tags": [
+        "documentation",
+        "preview",
+        "rendering-pipeline"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/03-file-operations.md",
+      "type": "document",
+      "name": "03-file-operations.md",
+      "filePath": "docs/03-file-operations.md",
+      "summary": "Documents Tauri file commands, content search, directory listing, and frontend file operation state tracking.",
+      "tags": [
+        "documentation",
+        "file-operations",
+        "tauri"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/04-pdf-export.md",
+      "type": "document",
+      "name": "04-pdf-export.md",
+      "filePath": "docs/04-pdf-export.md",
+      "summary": "Documents the PDF export pipeline including Mermaid pre-rendering, Pandoc integration, and external dependencies.",
+      "tags": [
+        "documentation",
+        "export",
+        "pdf"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/05-ui-layout.md",
+      "type": "document",
+      "name": "05-ui-layout.md",
+      "filePath": "docs/05-ui-layout.md",
+      "summary": "Comprehensive UI layout documentation covering toolbar, view modes, sidebar, divider drag, status bar, and theme variables.",
+      "tags": [
+        "documentation",
+        "ui-layout",
+        "interface"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/06-auto-update.md",
+      "type": "document",
+      "name": "06-auto-update.md",
+      "filePath": "docs/06-auto-update.md",
+      "summary": "Documents the auto-update system including configuration, Rust plugin registration, frontend logic, and artifact signing.",
+      "tags": [
+        "documentation",
+        "auto-update",
+        "deployment"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/07-release-pipeline.md",
+      "type": "document",
+      "name": "07-release-pipeline.md",
+      "filePath": "docs/07-release-pipeline.md",
+      "summary": "Documents the GitHub Actions release pipeline covering triggers, build matrix, per-platform build steps, and latest.json schema.",
+      "tags": [
+        "documentation",
+        "ci-cd",
+        "release"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "pipeline:.github/workflows/release.yml",
+      "type": "pipeline",
+      "name": "release.yml",
+      "filePath": ".github/workflows/release.yml",
+      "summary": "GitHub Actions workflow for building and releasing Kaelio across macOS aarch64, Windows x86_64, and Linux x86_64 with auto-updater artifact signing.",
+      "tags": [
+        "ci-cd",
+        "deployment",
+        "release"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:web/index.html",
+      "type": "file",
+      "name": "index.html",
+      "filePath": "web/index.html",
+      "summary": "HTML entry point for the web-based markdown editor, loading main.ts and defining the app shell with toolbar, editor, preview, and sidebar panes.",
+      "tags": [
+        "entry-point",
+        "markup",
+        "web-app"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:web/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "web/package.json",
+      "summary": "Web project package manifest defining dependencies (CodeMirror 6, markdown-it, KaTeX, Mermaid) and build scripts for the web markdown editor.",
+      "tags": [
+        "configuration",
+        "dependencies",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:web/src/main.ts",
+      "type": "file",
+      "name": "main.ts",
+      "filePath": "web/src/main.ts",
+      "summary": "Monolithic web app entry point for the markdown editor implementing editor setup, preview rendering, file I/O via File System API, theme management, view modes, and UI interactions.",
+      "tags": [
+        "entry-point",
+        "monolithic",
+        "markdown-editor"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:web/src/styles.css",
+      "type": "file",
+      "name": "styles.css",
+      "filePath": "web/src/styles.css",
+      "summary": "Primary stylesheet for the web markdown editor with 891 lines covering layout, toolbar, editor, preview, sidebar, themes, and responsive design.",
+      "tags": [
+        "styling",
+        "css",
+        "ui"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:web/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "web/tsconfig.json",
+      "summary": "TypeScript compiler configuration for the web markdown editor targeting ESNext with DOM types and Vite-compatible settings.",
+      "tags": [
+        "configuration",
+        "typescript",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:web/vite.config.ts",
+      "type": "file",
+      "name": "vite.config.ts",
+      "filePath": "web/vite.config.ts",
+      "summary": "Vite build configuration for the web markdown editor project.",
+      "tags": [
+        "configuration",
+        "build-system",
+        "vite"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:web/src/main.ts:openMermaidOverlay",
+      "type": "function",
+      "name": "openMermaidOverlay",
+      "filePath": "web/src/main.ts",
+      "lineRange": [
+        272,
+        341
+      ],
+      "summary": "Opens a full-screen overlay to display a rendered Mermaid diagram with pan/zoom via panzoom library, including ESC-to-close and SVG viewBox scaling.",
+      "tags": [
+        "ui",
+        "mermaid",
+        "diagram",
+        "overlay"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:web/src/main.ts:parseYamlFrontmatter",
+      "type": "function",
+      "name": "parseYamlFrontmatter",
+      "filePath": "web/src/main.ts",
+      "lineRange": [
+        351,
+        382
+      ],
+      "summary": "Parses YAML frontmatter from markdown content into structured key-value pairs and list items for display in the preview.",
+      "tags": [
+        "parsing",
+        "yaml",
+        "frontmatter",
+        "utility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:web/src/main.ts:applyFormat",
+      "type": "function",
+      "name": "applyFormat",
+      "filePath": "web/src/main.ts",
+      "lineRange": [
+        703,
+        737
+      ],
+      "summary": "Applies text formatting (bold, italic, heading, code, link, image) to the editor selection by wrapping with appropriate markdown syntax.",
+      "tags": [
+        "editor",
+        "formatting",
+        "command",
+        "code-mirror"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:web/src/main.ts:initDividerDrag",
+      "type": "function",
+      "name": "initDividerDrag",
+      "filePath": "web/src/main.ts",
+      "lineRange": [
+        831,
+        864
+      ],
+      "summary": "Initializes drag handles on the editor-preview divider to let users resize pane widths interactively.",
+      "tags": [
+        "ui",
+        "drag-drop",
+        "layout",
+        "interaction"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:web/src/main.ts:initDragDrop",
+      "type": "function",
+      "name": "initDragDrop",
+      "filePath": "web/src/main.ts",
+      "lineRange": [
+        910,
+        952
+      ],
+      "summary": "Sets up drag-and-drop support for markdown files into the editor, opening dropped files via the File System API.",
+      "tags": [
+        "drag-drop",
+        "file-io",
+        "ui",
+        "interaction"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:web/src/main.ts:onContentChange",
+      "type": "function",
+      "name": "onContentChange",
+      "filePath": "web/src/main.ts",
+      "lineRange": [
+        815,
+        827
+      ],
+      "summary": "Handles CodeMirror content changes with 300ms debounce: updates preview, word count, cursor position, and marks file as modified.",
+      "tags": [
+        "event-handler",
+        "debounce",
+        "editor",
+        "preview"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:web/src/main.ts:initScrollSync",
+      "type": "function",
+      "name": "initScrollSync",
+      "filePath": "web/src/main.ts",
+      "lineRange": [
+        681,
+        699
+      ],
+      "summary": "Synchronizes scrolling between the editor and preview panes using requestAnimationFrame for smooth coordinated scrolling.",
+      "tags": [
+        "ui",
+        "scroll-sync",
+        "editor",
+        "preview"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:web/src/main.ts:renderRecentFiles",
+      "type": "function",
+      "name": "renderRecentFiles",
+      "filePath": "web/src/main.ts",
+      "lineRange": [
+        108,
+        130
+      ],
+      "summary": "Renders the recent files list from localStorage, displaying file names with content previews and click-to-open functionality.",
+      "tags": [
+        "ui",
+        "recent-files",
+        "localStorage",
+        "rendering"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:web/src/main.ts:applyTheme",
+      "type": "function",
+      "name": "applyTheme",
+      "filePath": "web/src/main.ts",
+      "lineRange": [
+        167,
+        190
+      ],
+      "summary": "Applies a theme to the document root, editor, and preview pane, re-rendering Mermaid with the correct color scheme.",
+      "tags": [
+        "theme",
+        "ui",
+        "editor",
+        "mermaid"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:src-tauri/Cargo.toml",
+      "type": "config",
+      "name": "Cargo.toml",
+      "summary": "Rust package metadata and backend dependencies",
+      "tags": [
+        "rust",
+        "cargo",
+        "config"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:src-tauri/tauri.conf.json",
+      "type": "config",
+      "name": "tauri.conf.json",
+      "summary": "Tauri app identity, bundle, updater, file associations config",
+      "tags": [
+        "tauri",
+        "config"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:src-tauri/capabilities/default.json",
+      "type": "config",
+      "name": "default.json",
+      "summary": "Tauri capability permissions",
+      "tags": [
+        "tauri",
+        "permissions"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/main.ts:setupEditor",
+      "type": "function",
+      "name": "setupEditor",
+      "summary": "Initialize CodeMirror editor instance",
+      "tags": [
+        "typescript",
+        "codemirror"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/main.ts:renderPreview",
+      "type": "function",
+      "name": "renderPreview",
+      "summary": "Render markdown to preview pane",
+      "tags": [
+        "typescript",
+        "preview"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/main.ts:onContentChange",
+      "type": "function",
+      "name": "onContentChange",
+      "summary": "Handle content changes with debounce",
+      "tags": [
+        "typescript",
+        "debounce"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/main.ts:togglePreview",
+      "type": "function",
+      "name": "togglePreview",
+      "summary": "Toggle preview panel visibility",
+      "tags": [
+        "typescript",
+        "ui"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:save_file",
+      "type": "function",
+      "name": "save_file",
+      "summary": "Write file contents to disk",
+      "tags": [
+        "rust",
+        "file-io"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:git_push",
+      "type": "function",
+      "name": "git_push",
+      "summary": "Push to remote repository",
+      "tags": [
+        "rust",
+        "git"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src-tauri/src/lib.rs:export_pdf",
+      "type": "function",
+      "name": "export_pdf",
+      "summary": "Export to PDF via Pandoc",
+      "tags": [
+        "rust",
+        "export"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:index.html",
+      "target": "file:src/main.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "config:tsconfig.json",
+      "target": "file:src/main.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:package.json",
+      "target": "file:src/main.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:package.json",
+      "target": "file:vite.config.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:vite.config.ts",
+      "target": "file:src/main.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:src-tauri/build.rs",
+      "target": "file:src-tauri/src/lib.rs",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:index.html",
+      "target": "file:src/styles.css",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src-tauri/src/main.rs",
+      "target": "file:src-tauri/src/lib.rs",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:getDefaultBindings",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:setCustomBinding",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:buildKeymap",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:applyBindings",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:renderRecentFiles",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:applyTheme",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:setTheme",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:applyTypography",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:updatePreview",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:openFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:saveFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:newFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:gitSync",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:gitManualCommit",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:exportPDF",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:exportHTML",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:exportPreviewImage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:exportDOCX",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:toggleSidebar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:toggleCommandPalette",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:checkForUpdates",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src/main.ts:initScrollSync",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:read_file",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:list_directory",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:search_in_files",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:export_pdf_blocking",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:export_docx",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:export_html",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:git_repo_info",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:git_status",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:git_commit",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:git_pull",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:git_auto_sync",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:git_conflict_info",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:save_snapshot",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:watch_file",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:watch_folder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:run",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:raise_file_descriptor_limit",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:kaelio_home",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:find_bundled_binary",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:try_git_credential_fill",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "class:src-tauri/src/lib.rs:GitSyncResult",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "class:src-tauri/src/lib.rs:GitConflictInfo",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "class:src-tauri/src/lib.rs:FileInfo",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "class:src-tauri/src/lib.rs:DirEntry",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "class:src-tauri/src/lib.rs:GitRepoInfo",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "class:src-tauri/src/lib.rs:GitLogEntry",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "class:src-tauri/src/lib.rs:GitDiffResult",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "class:src-tauri/src/lib.rs:SnapshotInfo",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:read_file",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:list_directory",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:search_in_files",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:export_pdf_blocking",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:export_docx",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:export_html",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:git_repo_info",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:git_status",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:git_commit",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:git_pull",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:git_auto_sync",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:git_conflict_info",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "function:src-tauri/src/lib.rs:save_snapshot",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src-tauri/src/lib.rs",
+      "target": "function:src-tauri/src/lib.rs:run",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "config:web/tsconfig.json",
+      "target": "file:web/src/main.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:web/package.json",
+      "target": "file:web/src/main.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:web/src/main.ts",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/00-architecture-overview.md",
+      "target": "file:web/src/main.ts",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/01-editor-engine.md",
+      "target": "file:web/src/main.ts",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/02-preview-pipeline.md",
+      "target": "file:web/src/main.ts",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/03-file-operations.md",
+      "target": "file:web/src/main.ts",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/04-pdf-export.md",
+      "target": "file:web/src/main.ts",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/05-ui-layout.md",
+      "target": "file:web/src/main.ts",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/06-auto-update.md",
+      "target": "file:web/src/main.ts",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/07-release-pipeline.md",
+      "target": "pipeline:.github/workflows/release.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "pipeline:.github/workflows/release.yml",
+      "target": "file:web/src/main.ts",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:web/src/main.ts",
+      "target": "function:web/src/main.ts:openMermaidOverlay",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:web/src/main.ts",
+      "target": "function:web/src/main.ts:parseYamlFrontmatter",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:web/src/main.ts",
+      "target": "function:web/src/main.ts:applyFormat",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:web/src/main.ts",
+      "target": "function:web/src/main.ts:initDividerDrag",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:web/src/main.ts",
+      "target": "function:web/src/main.ts:initDragDrop",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:web/src/main.ts",
+      "target": "function:web/src/main.ts:onContentChange",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:web/src/main.ts",
+      "target": "function:web/src/main.ts:initScrollSync",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:web/src/main.ts",
+      "target": "function:web/src/main.ts:renderRecentFiles",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:web/src/main.ts",
+      "target": "function:web/src/main.ts:applyTheme",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:web/vite.config.ts",
+      "target": "file:web/index.html",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:frontend",
+      "name": "Frontend Layer",
+      "description": "Vanilla TypeScript monolith (src/main.ts) with CodeMirror editor, markdown preview pipeline, UI layout, and all frontend functions, plus the HTML shell and Vite build configuration",
+      "nodeIds": [
+        "file:src/main.ts",
+        "file:src/styles.css",
+        "file:index.html",
+        "file:vite.config.ts",
+        "function:src/main.ts:setupEditor",
+        "function:src/main.ts:renderPreview",
+        "function:src/main.ts:onContentChange",
+        "function:src/main.ts:openFile",
+        "function:src/main.ts:saveFile",
+        "function:src/main.ts:toggleSidebar",
+        "function:src/main.ts:togglePreview",
+        "function:src/main.ts:exportPDF",
+        "function:src/main.ts:initScrollSync",
+        "file:web/index.html",
+        "config:web/package.json",
+        "file:web/src/main.ts",
+        "file:web/src/styles.css",
+        "config:web/tsconfig.json",
+        "file:web/vite.config.ts"
+      ]
+    },
+    {
+      "id": "layer:backend",
+      "name": "Backend Layer",
+      "description": "Tauri 2 Rust IPC layer handling all file operations, Git integration (git2 crate), PDF/HTML/DOCX export via Pandoc, snapshot management, and auto-updater menus",
+      "nodeIds": [
+        "file:src-tauri/src/lib.rs",
+        "file:src-tauri/src/main.rs",
+        "file:src-tauri/build.rs",
+        "config:src-tauri/Cargo.toml",
+        "config:src-tauri/tauri.conf.json",
+        "config:src-tauri/capabilities/default.json",
+        "function:src-tauri/src/lib.rs:read_file",
+        "function:src-tauri/src/lib.rs:save_file",
+        "function:src-tauri/src/lib.rs:git_commit",
+        "function:src-tauri/src/lib.rs:git_push",
+        "function:src-tauri/src/lib.rs:export_pdf",
+        "class:src-tauri/src/lib.rs:GitSyncResult",
+        "class:src-tauri/src/lib.rs:GitConflictInfo",
+        "class:src-tauri/src/lib.rs:FileInfo"
+      ]
+    },
+    {
+      "id": "layer:config",
+      "name": "Configuration",
+      "description": "Root-level build and project configuration files for TypeScript compilation, npm dependencies, and build tooling",
+      "nodeIds": [
+        "config:tsconfig.json",
+        "config:package.json"
+      ]
+    },
+    {
+      "id": "layer:documentation",
+      "name": "Documentation",
+      "description": "Project documentation including README, changelog, agent configs, and seven technical docs covering architecture, editor engine, preview pipeline, file operations, export, UI layout, auto-update, and release pipeline",
+      "nodeIds": [
+        "document:README.md",
+        "document:CHANGELOG.md",
+        "document:CLAUDE.md",
+        "document:AGENTS.md",
+        "document:docs/00-architecture-overview.md",
+        "document:docs/01-editor-engine.md",
+        "document:docs/02-preview-pipeline.md",
+        "document:docs/03-file-operations.md",
+        "document:docs/04-pdf-export.md",
+        "document:docs/05-ui-layout.md",
+        "document:docs/06-auto-update.md",
+        "document:docs/07-release-pipeline.md"
+      ]
+    },
+    {
+      "id": "layer:ci-cd",
+      "name": "CI/CD",
+      "description": "GitHub Actions release workflow that builds macOS aarch64, Windows x86_64, and Linux x86_64 binaries, signs artifacts, and publishes GitHub Releases with latest.json for auto-updater",
+      "nodeIds": [
+        "pipeline:.github/workflows/release.yml"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "Project Overview",
+      "description": "Start with README.md to understand what Kaelio is: a fast, lightweight desktop Markdown editor built with Tauri 2 and Rust. This document outlines the feature set (live split preview, Mermaid diagrams, KaTeX math, PDF export via Pandoc, git sync, Obsidian-style callouts), keyboard shortcuts, and how to set up the development environment. It gives you the big-picture context before diving into any code.",
+      "nodeIds": [
+        "document:README.md"
+      ]
+    },
+    {
+      "order": 2,
+      "title": "System Architecture",
+      "description": "The architecture overview document maps the system shape: a two-layer split between the vanilla TypeScript frontend and the Rust backend via Tauri's IPC mechanism. It identifies the entry points on both sides and explains how the frontend and backend communicate. This document serves as a companion to the code, so keep it open as you explore the next steps.",
+      "nodeIds": [
+        "document:docs/00-architecture-overview.md"
+      ]
+    },
+    {
+      "order": 3,
+      "title": "Frontend Entry Point",
+      "description": "The frontend is a monolith: the entire application lives in src/main.ts (~5000 lines). This file bootstraps the CodeMirror 6 editor, initializes the markdown preview pipeline, sets up the file explorer, manages app state (currentFilePath, zoomLevel, view modes), and wires up the Git integration UI. It is the single point of entry for the TypeScript side, configured by tsconfig.json and package.json.",
+      "nodeIds": [
+        "file:src/main.ts",
+        "config:tsconfig.json",
+        "config:package.json"
+      ],
+      "languageLesson": "TypeScript barrel-style monoliths are common in small Tauri apps where there are no separate framework components. The entire app state lives in module-scoped variables rather than a state management library, keeping dependencies minimal."
+    },
+    {
+      "order": 4,
+      "title": "App Shell and Styling",
+      "description": "index.html provides the minimal HTML shell that loads main.ts and styles.css. The CSS file implements the Catppuccin Mocha dark theme using CSS custom properties, defines the three view modes (split, editor-only, preview-only), and styles the editor, preview pane, dialogs, and sidebar. This is where the visual identity of the app is defined.",
+      "nodeIds": [
+        "file:index.html",
+        "file:src/styles.css"
+      ],
+      "languageLesson": "CSS custom properties (variables) like --bg: #1e1e2e and --accent: #89b4fa enable theme switching and consistent styling across the app. The layout uses flexbox for the split-pane arrangement, which is the standard approach for editor layouts."
+    },
+    {
+      "order": 5,
+      "title": "Editor Engine",
+      "description": "The editor engine document details how CodeMirror 6 is configured as the markdown editing surface, including keybindings (Cmd+O, Cmd+S, Cmd+P, Cmd+E, Cmd+B), the 300ms debounce on content changes before re-rendering the preview, and the extension system. This is the core user-facing feature of the app.",
+      "nodeIds": [
+        "document:docs/01-editor-engine.md"
+      ]
+    },
+    {
+      "order": 6,
+      "title": "Preview Rendering Pipeline",
+      "description": "The preview pipeline transforms raw markdown into rendered HTML through a series of transformations: markdown-it parses the markdown, then custom handlers process callouts and interactive checklists, followed by KaTeX for math rendering and Mermaid for diagram rendering. YAML frontmatter is extracted for metadata. This pipeline runs on every content change after the debounce delay.",
+      "nodeIds": [
+        "document:docs/02-preview-pipeline.md"
+      ]
+    },
+    {
+      "order": 7,
+      "title": "UI Layout and View Modes",
+      "description": "This document explains the flexible UI layout system: how the split, editor-only, and preview-only view modes are toggled, how the sidebar with the file explorer works, and how the Catppuccin Mocha theme is applied across all components. Understanding this helps you navigate the frontend code in main.ts where the layout state is managed.",
+      "nodeIds": [
+        "document:docs/05-ui-layout.md"
+      ]
+    },
+    {
+      "order": 8,
+      "title": "Rust Backend Entry Point",
+      "description": "On the backend side, src-tauri/src/main.rs is the Tauri 2 application entry point. It bootstraps the Rust side of the app, registers the Tauri builder, and loads the lib module where all the actual work happens. The Tauri framework bridges this Rust code to the TypeScript frontend via IPC commands.",
+      "nodeIds": [
+        "file:src-tauri/src/main.rs",
+        "config:src-tauri/tauri.conf.json",
+        "config:src-tauri/capabilities/default.json"
+      ],
+      "languageLesson": "Tauri 2 uses a builder pattern to configure the app: tauri::Builder::default().plugin(...) .run() . The tauri.conf.json file declares app identity, bundle settings, allowed frontend URLs, and which plugins to load. The capabilities/default.json defines the permission model \u2014 what IPC commands the frontend is allowed to call."
+    },
+    {
+      "order": 9,
+      "title": "Backend IPC Commands",
+      "description": "src-tauri/src/lib.rs (~2150 lines) is the heart of the Rust backend. It registers all Tauri commands that the frontend calls: file operations (read, save, word count), export commands (PDF via Pandoc, HTML, DOCX), Git integration (repo info, status, diff, commit, push, pull, auto-sync, conflict resolution), snapshot management, and auto-updater menus. This is the highest fan-in node in the codebase because every backend feature flows through here.",
+      "nodeIds": [
+        "file:src-tauri/src/lib.rs",
+        "config:src-tauri/Cargo.toml"
+      ],
+      "languageLesson": "Rust's #[tauri::command] macro registers functions as IPC handlers callable from the frontend. Each command takes a Tauri::State for shared state and a webview window for UI operations. The Cargo.toml declares the key dependencies: tauri, git2, and the various Tauri plugins."
+    },
+    {
+      "order": 10,
+      "title": "Build, Release, and CI/CD",
+      "description": "The final step covers how Kaelio goes from source to distributed app. The Tauri build script (build.rs) configures platform-specific settings during compilation. The GitHub Actions release workflow (release.yml) builds the app for macOS aarch64, Windows x86_64, and Linux x86_64, signs the artifacts, and creates a GitHub Release with a latest.json manifest for the auto-updater. Pushing a v* tag triggers this entire pipeline.",
+      "nodeIds": [
+        "file:src-tauri/build.rs",
+        "pipeline:.github/workflows/release.yml",
+        "document:docs/06-auto-update.md",
+        "document:docs/07-release-pipeline.md"
+      ]
+    }
+  ]
+}

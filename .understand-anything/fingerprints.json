@@ -1,0 +1,3434 @@
+{
+  "version": "1.0.0",
+  "gitCommitHash": "c1d0ada4160f30586f65ebb0b9e413ad9d750176",
+  "generatedAt": "2026-05-23T04:22:32.982Z",
+  "files": {
+    "src/main.ts": {
+      "filePath": "src/main.ts",
+      "contentHash": "dad931e4a5b146f1862186578107fa47d5250d28f9a9154795fda5137bacb12c",
+      "functions": [
+        {
+          "name": "getActiveTab",
+          "params": [],
+          "returnType": "Tab | null",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "getDefaultBindings",
+          "params": [],
+          "returnType": "ShortcutDef[]",
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "getCustomBindings",
+          "params": [],
+          "returnType": "Record<string, string>",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "getBinding",
+          "params": [
+            "id"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "setCustomBinding",
+          "params": [
+            "id",
+            "key"
+          ],
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "resetAllBindings",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "findConflict",
+          "params": [
+            "key",
+            "excludeId"
+          ],
+          "returnType": "ShortcutDef | null",
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "isOSReserved",
+          "params": [
+            "key"
+          ],
+          "returnType": "boolean",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "keyEventToCM6",
+          "params": [
+            "e"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "cm6KeyToDisplay",
+          "params": [
+            "key"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "cm6KeyMatchesEvent",
+          "params": [
+            "cm6Key",
+            "e"
+          ],
+          "returnType": "boolean",
+          "exported": false,
+          "lineCount": 15
+        },
+        {
+          "name": "buildKeymap",
+          "params": [],
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "applyBindings",
+          "params": [],
+          "exported": false,
+          "lineCount": 26
+        },
+        {
+          "name": "getRecentFiles",
+          "params": [],
+          "returnType": "string[]",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "addRecentFile",
+          "params": [
+            "path"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "renderRecentFiles",
+          "params": [],
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "toggleRecentPanel",
+          "params": [],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "applyZoom",
+          "params": [],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "zoomIn",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "zoomOut",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "zoomReset",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "getFontStack",
+          "params": [
+            "fontName"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "editorTypographyTheme",
+          "params": [],
+          "exported": false,
+          "lineCount": 27
+        },
+        {
+          "name": "applyTypography",
+          "params": [],
+          "exported": false,
+          "lineCount": 28
+        },
+        {
+          "name": "applyExplorerTypography",
+          "params": [],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "setExplorerTextSize",
+          "params": [
+            "size"
+          ],
+          "exported": false,
+          "lineCount": 17
+        },
+        {
+          "name": "setFont",
+          "params": [
+            "fontName"
+          ],
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "cycleFont",
+          "params": [],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "setTextSize",
+          "params": [
+            "size"
+          ],
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "getEffectiveTheme",
+          "params": [],
+          "returnType": "\"light\" | \"dark\"",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "getCustomColorSettings",
+          "params": [],
+          "returnType": "Record<string, string>",
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "applyCustomColors",
+          "params": [],
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "applyTheme",
+          "params": [],
+          "exported": false,
+          "lineCount": 24
+        },
+        {
+          "name": "cycleTheme",
+          "params": [],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "setTheme",
+          "params": [
+            "theme"
+          ],
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "$",
+          "params": [
+            "sel"
+          ],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "renderCallouts",
+          "params": [
+            "html"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 14
+        },
+        {
+          "name": "renderChecklists",
+          "params": [
+            "html"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 14
+        },
+        {
+          "name": "renderKaTeX",
+          "params": [
+            "html"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "processMermaidBlocks",
+          "params": [
+            "html"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "renderMermaidDivs",
+          "params": [],
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "openMermaidOverlay",
+          "params": [
+            "source"
+          ],
+          "exported": false,
+          "lineCount": 78
+        },
+        {
+          "name": "extractFrontmatter",
+          "params": [
+            "content"
+          ],
+          "returnType": "{ frontmatter: string | null; body: string }",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "parseYamlFrontmatter",
+          "params": [
+            "yaml"
+          ],
+          "returnType": "{ key: string; value: string }[]",
+          "exported": false,
+          "lineCount": 39
+        },
+        {
+          "name": "renderFrontmatter",
+          "params": [
+            "yaml"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "escapeHtml",
+          "params": [
+            "s"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "getPathExtension",
+          "params": [
+            "path"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "isMarkdownPath",
+          "params": [
+            "path"
+          ],
+          "returnType": "boolean",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "isHtmlPath",
+          "params": [
+            "path"
+          ],
+          "returnType": "boolean",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "isJsonPath",
+          "params": [
+            "path"
+          ],
+          "returnType": "boolean",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "isCsvPath",
+          "params": [
+            "path"
+          ],
+          "returnType": "boolean",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "isSvgPath",
+          "params": [
+            "path"
+          ],
+          "returnType": "boolean",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "isImagePath",
+          "params": [
+            "path"
+          ],
+          "returnType": "boolean",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "isPdfPath",
+          "params": [
+            "path"
+          ],
+          "returnType": "boolean",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "isPreviewOnlyPath",
+          "params": [
+            "path"
+          ],
+          "returnType": "boolean",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "renderHtmlPreview",
+          "params": [
+            "previewPane",
+            "content"
+          ],
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "renderImagePreview",
+          "params": [
+            "previewPane",
+            "path"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "renderPdfPreview",
+          "params": [
+            "previewPane",
+            "path"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "renderJsonPreview",
+          "params": [
+            "previewPane",
+            "content"
+          ],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "parseCsvRows",
+          "params": [
+            "content",
+            "maxRows"
+          ],
+          "returnType": "string[][]",
+          "exported": false,
+          "lineCount": 34
+        },
+        {
+          "name": "renderCsvPreview",
+          "params": [
+            "previewPane",
+            "content"
+          ],
+          "exported": false,
+          "lineCount": 17
+        },
+        {
+          "name": "updatePreview",
+          "params": [
+            "content"
+          ],
+          "exported": false,
+          "lineCount": 90
+        },
+        {
+          "name": "getPreviewLineElements",
+          "params": [
+            "previewPane"
+          ],
+          "returnType": "{ line: number; el: HTMLElement }[]",
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "syncPreviewToEditor",
+          "params": [],
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "syncEditorToPreview",
+          "params": [],
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "jumpEditorToPreviewClick",
+          "params": [
+            "target"
+          ],
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "updateSyncScrollButton",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "toggleSyncScroll",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "scrollPreviewToAnchor",
+          "params": [
+            "fragment"
+          ],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "updateWordCount",
+          "params": [
+            "content"
+          ],
+          "exported": false,
+          "lineCount": 15
+        },
+        {
+          "name": "updateCursorPosition",
+          "params": [
+            "view"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "startFileWatch",
+          "params": [
+            "path"
+          ],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "isEditorDirty",
+          "params": [],
+          "returnType": "boolean",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "reloadCurrentFile",
+          "params": [],
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "showFileChangedBanner",
+          "params": [],
+          "exported": false,
+          "lineCount": 21
+        },
+        {
+          "name": "startFolderWatch",
+          "params": [
+            "path"
+          ],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "setModified",
+          "params": [
+            "value"
+          ],
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "setFilename",
+          "params": [
+            "path"
+          ],
+          "exported": false,
+          "lineCount": 15
+        },
+        {
+          "name": "saveFile",
+          "params": [],
+          "exported": false,
+          "lineCount": 38
+        },
+        {
+          "name": "openFileDialog",
+          "params": [],
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "openFile",
+          "params": [
+            "path",
+            "skipScrollRestore"
+          ],
+          "exported": false,
+          "lineCount": 68
+        },
+        {
+          "name": "newFile",
+          "params": [],
+          "exported": false,
+          "lineCount": 31
+        },
+        {
+          "name": "toggleAutoSave",
+          "params": [],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "updateAutoSaveUI",
+          "params": [],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "scheduleAutoSave",
+          "params": [],
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "refreshGitStatus",
+          "params": [],
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "debounceGitRefresh",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "updateTreeGitDots",
+          "params": [],
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "updateGitUI",
+          "params": [],
+          "exported": false,
+          "lineCount": 71
+        },
+        {
+          "name": "populateChangedFiles",
+          "params": [
+            "container"
+          ],
+          "exported": false,
+          "lineCount": 23
+        },
+        {
+          "name": "toggleAutoSync",
+          "params": [],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "gitAutoSync",
+          "params": [
+            "filePath"
+          ],
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "gitManualCommit",
+          "params": [],
+          "exported": false,
+          "lineCount": 27
+        },
+        {
+          "name": "gitSync",
+          "params": [],
+          "exported": false,
+          "lineCount": 19
+        },
+        {
+          "name": "timeAgo",
+          "params": [
+            "unixSec"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "showSyncSetup",
+          "params": [],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "hideSyncSetup",
+          "params": [],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "checkSyncAuth",
+          "params": [],
+          "exported": false,
+          "lineCount": 17
+        },
+        {
+          "name": "connectSync",
+          "params": [],
+          "exported": false,
+          "lineCount": 36
+        },
+        {
+          "name": "showConflictResolver",
+          "params": [
+            "filePath"
+          ],
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "resolveConflict",
+          "params": [
+            "choice"
+          ],
+          "exported": false,
+          "lineCount": 25
+        },
+        {
+          "name": "scheduleSnapshot",
+          "params": [],
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "showFileHistory",
+          "params": [],
+          "exported": false,
+          "lineCount": 15
+        },
+        {
+          "name": "loadHistoryCommits",
+          "params": [],
+          "exported": false,
+          "lineCount": 32
+        },
+        {
+          "name": "loadHistorySnapshots",
+          "params": [],
+          "exported": false,
+          "lineCount": 31
+        },
+        {
+          "name": "showHistoryDiff",
+          "params": [
+            "commitId",
+            "label",
+            "_type"
+          ],
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "showSnapshotDiff",
+          "params": [
+            "snapPath",
+            "label"
+          ],
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "displayHistoryDiff",
+          "params": [
+            "oldContent",
+            "newContent",
+            "title"
+          ],
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "hideHistoryDiff",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "restoreFromCommit",
+          "params": [
+            "commitId"
+          ],
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "restoreFromSnapshot",
+          "params": [
+            "snapPath"
+          ],
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "gitDiscardFile",
+          "params": [
+            "filePath"
+          ],
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "scheduleRecovery",
+          "params": [],
+          "exported": false,
+          "lineCount": 14
+        },
+        {
+          "name": "deleteRecoveryForCurrent",
+          "params": [],
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "checkRecovery",
+          "params": [],
+          "exported": false,
+          "lineCount": 37
+        },
+        {
+          "name": "toggleLineNumbers",
+          "params": [],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "updateLineNumbersUI",
+          "params": [],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "flashStatus",
+          "params": [
+            "text",
+            "color",
+            "duration"
+          ],
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "showInputDialog",
+          "params": [
+            "message",
+            "defaultValue"
+          ],
+          "returnType": "Promise<string | null>",
+          "exported": false,
+          "lineCount": 32
+        },
+        {
+          "name": "showConfirmDialog",
+          "params": [
+            "message"
+          ],
+          "returnType": "Promise<boolean>",
+          "exported": false,
+          "lineCount": 28
+        },
+        {
+          "name": "onContentChange",
+          "params": [
+            "view"
+          ],
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "initDividerDrag",
+          "params": [],
+          "exported": false,
+          "lineCount": 36
+        },
+        {
+          "name": "initSidebarResize",
+          "params": [],
+          "exported": false,
+          "lineCount": 33
+        },
+        {
+          "name": "setViewMode",
+          "params": [
+            "mode"
+          ],
+          "exported": false,
+          "lineCount": 30
+        },
+        {
+          "name": "togglePreview",
+          "params": [],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "toggleReadMode",
+          "params": [],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "initDragDrop",
+          "params": [],
+          "exported": false,
+          "lineCount": 21
+        },
+        {
+          "name": "copyFormattedHTML",
+          "params": [],
+          "exported": false,
+          "lineCount": 19
+        },
+        {
+          "name": "getFileIcon",
+          "params": [
+            "entry"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "loadDirectory",
+          "params": [
+            "path"
+          ],
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "initTreeDrag",
+          "params": [
+            "item",
+            "entry"
+          ],
+          "exported": false,
+          "lineCount": 85
+        },
+        {
+          "name": "renderTreeEntries",
+          "params": [
+            "entries",
+            "container",
+            "depth"
+          ],
+          "exported": false,
+          "lineCount": 77
+        },
+        {
+          "name": "updateSidebarTitle",
+          "params": [
+            "path"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "setSidebarVisible",
+          "params": [
+            "visible"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "toggleSidebar",
+          "params": [],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "openFolder",
+          "params": [
+            "folderPath"
+          ],
+          "exported": false,
+          "lineCount": 22
+        },
+        {
+          "name": "refreshSidebar",
+          "params": [],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "showContextMenu",
+          "params": [
+            "x",
+            "y",
+            "target"
+          ],
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "hideContextMenu",
+          "params": [],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "ctxNewFile",
+          "params": [],
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "ctxNewFolder",
+          "params": [],
+          "exported": false,
+          "lineCount": 15
+        },
+        {
+          "name": "ctxDelete",
+          "params": [],
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "ctxRename",
+          "params": [],
+          "exported": false,
+          "lineCount": 63
+        },
+        {
+          "name": "toggleOutline",
+          "params": [],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "updateOutline",
+          "params": [
+            "content"
+          ],
+          "exported": false,
+          "lineCount": 35
+        },
+        {
+          "name": "getCommands",
+          "params": [],
+          "returnType": "PaletteCommand[]",
+          "exported": false,
+          "lineCount": 39
+        },
+        {
+          "name": "toggleCommandPalette",
+          "params": [],
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "renderPaletteResults",
+          "params": [
+            "query"
+          ],
+          "exported": false,
+          "lineCount": 25
+        },
+        {
+          "name": "handlePaletteKey",
+          "params": [
+            "e"
+          ],
+          "exported": false,
+          "lineCount": 29
+        },
+        {
+          "name": "openFileSearch",
+          "params": [],
+          "exported": false,
+          "lineCount": 28
+        },
+        {
+          "name": "closeFileSearch",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "renderFileSearchResults",
+          "params": [
+            "query"
+          ],
+          "exported": false,
+          "lineCount": 29
+        },
+        {
+          "name": "handleFileSearchKey",
+          "params": [
+            "e"
+          ],
+          "exported": false,
+          "lineCount": 29
+        },
+        {
+          "name": "navigateToSearchResult",
+          "params": [
+            "result"
+          ],
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "activateSidebarSearch",
+          "params": [],
+          "exported": false,
+          "lineCount": 24
+        },
+        {
+          "name": "deactivateSidebarSearch",
+          "params": [],
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "doSidebarSearch",
+          "params": [
+            "query"
+          ],
+          "exported": false,
+          "lineCount": 17
+        },
+        {
+          "name": "renderSidebarSearchResults",
+          "params": [],
+          "exported": false,
+          "lineCount": 32
+        },
+        {
+          "name": "openSidebarSearchResult",
+          "params": [
+            "index"
+          ],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "saveScrollPosition",
+          "params": [],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "restoreScrollPosition",
+          "params": [
+            "path"
+          ],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "createEditorExtensions",
+          "params": [],
+          "exported": false,
+          "lineCount": 32
+        },
+        {
+          "name": "createTab",
+          "params": [
+            "filePath",
+            "content"
+          ],
+          "returnType": "Tab",
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "saveActiveTabState",
+          "params": [],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "switchToTab",
+          "params": [
+            "tabId"
+          ],
+          "exported": false,
+          "lineCount": 40
+        },
+        {
+          "name": "renderTabs",
+          "params": [],
+          "exported": false,
+          "lineCount": 53
+        },
+        {
+          "name": "closeTab",
+          "params": [
+            "tabId"
+          ],
+          "exported": false,
+          "lineCount": 64
+        },
+        {
+          "name": "closeActiveTab",
+          "params": [],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "showTabContextMenu",
+          "params": [
+            "x",
+            "y",
+            "tabId"
+          ],
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "hideTabContextMenu",
+          "params": [],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "closeOtherTabs",
+          "params": [
+            "tabId"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "closeTabsToRight",
+          "params": [
+            "tabId"
+          ],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "closeAllTabs",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "persistOpenTabs",
+          "params": [],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "updateSelectionCount",
+          "params": [
+            "view"
+          ],
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "updateActivityBarUI",
+          "params": [],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "toggleAppearancePopover",
+          "params": [],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "closeAppearancePopover",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "appearanceItem",
+          "params": [
+            "label",
+            "value",
+            "isActive"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "sizeAppearanceItem",
+          "params": [
+            "scope",
+            "label",
+            "value",
+            "isActive"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "setRestoreLastSession",
+          "params": [
+            "enabled"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "renderAppearancePanel",
+          "params": [
+            "panel"
+          ],
+          "exported": false,
+          "lineCount": 77
+        },
+        {
+          "name": "toggleHelp",
+          "params": [],
+          "exported": false,
+          "lineCount": 35
+        },
+        {
+          "name": "copyRawMarkdown",
+          "params": [],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "copyPlainText",
+          "params": [],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "ctxDuplicate",
+          "params": [],
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "ctxCopyAbsolutePath",
+          "params": [],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "ctxCopyRelativePath",
+          "params": [],
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "ctxReveal",
+          "params": [],
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "preprocessForHtmlExport",
+          "params": [
+            "content"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 29
+        },
+        {
+          "name": "exportHTML",
+          "params": [],
+          "exported": false,
+          "lineCount": 19
+        },
+        {
+          "name": "preparePreviewCaptureNode",
+          "params": [],
+          "returnType": "{ node: HTMLElement; cleanup: () => void }",
+          "exported": false,
+          "lineCount": 71
+        },
+        {
+          "name": "dataUrlBase64",
+          "params": [
+            "dataUrl"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "dataUrlToUint8Array",
+          "params": [
+            "dataUrl"
+          ],
+          "returnType": "Uint8Array",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "nextPaint",
+          "params": [],
+          "returnType": "Promise<void>",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "waitForPreviewAssets",
+          "params": [
+            "node"
+          ],
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "withPreviewAvailable",
+          "params": [
+            "work"
+          ],
+          "returnType": "Promise<T>",
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "capturePreviewPng",
+          "params": [],
+          "returnType": "Promise<{ dataUrl: string; width: number; height: number }>",
+          "exported": false,
+          "lineCount": 25
+        },
+        {
+          "name": "loadImageDataUrl",
+          "params": [
+            "dataUrl"
+          ],
+          "returnType": "Promise<HTMLImageElement>",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "sliceImageDataUrl",
+          "params": [
+            "dataUrl",
+            "maxSliceHeight"
+          ],
+          "returnType": "Promise<{ dataUrl: string; width: number; height: number }[]>",
+          "exported": false,
+          "lineCount": 22
+        },
+        {
+          "name": "exportPreviewImage",
+          "params": [
+            "format"
+          ],
+          "exported": false,
+          "lineCount": 43
+        },
+        {
+          "name": "exportPDF",
+          "params": [],
+          "exported": false,
+          "lineCount": 38
+        },
+        {
+          "name": "exportDOCX",
+          "params": [],
+          "exported": false,
+          "lineCount": 51
+        },
+        {
+          "name": "showImageLightbox",
+          "params": [
+            "src"
+          ],
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "handleImagePaste",
+          "params": [
+            "e"
+          ],
+          "exported": false,
+          "lineCount": 36
+        },
+        {
+          "name": "doUpdateCheck",
+          "params": [
+            "manual"
+          ],
+          "exported": false,
+          "lineCount": 53
+        },
+        {
+          "name": "checkForUpdates",
+          "params": [],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "applyFormat",
+          "params": [
+            "fmt"
+          ],
+          "exported": false,
+          "lineCount": 51
+        },
+        {
+          "name": "updateBreadcrumb",
+          "params": [],
+          "exported": false,
+          "lineCount": 26
+        },
+        {
+          "name": "initScrollSync",
+          "params": [],
+          "exported": false,
+          "lineCount": 29
+        },
+        {
+          "name": "loadCustomCSS",
+          "params": [],
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "handleNativeMenuCommand",
+          "params": [
+            "command"
+          ],
+          "exported": false,
+          "lineCount": 59
+        },
+        {
+          "name": "renderShortcutsContent",
+          "params": [],
+          "exported": false,
+          "lineCount": 41
+        },
+        {
+          "name": "startCapture",
+          "params": [
+            "row"
+          ],
+          "exported": false,
+          "lineCount": 75
+        },
+        {
+          "name": "toggleShortcutsModal",
+          "params": [],
+          "exported": false,
+          "lineCount": 10
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "@codemirror/view",
+          "specifiers": [
+            "EditorView",
+            "keymap",
+            "lineNumbers",
+            "highlightActiveLine",
+            "highlightActiveLineGutter",
+            "ViewUpdate"
+          ]
+        },
+        {
+          "source": "@codemirror/state",
+          "specifiers": [
+            "EditorState",
+            "Compartment"
+          ]
+        },
+        {
+          "source": "@codemirror/lang-markdown",
+          "specifiers": [
+            "markdown",
+            "markdownLanguage"
+          ]
+        },
+        {
+          "source": "@codemirror/language-data",
+          "specifiers": [
+            "languages"
+          ]
+        },
+        {
+          "source": "@codemirror/theme-one-dark",
+          "specifiers": [
+            "oneDark"
+          ]
+        },
+        {
+          "source": "@codemirror/commands",
+          "specifiers": [
+            "defaultKeymap",
+            "indentWithTab",
+            "history",
+            "historyKeymap"
+          ]
+        },
+        {
+          "source": "@codemirror/language",
+          "specifiers": [
+            "syntaxHighlighting",
+            "defaultHighlightStyle",
+            "bracketMatching",
+            "foldGutter",
+            "foldKeymap"
+          ]
+        },
+        {
+          "source": "@codemirror/autocomplete",
+          "specifiers": [
+            "closeBrackets"
+          ]
+        },
+        {
+          "source": "@codemirror/search",
+          "specifiers": [
+            "search",
+            "searchKeymap"
+          ]
+        },
+        {
+          "source": "markdown-it",
+          "specifiers": [
+            "MarkdownIt"
+          ]
+        },
+        {
+          "source": "markdown-it-footnote",
+          "specifiers": [
+            "footnote"
+          ]
+        },
+        {
+          "source": "mermaid",
+          "specifiers": [
+            "mermaid"
+          ]
+        },
+        {
+          "source": "panzoom",
+          "specifiers": [
+            "panzoom"
+          ]
+        },
+        {
+          "source": "katex",
+          "specifiers": [
+            "katex"
+          ]
+        },
+        {
+          "source": "html-to-image",
+          "specifiers": [
+            "toJpeg",
+            "toPng"
+          ]
+        },
+        {
+          "source": "jspdf",
+          "specifiers": [
+            "jsPDF"
+          ]
+        },
+        {
+          "source": "docx",
+          "specifiers": [
+            "DocxDocument",
+            "ImageRun",
+            "Packer",
+            "Paragraph"
+          ]
+        },
+        {
+          "source": "katex/dist/katex.min.css",
+          "specifiers": []
+        },
+        {
+          "source": "@tauri-apps/api/core",
+          "specifiers": [
+            "convertFileSrc",
+            "invoke"
+          ]
+        },
+        {
+          "source": "@tauri-apps/api/event",
+          "specifiers": [
+            "listen"
+          ]
+        },
+        {
+          "source": "@tauri-apps/api/window",
+          "specifiers": [
+            "getCurrentWindow"
+          ]
+        },
+        {
+          "source": "@tauri-apps/plugin-dialog",
+          "specifiers": [
+            "open",
+            "save"
+          ]
+        },
+        {
+          "source": "@tauri-apps/plugin-updater",
+          "specifiers": [
+            "check"
+          ]
+        },
+        {
+          "source": "@tauri-apps/plugin-process",
+          "specifiers": [
+            "relaunch"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 5216,
+      "hasStructuralAnalysis": true
+    },
+    "src/styles.css": {
+      "filePath": "src/styles.css",
+      "contentHash": "fcf5ff3bfca421f5ec75b77b8b6897fb71fb01828a71e6bd632c03665d75d5bb",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 2669,
+      "hasStructuralAnalysis": false
+    },
+    "vite.config.ts": {
+      "filePath": "vite.config.ts",
+      "contentHash": "071b8aec64417430f817d4a40bfc0915dca3b9311cdb04bfd7b818526e53920b",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "vite",
+          "specifiers": [
+            "defineConfig"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 31,
+      "hasStructuralAnalysis": true
+    },
+    "tsconfig.json": {
+      "filePath": "tsconfig.json",
+      "contentHash": "eacc61733333e59fe271157d746cf12c89e57177fa74855799c058841f9c06c1",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 24,
+      "hasStructuralAnalysis": true
+    },
+    "package.json": {
+      "filePath": "package.json",
+      "contentHash": "704796ad3c9251397c34ead81b327264f8de31b18ac6559a37918efaf84fdb0c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 41,
+      "hasStructuralAnalysis": true
+    },
+    "index.html": {
+      "filePath": "index.html",
+      "contentHash": "7f3498288f58ecf12430d2b9f1bdc59d61d925ec61f738fb46287f070dfc3184",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 383,
+      "hasStructuralAnalysis": false
+    },
+    "src-tauri/src/lib.rs": {
+      "filePath": "src-tauri/src/lib.rs",
+      "contentHash": "5718791dfb6c56ccaf9dac933297c8e60de3659095b684798d84404a459d3489",
+      "functions": [
+        {
+          "name": "raise_file_descriptor_limit",
+          "params": [],
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "raise_file_descriptor_limit",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "kaelio_home",
+          "params": [],
+          "returnType": "Result<PathBuf, String>",
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "read_file",
+          "params": [
+            "path"
+          ],
+          "returnType": "Result<FileInfo, String>",
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "save_binary_base64",
+          "params": [
+            "path",
+            "data_base64"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "save_file",
+          "params": [
+            "path",
+            "content"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "word_count",
+          "params": [
+            "text"
+          ],
+          "returnType": "WordCount",
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "list_directory",
+          "params": [
+            "path"
+          ],
+          "returnType": "Result<Vec<DirEntry>, String>",
+          "exported": false,
+          "lineCount": 30
+        },
+        {
+          "name": "get_home_dir",
+          "params": [],
+          "returnType": "Result<String, String>",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "get_initial_file",
+          "params": [],
+          "returnType": "Option<String>",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "create_file",
+          "params": [
+            "path"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "create_directory",
+          "params": [
+            "path"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "delete_entry",
+          "params": [
+            "path"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "rename_entry",
+          "params": [
+            "old_path",
+            "new_path"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "list_files_recursive",
+          "params": [
+            "path",
+            "max_depth"
+          ],
+          "returnType": "Result<Vec<String>, String>",
+          "exported": false,
+          "lineCount": 27
+        },
+        {
+          "name": "search_in_files",
+          "params": [
+            "folder_path",
+            "query"
+          ],
+          "returnType": "Result<Vec<SearchResult>, String>",
+          "exported": false,
+          "lineCount": 58
+        },
+        {
+          "name": "get_recovery_dir",
+          "params": [],
+          "returnType": "Result<PathBuf, String>",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "path_to_recovery_name",
+          "params": [
+            "path"
+          ],
+          "returnType": "String",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "save_recovery",
+          "params": [
+            "original_path",
+            "content"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "get_recovery_files",
+          "params": [],
+          "returnType": "Result<Vec<RecoveryInfo>, String>",
+          "exported": false,
+          "lineCount": 25
+        },
+        {
+          "name": "read_recovery_content",
+          "params": [
+            "recovery_path"
+          ],
+          "returnType": "Result<String, String>",
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "delete_recovery",
+          "params": [
+            "recovery_path"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "base64url_encode",
+          "params": [
+            "data"
+          ],
+          "returnType": "String",
+          "exported": false,
+          "lineCount": 19
+        },
+        {
+          "name": "sidecar_name",
+          "params": [
+            "base"
+          ],
+          "returnType": "String",
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "find_bundled_binary",
+          "params": [
+            "app",
+            "base"
+          ],
+          "returnType": "Option<PathBuf>",
+          "exported": false,
+          "lineCount": 24
+        },
+        {
+          "name": "sidecar_path_env",
+          "params": [
+            "app",
+            "base_path"
+          ],
+          "returnType": "String",
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "pandoc_command",
+          "params": [
+            "app"
+          ],
+          "returnType": "Command",
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "output_file_ready",
+          "params": [
+            "path"
+          ],
+          "returnType": "bool",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "export_pdf",
+          "params": [
+            "markdown_content",
+            "output_path",
+            "source_format",
+            "app"
+          ],
+          "returnType": "Result<String, String>",
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "export_pdf_blocking",
+          "params": [
+            "markdown_content",
+            "output_path",
+            "source_format",
+            "app"
+          ],
+          "returnType": "Result<String, String>",
+          "exported": false,
+          "lineCount": 241
+        },
+        {
+          "name": "export_docx",
+          "params": [
+            "markdown_content",
+            "output_path",
+            "app"
+          ],
+          "returnType": "Result<String, String>",
+          "exported": false,
+          "lineCount": 88
+        },
+        {
+          "name": "duplicate_entry",
+          "params": [
+            "path"
+          ],
+          "returnType": "Result<String, String>",
+          "exported": false,
+          "lineCount": 37
+        },
+        {
+          "name": "reveal_in_finder",
+          "params": [
+            "path"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 23
+        },
+        {
+          "name": "export_html",
+          "params": [
+            "markdown_content",
+            "theme"
+          ],
+          "returnType": "Result<String, String>",
+          "exported": false,
+          "lineCount": 139
+        },
+        {
+          "name": "escape_html",
+          "params": [
+            "s"
+          ],
+          "returnType": "String",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "inline_format",
+          "params": [
+            "s"
+          ],
+          "returnType": "String",
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "regex_replace_all",
+          "params": [
+            "text",
+            "pattern",
+            "replacement"
+          ],
+          "returnType": "String",
+          "exported": false,
+          "lineCount": 61
+        },
+        {
+          "name": "replace_delimited",
+          "params": [
+            "text",
+            "open",
+            "close",
+            "f"
+          ],
+          "returnType": "String",
+          "exported": false,
+          "lineCount": 23
+        },
+        {
+          "name": "load_custom_css",
+          "params": [],
+          "returnType": "Result<String, String>",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "create_window",
+          "params": [
+            "app",
+            "file_path"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 26
+        },
+        {
+          "name": "watch_file",
+          "params": [
+            "path",
+            "window"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 39
+        },
+        {
+          "name": "unwatch_file",
+          "params": [
+            "window"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "watch_folder",
+          "params": [
+            "path",
+            "window"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 38
+        },
+        {
+          "name": "unwatch_folder",
+          "params": [
+            "window"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "try_git_credential_fill",
+          "params": [
+            "url"
+          ],
+          "returnType": "Option<(String, String)>",
+          "exported": false,
+          "lineCount": 28
+        },
+        {
+          "name": "git_cred_callback",
+          "params": [
+            "url",
+            "username",
+            "allowed"
+          ],
+          "returnType": "Result<Cred, git2::Error>",
+          "exported": false,
+          "lineCount": 41
+        },
+        {
+          "name": "git_repo_info",
+          "params": [
+            "folder_path"
+          ],
+          "returnType": "Result<GitRepoInfo, String>",
+          "exported": false,
+          "lineCount": 30
+        },
+        {
+          "name": "git_status",
+          "params": [
+            "folder_path"
+          ],
+          "returnType": "Result<Vec<GitFileStatus>, String>",
+          "exported": false,
+          "lineCount": 28
+        },
+        {
+          "name": "git_diff_file",
+          "params": [
+            "folder_path",
+            "file_path"
+          ],
+          "returnType": "Result<GitDiffResult, String>",
+          "exported": false,
+          "lineCount": 40
+        },
+        {
+          "name": "git_log",
+          "params": [
+            "folder_path",
+            "file_path",
+            "limit"
+          ],
+          "returnType": "Result<Vec<GitLogEntry>, String>",
+          "exported": false,
+          "lineCount": 41
+        },
+        {
+          "name": "git_commit",
+          "params": [
+            "folder_path",
+            "files",
+            "message"
+          ],
+          "returnType": "Result<String, String>",
+          "exported": false,
+          "lineCount": 32
+        },
+        {
+          "name": "git_push",
+          "params": [
+            "folder_path"
+          ],
+          "returnType": "Result<String, String>",
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "git_pull",
+          "params": [
+            "folder_path"
+          ],
+          "returnType": "Result<GitSyncResult, String>",
+          "exported": false,
+          "lineCount": 77
+        },
+        {
+          "name": "git_auto_sync",
+          "params": [
+            "folder_path",
+            "file_path"
+          ],
+          "returnType": "Result<GitSyncResult, String>",
+          "exported": false,
+          "lineCount": 66
+        },
+        {
+          "name": "git_init",
+          "params": [
+            "folder_path"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "git_setup_sync",
+          "params": [
+            "folder_path",
+            "remote_url"
+          ],
+          "returnType": "Result<GitRepoInfo, String>",
+          "exported": false,
+          "lineCount": 58
+        },
+        {
+          "name": "git_check_auth",
+          "params": [
+            "remote_url"
+          ],
+          "returnType": "Result<bool, String>",
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "git_discard_file",
+          "params": [
+            "folder_path",
+            "file_path"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "git_stage_file",
+          "params": [
+            "folder_path",
+            "file_path"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "git_file_at_commit",
+          "params": [
+            "folder_path",
+            "file_path",
+            "commit_id"
+          ],
+          "returnType": "Result<String, String>",
+          "exported": false,
+          "lineCount": 14
+        },
+        {
+          "name": "git_restore_file",
+          "params": [
+            "folder_path",
+            "file_path",
+            "commit_id"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "git_conflict_info",
+          "params": [
+            "folder_path",
+            "file_path"
+          ],
+          "returnType": "Result<GitConflictInfo, String>",
+          "exported": false,
+          "lineCount": 49
+        },
+        {
+          "name": "git_resolve_conflict",
+          "params": [
+            "folder_path",
+            "file_path",
+            "content"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "save_snapshot",
+          "params": [
+            "file_path",
+            "content"
+          ],
+          "returnType": "Result<(), String>",
+          "exported": false,
+          "lineCount": 27
+        },
+        {
+          "name": "md5_simple",
+          "params": [
+            "input"
+          ],
+          "returnType": "u64",
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "list_snapshots",
+          "params": [
+            "file_path"
+          ],
+          "returnType": "Result<Vec<SnapshotInfo>, String>",
+          "exported": false,
+          "lineCount": 22
+        },
+        {
+          "name": "read_snapshot",
+          "params": [
+            "snap_path"
+          ],
+          "returnType": "Result<String, String>",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "run",
+          "params": [],
+          "exported": true,
+          "lineCount": 181
+        }
+      ],
+      "classes": [
+        {
+          "name": "FileInfo",
+          "methods": [],
+          "properties": [
+            "path",
+            "content",
+            "size"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "DirEntry",
+          "methods": [],
+          "properties": [
+            "name",
+            "path",
+            "is_dir",
+            "extension"
+          ],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "WordCount",
+          "methods": [],
+          "properties": [
+            "chars",
+            "words",
+            "lines"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "GitFileStatus",
+          "methods": [],
+          "properties": [
+            "path",
+            "status"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "GitRepoInfo",
+          "methods": [],
+          "properties": [
+            "is_repo",
+            "branch",
+            "remote_url",
+            "ahead",
+            "behind"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "GitLogEntry",
+          "methods": [],
+          "properties": [
+            "id",
+            "message",
+            "author",
+            "timestamp"
+          ],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "GitDiffResult",
+          "methods": [],
+          "properties": [
+            "old_content",
+            "new_content",
+            "patch"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "GitSyncResult",
+          "methods": [],
+          "properties": [
+            "committed",
+            "pushed",
+            "pulled",
+            "message",
+            "conflicts"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "GitConflictInfo",
+          "methods": [],
+          "properties": [
+            "path",
+            "local_content",
+            "remote_content",
+            "base_content"
+          ],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "SearchResult",
+          "methods": [],
+          "properties": [
+            "file_path",
+            "line_number",
+            "line_content",
+            "match_start",
+            "match_end"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "RecoveryInfo",
+          "methods": [],
+          "properties": [
+            "original_path",
+            "recovery_path",
+            "timestamp"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "SnapshotInfo",
+          "methods": [],
+          "properties": [
+            "file_path",
+            "timestamp",
+            "snap_path"
+          ],
+          "exported": false,
+          "lineCount": 5
+        }
+      ],
+      "imports": [
+        {
+          "source": "std::collections",
+          "specifiers": [
+            "HashMap"
+          ]
+        },
+        {
+          "source": "std",
+          "specifiers": [
+            "fs"
+          ]
+        },
+        {
+          "source": "std::path",
+          "specifiers": [
+            "Path",
+            "PathBuf"
+          ]
+        },
+        {
+          "source": "std::process",
+          "specifiers": [
+            "Command"
+          ]
+        },
+        {
+          "source": "std::sync",
+          "specifiers": [
+            "Mutex"
+          ]
+        },
+        {
+          "source": "base64",
+          "specifiers": [
+            "engine::general_purpose"
+          ]
+        },
+        {
+          "source": "serde",
+          "specifiers": [
+            "Deserialize",
+            "Serialize"
+          ]
+        },
+        {
+          "source": "tauri::menu",
+          "specifiers": [
+            "Menu",
+            "MenuItem",
+            "PredefinedMenuItem",
+            "Submenu"
+          ]
+        },
+        {
+          "source": "tauri",
+          "specifiers": [
+            "Emitter",
+            "Manager"
+          ]
+        },
+        {
+          "source": "notify",
+          "specifiers": [
+            "Watcher",
+            "RecommendedWatcher",
+            "RecursiveMode",
+            "Event",
+            "EventKind"
+          ]
+        },
+        {
+          "source": "wait_timeout",
+          "specifiers": [
+            "ChildExt"
+          ]
+        },
+        {
+          "source": "git2",
+          "specifiers": [
+            "Repository",
+            "StatusOptions",
+            "Signature",
+            "Cred",
+            "CredentialType"
+          ]
+        }
+      ],
+      "exports": [
+        "run"
+      ],
+      "totalLines": 2161,
+      "hasStructuralAnalysis": true
+    },
+    "src-tauri/src/main.rs": {
+      "filePath": "src-tauri/src/main.rs",
+      "contentHash": "adae2eb8f5f6efbec83a9f5cdda76d42b64bf6769bb1d4622ec6a38e5f95614a",
+      "functions": [
+        {
+          "name": "main",
+          "params": [],
+          "exported": false,
+          "lineCount": 3
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 7,
+      "hasStructuralAnalysis": true
+    },
+    "src-tauri/build.rs": {
+      "filePath": "src-tauri/build.rs",
+      "contentHash": "487059eaf8a947b80f20a9aacac038a5047b2ad69d2401b827376c67d6fe847f",
+      "functions": [
+        {
+          "name": "main",
+          "params": [],
+          "exported": false,
+          "lineCount": 3
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 4,
+      "hasStructuralAnalysis": true
+    },
+    "README.md": {
+      "filePath": "README.md",
+      "contentHash": "c6ca9acb688c89928a419f130563aa696f06b5d59d8b83db99455cb5021f0924",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 220,
+      "hasStructuralAnalysis": true
+    },
+    "CHANGELOG.md": {
+      "filePath": "CHANGELOG.md",
+      "contentHash": "72ad94de5e2651c520bb767d0628f5c217527a9de3408ca02fe3f26b9582fde4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 49,
+      "hasStructuralAnalysis": true
+    },
+    "CLAUDE.md": {
+      "filePath": "CLAUDE.md",
+      "contentHash": "8a4fb78d3482bde19e31673077b62e91cc62fe083f8875eaccef2539e5bbb86a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 55,
+      "hasStructuralAnalysis": true
+    },
+    "AGENTS.md": {
+      "filePath": "AGENTS.md",
+      "contentHash": "9ae21055074be13e8513c548117850e1516de2a08d28f8a19b5107fedd501a38",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 55,
+      "hasStructuralAnalysis": true
+    },
+    "docs/00-architecture-overview.md": {
+      "filePath": "docs/00-architecture-overview.md",
+      "contentHash": "7861eead6ea9bdd6739a6af7895b4b457feaae9eba7c1a8f83d21f090489e475",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 79,
+      "hasStructuralAnalysis": true
+    },
+    "docs/01-editor-engine.md": {
+      "filePath": "docs/01-editor-engine.md",
+      "contentHash": "597bcc05d2b4dd687017b06e6bd38f8f83073bb91c06113c3a2e1cd4eaa7c420",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 67,
+      "hasStructuralAnalysis": true
+    },
+    "docs/02-preview-pipeline.md": {
+      "filePath": "docs/02-preview-pipeline.md",
+      "contentHash": "0a48d9133a9bbddbaee6e787bfa591d6316a73f67483f34dfb223e245e09980f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 90,
+      "hasStructuralAnalysis": true
+    },
+    "docs/03-file-operations.md": {
+      "filePath": "docs/03-file-operations.md",
+      "contentHash": "d224d844f18e78d9691413d215962f9708e5aa789e636199c12237e9eccf2dd3",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 80,
+      "hasStructuralAnalysis": true
+    },
+    "docs/04-pdf-export.md": {
+      "filePath": "docs/04-pdf-export.md",
+      "contentHash": "3094cccca33074563aa48bab6af3da205384432eac90e90761ba0d4641578d52",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 70,
+      "hasStructuralAnalysis": true
+    },
+    "docs/05-ui-layout.md": {
+      "filePath": "docs/05-ui-layout.md",
+      "contentHash": "7ba1230ebba34bd2d5946511366103054aca21ae01abc24ab218c77f590cb54f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 123,
+      "hasStructuralAnalysis": true
+    },
+    "docs/06-auto-update.md": {
+      "filePath": "docs/06-auto-update.md",
+      "contentHash": "889853b5ea4038bbf6d38b819275ef8b4ae7837f99f7dbc8a4926853b10fa1d2",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 82,
+      "hasStructuralAnalysis": true
+    },
+    "docs/07-release-pipeline.md": {
+      "filePath": "docs/07-release-pipeline.md",
+      "contentHash": "e0b61be44183ef1d2af2585e2ffe79f6b36fa99ec29dd6bc38e735831424ecb7",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 101,
+      "hasStructuralAnalysis": true
+    },
+    ".github/workflows/release.yml": {
+      "filePath": ".github/workflows/release.yml",
+      "contentHash": "2fb51de1566c53944bfb526241c9680a4799dfdc3a66f080ec8771fe6cd3d364",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 163,
+      "hasStructuralAnalysis": true
+    },
+    "web/index.html": {
+      "filePath": "web/index.html",
+      "contentHash": "b428096b2d5f5826887a13544ded13b56be5cee2179c2f5d25ac4ebbaed4b40d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 110,
+      "hasStructuralAnalysis": false
+    },
+    "web/package.json": {
+      "filePath": "web/package.json",
+      "contentHash": "5f7368f910cd47777a38c5a812cbbf7bd17e0c2ec8930e5bb619f3bccc7f6d6d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 37,
+      "hasStructuralAnalysis": true
+    },
+    "web/src/main.ts": {
+      "filePath": "web/src/main.ts",
+      "contentHash": "3e2308ae830d31dfea81333588d95a5dfd65e6c545b57011540e9c42f7abc2d7",
+      "functions": [
+        {
+          "name": "cycleFont",
+          "params": [],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "applyFont",
+          "params": [],
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "toggleLineNumbers",
+          "params": [],
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "toggleZenMode",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "getRecentFiles",
+          "params": [],
+          "returnType": "RecentEntry[]",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "addRecentFile",
+          "params": [
+            "name",
+            "content"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "renderRecentFiles",
+          "params": [],
+          "exported": false,
+          "lineCount": 23
+        },
+        {
+          "name": "toggleRecentPanel",
+          "params": [],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "applyZoom",
+          "params": [],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "zoomIn",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "zoomOut",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "zoomReset",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "getEffectiveTheme",
+          "params": [],
+          "returnType": "\"light\" | \"dark\"",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "applyTheme",
+          "params": [],
+          "exported": false,
+          "lineCount": 24
+        },
+        {
+          "name": "cycleTheme",
+          "params": [],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "$",
+          "params": [
+            "sel"
+          ],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "renderKaTeX",
+          "params": [
+            "html"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "processMermaidBlocks",
+          "params": [
+            "html"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "renderMermaidDivs",
+          "params": [],
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "openMermaidOverlay",
+          "params": [
+            "source"
+          ],
+          "exported": false,
+          "lineCount": 70
+        },
+        {
+          "name": "extractFrontmatter",
+          "params": [
+            "content"
+          ],
+          "returnType": "{ frontmatter: string | null; body: string }",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "parseYamlFrontmatter",
+          "params": [
+            "yaml"
+          ],
+          "returnType": "{ key: string; value: string }[]",
+          "exported": false,
+          "lineCount": 32
+        },
+        {
+          "name": "renderFrontmatter",
+          "params": [
+            "yaml"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "escapeHtml",
+          "params": [
+            "s"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "updatePreview",
+          "params": [
+            "content"
+          ],
+          "exported": false,
+          "lineCount": 21
+        },
+        {
+          "name": "wordCount",
+          "params": [
+            "text"
+          ],
+          "returnType": "{ chars: number; words: number; lines: number }",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "updateWordCount",
+          "params": [
+            "content"
+          ],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "updateCursorPosition",
+          "params": [
+            "view"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "updateSelectionCount",
+          "params": [
+            "view"
+          ],
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "flashStatus",
+          "params": [
+            "text",
+            "color",
+            "duration"
+          ],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "setModified",
+          "params": [
+            "value"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "setFilename",
+          "params": [
+            "name"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "loadContent",
+          "params": [
+            "name",
+            "content"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "openFileDialog",
+          "params": [],
+          "exported": false,
+          "lineCount": 32
+        },
+        {
+          "name": "saveFile",
+          "params": [],
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "saveFileAs",
+          "params": [],
+          "exported": false,
+          "lineCount": 29
+        },
+        {
+          "name": "newFile",
+          "params": [],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "copyFormattedHTML",
+          "params": [],
+          "exported": false,
+          "lineCount": 19
+        },
+        {
+          "name": "copyRawMarkdown",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "copyPlainText",
+          "params": [],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "exportHTML",
+          "params": [],
+          "exported": false,
+          "lineCount": 30
+        },
+        {
+          "name": "showImageLightbox",
+          "params": [
+            "src"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "handleImagePaste",
+          "params": [
+            "e"
+          ],
+          "exported": false,
+          "lineCount": 14
+        },
+        {
+          "name": "initScrollSync",
+          "params": [],
+          "exported": false,
+          "lineCount": 19
+        },
+        {
+          "name": "applyFormat",
+          "params": [
+            "fmt"
+          ],
+          "exported": false,
+          "lineCount": 35
+        },
+        {
+          "name": "getCommands",
+          "params": [],
+          "returnType": "PaletteCommand[]",
+          "exported": false,
+          "lineCount": 21
+        },
+        {
+          "name": "toggleCommandPalette",
+          "params": [],
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "renderPaletteResults",
+          "params": [
+            "query"
+          ],
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "handlePaletteKey",
+          "params": [
+            "e"
+          ],
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "onContentChange",
+          "params": [
+            "view"
+          ],
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "initDividerDrag",
+          "params": [],
+          "exported": false,
+          "lineCount": 34
+        },
+        {
+          "name": "setViewMode",
+          "params": [
+            "mode"
+          ],
+          "exported": false,
+          "lineCount": 28
+        },
+        {
+          "name": "togglePreview",
+          "params": [],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "toggleReadMode",
+          "params": [],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "initDragDrop",
+          "params": [],
+          "exported": false,
+          "lineCount": 43
+        },
+        {
+          "name": "dismissBanner",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "@codemirror/view",
+          "specifiers": [
+            "EditorView",
+            "keymap",
+            "lineNumbers",
+            "highlightActiveLine",
+            "highlightActiveLineGutter",
+            "ViewUpdate"
+          ]
+        },
+        {
+          "source": "@codemirror/state",
+          "specifiers": [
+            "EditorState",
+            "Compartment"
+          ]
+        },
+        {
+          "source": "@codemirror/lang-markdown",
+          "specifiers": [
+            "markdown",
+            "markdownLanguage"
+          ]
+        },
+        {
+          "source": "@codemirror/language-data",
+          "specifiers": [
+            "languages"
+          ]
+        },
+        {
+          "source": "@codemirror/theme-one-dark",
+          "specifiers": [
+            "oneDark"
+          ]
+        },
+        {
+          "source": "@codemirror/commands",
+          "specifiers": [
+            "defaultKeymap",
+            "indentWithTab",
+            "history",
+            "historyKeymap"
+          ]
+        },
+        {
+          "source": "@codemirror/language",
+          "specifiers": [
+            "syntaxHighlighting",
+            "defaultHighlightStyle",
+            "bracketMatching",
+            "foldGutter",
+            "foldKeymap"
+          ]
+        },
+        {
+          "source": "@codemirror/autocomplete",
+          "specifiers": [
+            "closeBrackets"
+          ]
+        },
+        {
+          "source": "@codemirror/search",
+          "specifiers": [
+            "search",
+            "searchKeymap"
+          ]
+        },
+        {
+          "source": "markdown-it",
+          "specifiers": [
+            "MarkdownIt"
+          ]
+        },
+        {
+          "source": "markdown-it-footnote",
+          "specifiers": [
+            "footnote"
+          ]
+        },
+        {
+          "source": "mermaid",
+          "specifiers": [
+            "mermaid"
+          ]
+        },
+        {
+          "source": "panzoom",
+          "specifiers": [
+            "panzoom"
+          ]
+        },
+        {
+          "source": "katex",
+          "specifiers": [
+            "katex"
+          ]
+        },
+        {
+          "source": "katex/dist/katex.min.css",
+          "specifiers": []
+        }
+      ],
+      "exports": [],
+      "totalLines": 1226,
+      "hasStructuralAnalysis": true
+    },
+    "web/src/styles.css": {
+      "filePath": "web/src/styles.css",
+      "contentHash": "d7672405402dd4852120a9b948915a5e05e2c7bcaf625b537a8ba9a0101c6f41",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 892,
+      "hasStructuralAnalysis": false
+    },
+    "web/tsconfig.json": {
+      "filePath": "web/tsconfig.json",
+      "contentHash": "c3df7d9e7ce2ec1fbfb3884f3b091ec1f3d57a814a29c354e03700e31a3834ff",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 20,
+      "hasStructuralAnalysis": true
+    },
+    "web/vite.config.ts": {
+      "filePath": "web/vite.config.ts",
+      "contentHash": "85274c2b42423b348944fa63d8548f7375c1f4bb52be6de3eb83411e3c884a2c",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "vite",
+          "specifiers": [
+            "defineConfig"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 8,
+      "hasStructuralAnalysis": true
+    }
+  }
+}

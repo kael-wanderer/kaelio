@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kaelio</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <div id="app">
+      <div id="toolbar">
+        <div id="file-info">
+          <span id="filename">No file open</span>
+          <span id="modified-indicator" class="hidden">●</span>
+          <span id="autosave-indicator" class="hidden">Auto</span>
+        </div>
+        <div id="toolbar-actions">
+          <!-- Dropdown menus -->
+          <div class="toolbar-dropdown app-menu-dropdown">
+            <button id="btn-file-menu">File <span class="arrow">▾</span></button>
+            <div class="dropdown-menu hidden">
+              <div id="btn-new" class="dropdown-item">New File <span class="shortcut">⌘N</span></div>
+              <div id="btn-open" class="dropdown-item">Open File <span class="shortcut">⌘O</span></div>
+              <div id="btn-open-folder" class="dropdown-item">Open Folder</div>
+              <div id="btn-new-window" class="dropdown-item">New Window <span class="shortcut">⇧⌘N</span></div>
+              <div id="btn-recent" class="dropdown-item">Recent Files</div>
+              <div class="dropdown-divider"></div>
+              <div id="btn-save" class="dropdown-item">Save <span class="shortcut">⌘S</span></div>
+              <div id="btn-autosave" class="dropdown-item">Auto-save: <span id="autosave-label">Off</span></div>
+              <div id="btn-autosync" class="dropdown-item">Auto-sync: <span id="autosync-git-label">Off</span></div>
+              <div class="dropdown-divider"></div>
+              <div id="btn-export-pdf" class="dropdown-item">Export PDF</div>
+              <div id="btn-export-html" class="dropdown-item">Export HTML</div>
+              <div id="btn-export-png" class="dropdown-item">Export PNG</div>
+              <div id="btn-export-jpg" class="dropdown-item">Export JPG</div>
+              <div id="btn-export-docx" class="dropdown-item">Export DOCX</div>
+            </div>
+          </div>
+          <div class="toolbar-dropdown app-menu-dropdown">
+            <button id="btn-view-menu">View <span class="arrow">▾</span></button>
+            <div class="dropdown-menu hidden">
+              <div id="btn-toggle-sidebar" class="dropdown-item">Show/Hide Explorer <span class="shortcut">⌘B</span></div>
+              <div id="btn-toggle-preview" class="dropdown-item">Show/Hide Preview <span class="shortcut">⌘P</span></div>
+              <div id="btn-read-mode" class="dropdown-item">Reading View <span class="shortcut">⌘E</span></div>
+              <div class="dropdown-divider"></div>
+              <div id="btn-toggle-outline" class="dropdown-item">Toggle Outline</div>
+              <div id="btn-toggle-linenumbers" class="dropdown-item">Line Numbers: <span id="linenumbers-label">On</span></div>
+              <div class="dropdown-divider"></div>
+              <label class="dropdown-control" for="font-select">
+                <span>Font: <span id="font-label">System</span></span>
+                <select id="font-select">
+                  <option value="System">System</option>
+                  <option value="Inter">Inter</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Merriweather">Merriweather</option>
+                  <option value="JetBrains Mono">JetBrains Mono</option>
+                  <option value="Custom...">Custom...</option>
+                </select>
+              </label>
+              <label class="dropdown-control" for="text-size-select">
+                <span>Text Size: <span id="text-size-label">16px</span></span>
+                <select id="text-size-select">
+                  <option value="12">12</option>
+                  <option value="14">14</option>
+                  <option value="16">16</option>
+                  <option value="18">18</option>
+                  <option value="20">20</option>
+                  <option value="24">24</option>
+                  <option value="Custom...">Custom...</option>
+                </select>
+              </label>
+              <label class="dropdown-control" for="theme-select">
+                <span id="btn-theme-label">Theme: System</span>
+                <select id="theme-select">
+                  <option value="auto">System</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="catppuccin-mocha">Catppuccin Mocha</option>
+                  <option value="everforest-dark">Everforest Dark</option>
+                  <option value="nord">Nord</option>
+                  <option value="custom">Custom...</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="toolbar-dropdown app-menu-dropdown">
+            <button id="btn-help-menu">Help <span class="arrow">▾</span></button>
+            <div class="dropdown-menu hidden">
+              <div id="btn-keyboard-shortcuts" class="dropdown-item">Keyboard Shortcuts <span class="shortcut">⌘/</span></div>
+              <div id="btn-customize-shortcuts" class="dropdown-item">Customize Shortcuts</div>
+              <div class="dropdown-divider"></div>
+              <div id="btn-check-updates" class="dropdown-item">Check for Updates…</div>
+              <div id="btn-about" class="dropdown-item">About Kaelio</div>
+            </div>
+          </div>
+
+          <span class="toolbar-sep"></span>
+
+          <!-- Primary actions -->
+          <button id="btn-theme-icon" title="Toggle theme">◐</button>
+          <span class="toolbar-sep"></span>
+          <div class="toolbar-dropdown" style="position:relative">
+            <button id="btn-copy-html" title="Copy formatted (Cmd+Shift+C)">Copy ▾</button>
+            <div id="copy-dropdown" class="dropdown-menu hidden">
+              <div id="btn-copy-formatted" class="dropdown-item">Copy Formatted</div>
+              <div id="btn-copy-raw" class="dropdown-item">Copy Raw Markdown</div>
+              <div id="btn-copy-plain" class="dropdown-item">Copy Plain Text</div>
+            </div>
+          </div>
+          <div class="toolbar-dropdown" style="position:relative">
+            <button id="btn-export-menu" title="Export document">Export ▾</button>
+            <div id="export-dropdown" class="dropdown-menu hidden">
+              <div id="btn-toolbar-export-pdf" class="dropdown-item">Export PDF</div>
+              <div id="btn-toolbar-export-html" class="dropdown-item">Export HTML</div>
+              <div id="btn-toolbar-export-png" class="dropdown-item">Export PNG</div>
+              <div id="btn-toolbar-export-jpg" class="dropdown-item">Export JPG</div>
+              <div id="btn-toolbar-export-docx" class="dropdown-item">Export DOCX</div>
+            </div>
+          </div>
+          <span class="toolbar-sep"></span>
+          <button id="btn-sync-scroll" title="Sync editor &amp; preview scroll">⇆</button>
+          <span class="toolbar-sep"></span>
+          <button id="btn-zoom-out" title="Zoom out (Cmd+-)">−</button>
+          <span id="status-zoom" class="toolbar-zoom">100%</span>
+          <button id="btn-zoom-in" title="Zoom in (Cmd+=)">+</button>
+        </div>
+        <div id="token-info">
+          <span id="token-count">0 words</span>
+          <span id="cost-estimate" class="dim">0 lines</span>
+        </div>
+      </div>
+      <div id="recent-panel" class="hidden">
+        <div id="recent-list"></div>
+      </div>
+      <div id="tab-bar"></div>
+      <div id="breadcrumb" class="hidden"></div>
+      <!-- Recovery banner -->
+      <div id="recovery-banner" class="hidden">
+        <span id="recovery-message">Unsaved changes recovered.</span>
+        <button id="recovery-restore">Restore</button>
+        <button id="recovery-dismiss">Dismiss</button>
+      </div>
+      <div id="editor-container">
+        <nav id="activity-bar" aria-label="Primary navigation">
+          <button id="activity-explorer" class="activity-btn" title="Show/Hide Explorer (⌘B)" aria-label="Show/Hide Explorer">☰</button>
+          <button id="activity-preview" class="activity-btn" title="Show/Hide Preview (⌘P)" aria-label="Show/Hide Preview">◧</button>
+          <button id="activity-reading" class="activity-btn" title="Reading View (⌘E)" aria-label="Reading View">◨</button>
+          <button id="activity-linenumbers" class="activity-btn" title="Show/Hide Line Numbers" aria-label="Show/Hide Line Numbers">#</button>
+          <button id="activity-settings" class="activity-btn activity-bottom" title="Appearance Settings" aria-label="Appearance Settings">⚙</button>
+        </nav>
+        <div id="appearance-popover" class="hidden">
+          <div class="appearance-header">Appearance</div>
+          <div class="appearance-tabs" role="tablist" aria-label="Appearance settings">
+            <button class="appearance-tab active" data-panel="theme">Themes</button>
+            <button class="appearance-tab" data-panel="font">Font</button>
+            <button class="appearance-tab" data-panel="size">Size</button>
+            <button class="appearance-tab" data-panel="session">Session</button>
+          </div>
+          <div id="appearance-panel"></div>
+        </div>
+        <div id="sidebar" class="hidden">
+          <div id="sidebar-header">
+            <span id="sidebar-title" title="Click to show file tree">Explorer</span>
+            <div id="sidebar-actions">
+              <button id="btn-sidebar-search" title="Search in folder (⌘⌥F)">⌕</button>
+              <button id="btn-sidebar-refresh" title="Refresh file list">↻</button>
+              <button id="btn-sidebar-new-file" title="New File">+</button>
+              <button id="btn-sidebar-new-folder" title="New Folder">📁</button>
+              <button id="btn-sidebar-git" title="Toggle Git Panel">⎇</button>
+              <button id="btn-sidebar-outline" title="Toggle Outline">¶</button>
+              <button id="btn-sidebar-close" title="Close Sidebar (⌘B)">✕</button>
+            </div>
+          </div>
+          <div id="sidebar-search-panel" class="hidden">
+            <input id="sidebar-search-input" type="text" placeholder="Search in files…" autocomplete="off" />
+            <div id="sidebar-search-results"></div>
+          </div>
+          <div id="sidebar-tree"></div>
+          <div id="outline-panel" class="hidden">
+            <div id="outline-header">
+              <span>Outline</span>
+            </div>
+            <div id="outline-list"></div>
+          </div>
+          <div id="git-panel" class="hidden">
+            <div id="git-panel-header">
+              <span id="git-branch-name">main</span>
+              <button id="btn-git-sync" title="Sync now">⟳</button>
+            </div>
+            <div id="sync-status"></div>
+            <div id="git-changed-files"></div>
+            <div id="git-commit-area">
+              <input id="git-commit-input" type="text" placeholder="Describe your changes…" autocomplete="off" />
+              <button id="btn-git-commit">Save</button>
+            </div>
+            <!-- Shown when folder has no sync set up -->
+            <div id="sync-setup" class="hidden">
+              <div class="sync-setup-msg">Sync your files to the cloud so you never lose them.</div>
+              <button id="btn-sync-setup">Set up Sync</button>
+            </div>
+          </div>
+        </div>
+        <div id="sidebar-resizer"></div>
+        <div id="editor-wrapper">
+          <div id="format-bar">
+            <button class="fmt-btn" data-fmt="bold" title="Bold">B</button>
+            <button class="fmt-btn" data-fmt="italic" title="Italic"><i>I</i></button>
+            <button class="fmt-btn" data-fmt="heading" title="Heading">H</button>
+            <button class="fmt-btn" data-fmt="link" title="Link">&#128279;</button>
+            <button class="fmt-btn" data-fmt="code" title="Code">`</button>
+            <button class="fmt-btn" data-fmt="quote" title="Quote">&#10077;</button>
+            <button class="fmt-btn" data-fmt="list" title="List">&#8226;</button>
+            <button class="fmt-btn" data-fmt="hr" title="Horizontal Rule">&#8212;</button>
+          </div>
+          <div id="editor-pane"></div>
+        </div>
+        <div id="divider"></div>
+        <div id="preview-pane"></div>
+      </div>
+      <!-- Tab context menu -->
+      <div id="tab-context-menu" class="hidden">
+        <div id="tab-ctx-close" class="ctx-item">Close</div>
+        <div id="tab-ctx-close-others" class="ctx-item">Close Others</div>
+        <div id="tab-ctx-close-right" class="ctx-item">Close to the Right</div>
+        <div id="tab-ctx-close-all" class="ctx-item">Close All</div>
+      </div>
+      <!-- Context menu -->
+      <div id="context-menu" class="hidden">
+        <div id="ctx-new-file" class="ctx-item">New File</div>
+        <div id="ctx-new-folder" class="ctx-item">New Folder</div>
+        <div class="ctx-divider"></div>
+        <div id="ctx-rename" class="ctx-item">Rename</div>
+        <div id="ctx-duplicate" class="ctx-item">Duplicate</div>
+        <div class="ctx-item ctx-submenu">Copy Path
+          <div class="ctx-submenu-items">
+            <div id="ctx-copy-absolute" class="ctx-item">Absolute Path</div>
+            <div id="ctx-copy-relative" class="ctx-item">Relative Path</div>
+          </div>
+        </div>
+        <div id="ctx-reveal" class="ctx-item">Reveal in Finder</div>
+        <div class="ctx-divider"></div>
+        <div id="ctx-git-history" class="ctx-item">File History</div>
+        <div id="ctx-git-discard" class="ctx-item ctx-danger">Discard Changes</div>
+        <div class="ctx-divider"></div>
+        <div id="ctx-delete" class="ctx-item ctx-danger">Delete</div>
+      </div>
+      <!-- Command palette -->
+      <div id="command-palette" class="hidden">
+        <div id="palette-backdrop"></div>
+        <div id="palette-dialog">
+          <input id="palette-input" type="text" placeholder="Type a command…" autocomplete="off" />
+          <div id="palette-results"></div>
+        </div>
+      </div>
+      <!-- File search -->
+      <div id="file-search" class="hidden">
+        <div id="filesearch-backdrop"></div>
+        <div id="filesearch-dialog">
+          <input id="filesearch-input" type="text" placeholder="Search files…" autocomplete="off" />
+          <div id="filesearch-results"></div>
+        </div>
+      </div>
+      <div id="statusbar">
+        <span id="status-branch" class="hidden">⎇ main</span>
+        <span id="status-position">Ln 1, Col 1</span>
+        <span id="status-selection"></span>
+        <span id="status-words">0 words</span>
+        <span id="status-tokens">0 chars</span>
+        <button id="status-help" title="Keyboard Shortcuts (⌘/)">?</button>
+        <a id="status-github" href="https://github.com/kael-wanderer/kaelio" target="_blank">GitHub</a>
+      </div>
+      <!-- Help cheatsheet -->
+      <div id="help-modal" class="hidden">
+        <div id="help-backdrop"></div>
+        <div id="help-dialog">
+          <div id="help-header">
+            <span>Keyboard Shortcuts</span>
+            <button id="help-close">✕</button>
+          </div>
+          <div id="help-content"></div>
+        </div>
+      </div>
+      <!-- Shortcuts settings modal -->
+      <div id="shortcuts-modal" class="hidden">
+        <div id="shortcuts-backdrop"></div>
+        <div id="shortcuts-dialog">
+          <div id="shortcuts-header">
+            <span>Customize Shortcuts</span>
+            <div>
+              <button id="shortcuts-reset">Reset All</button>
+              <button id="shortcuts-close">✕</button>
+            </div>
+          </div>
+          <div id="shortcuts-content"></div>
+        </div>
+      </div>
+      <!-- Sync setup dialog -->
+      <div id="sync-setup-modal" class="hidden">
+        <div id="sync-setup-backdrop"></div>
+        <div id="sync-setup-dialog">
+          <div id="sync-setup-header">
+            <span>Set up Sync</span>
+            <button id="sync-setup-close">✕</button>
+          </div>
+          <div id="sync-setup-body">
+            <p>Connect to a GitHub repository to sync your files across devices.</p>
+            <div id="sync-auth-status"></div>
+            <label for="sync-repo-url">Repository URL</label>
+            <input id="sync-repo-url" type="text" placeholder="https://github.com/you/my-notes.git" autocomplete="off" />
+            <div class="sync-setup-hint">Create a <a id="sync-create-repo-link" href="#">new private repo on GitHub</a>, then paste the URL here.</div>
+            <div id="sync-setup-error" class="hidden"></div>
+            <button id="btn-sync-connect">Connect & Sync</button>
+          </div>
+        </div>
+      </div>
+      <!-- Conflict resolution modal -->
+      <div id="conflict-modal" class="hidden">
+        <div id="conflict-backdrop"></div>
+        <div id="conflict-dialog">
+          <div id="conflict-header">
+            <span id="conflict-title">Resolve conflict</span>
+            <button id="conflict-close">✕</button>
+          </div>
+          <div id="conflict-body">
+            <div id="conflict-panels">
+              <div class="conflict-panel">
+                <div class="conflict-panel-label">Your version</div>
+                <pre id="conflict-local"></pre>
+              </div>
+              <div class="conflict-panel">
+                <div class="conflict-panel-label">Incoming version</div>
+                <pre id="conflict-remote"></pre>
+              </div>
+            </div>
+            <div id="conflict-actions">
+              <button id="conflict-accept-local">Keep yours</button>
+              <button id="conflict-accept-remote">Accept incoming</button>
+              <button id="conflict-accept-both">Keep both</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- File history modal -->
+      <div id="history-modal" class="hidden">
+        <div id="history-backdrop"></div>
+        <div id="history-dialog">
+          <div id="history-header">
+            <span>File History</span>
+            <div id="history-tabs">
+              <button id="history-tab-commits" class="history-tab active">Commits</button>
+              <button id="history-tab-snapshots" class="history-tab">Snapshots</button>
+            </div>
+            <button id="history-close">✕</button>
+          </div>
+          <div id="history-list"></div>
+          <div id="history-diff" class="hidden">
+            <div id="history-diff-header">
+              <span id="history-diff-title"></span>
+              <div>
+                <button id="history-diff-restore">Restore this version</button>
+                <button id="history-diff-back">← Back</button>
+              </div>
+            </div>
+            <div id="history-diff-panels">
+              <div class="conflict-panel">
+                <div class="conflict-panel-label">Selected version</div>
+                <pre id="history-diff-old"></pre>
+              </div>
+              <div class="conflict-panel">
+                <div class="conflict-panel-label">Current</div>
+                <pre id="history-diff-new"></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Image lightbox -->
+      <div id="image-lightbox" class="hidden"></div>
+    </div>
+  </body>
+</html>
