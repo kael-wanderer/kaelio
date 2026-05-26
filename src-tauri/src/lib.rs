@@ -1186,12 +1186,17 @@ fn watch_file(path: String, window: tauri::Window) -> Result<(), String> {
 
     // Create a new watcher that emits to this specific window
     let watched_path = PathBuf::from(&path);
+    let watched_name = watched_path.file_name().map(|n| n.to_os_string());
     let watcher = RecommendedWatcher::new(
         move |res: Result<Event, notify::Error>| {
             match res {
                 Ok(event) => match event.kind {
-                    EventKind::Modify(_) | EventKind::Create(_) => {
-                        if event.paths.iter().any(|p| p == &watched_path) {
+                    EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
+                        let dominated = event.paths.iter().any(|p| {
+                            p == &watched_path
+                                || p.file_name().map(|n| n.to_os_string()) == watched_name
+                        });
+                        if dominated {
                             let _ = window.emit("file-changed", watched_path.to_string_lossy().to_string());
                         }
                     }

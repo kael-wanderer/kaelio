@@ -1189,12 +1189,6 @@ body {
   margin-left: auto;
   display: flex;
   gap: 2px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-
-#sidebar-header:hover #sidebar-actions {
-  opacity: 1;
 }
 
 #sidebar-actions button {

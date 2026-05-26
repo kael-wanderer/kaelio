@@ -1253,6 +1253,8 @@ function updateCursorPosition(view: EditorView) {
 // --- File watcher (external changes) ---
 
 let fileWatchSuppressed = false; // suppress events right after we save
+let externalReload = false; // suppress onContentChange during external reload
+let fileChangeDebounce: ReturnType<typeof setTimeout> | null = null;
 
 async function startFileWatch(path: string | null) {
   try { await invoke("unwatch_file"); } catch { /* ok */ }
@@ -1270,10 +1272,15 @@ async function reloadCurrentFile() {
   if (!currentFilePath) return;
   try {
     const result = await invoke<{ path: string; content: string }>("read_file", { path: currentFilePath });
+    externalReload = true;
     editor.dispatch({
       changes: { from: 0, to: editor.state.doc.length, insert: result.content },
     });
+    externalReload = false;
     setModified(false);
+    updatePreview(result.content);
+    updateWordCount(result.content);
+    updateOutline(result.content);
   } catch { /* file may have been deleted */ }
 }
 
@@ -1305,11 +1312,14 @@ listen<string>("file-changed", async (event) => {
   if (fileWatchSuppressed) return;
   if (event.payload !== currentFilePath) return;
 
-  if (isEditorDirty()) {
-    showFileChangedBanner();
-  } else {
-    await reloadCurrentFile();
-  }
+  if (fileChangeDebounce) clearTimeout(fileChangeDebounce);
+  fileChangeDebounce = setTimeout(async () => {
+    if (isEditorDirty()) {
+      showFileChangedBanner();
+    } else {
+      await reloadCurrentFile();
+    }
+  }, 200);
 });
 
 // Folder watcher: refresh sidebar when files are added/removed/renamed externally
@@ -2235,6 +2245,7 @@ function showConfirmDialog(message: string): Promise<boolean> {
 // --- Debounced content change handler ---
 
 function onContentChange(view: EditorView) {
+  if (externalReload) return;
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     const content = view.state.doc.toString();
@@ -4710,6 +4721,8 @@ window.addEventListener("DOMContentLoaded", () => {
       });
     });
     previewPaneEl.addEventListener("click", (e) => {
+      const sel = window.getSelection();
+      if (sel && sel.toString().length > 0) return;
       const t = e.target as HTMLElement;
       if (t.closest("a, button, input, .task-check, .mermaid, .heading-copy-link, .fm-tag-remove")) return;
       jumpEditorToPreviewClick(t);
