@@ -262,6 +262,7 @@ fn list_files_recursive(path: String, max_depth: u32) -> Result<Vec<String>, Str
 
 #[derive(Serialize, Deserialize)]
 struct SearchResult {
+    result_type: String,
     file_path: String,
     line_number: usize,
     line_content: String,
@@ -281,8 +282,17 @@ fn search_in_files(folder_path: String, query: String) -> Result<Vec<SearchResul
     let max_results = 200usize;
     let max_file_size = 1_048_576u64;
 
-    let mut files: Vec<PathBuf> = Vec::new();
-    fn walk(dir: &Path, depth: u32, files: &mut Vec<PathBuf>, ignore: &[&str], extensions: &[&str], max_size: u64) {
+    let mut all_files: Vec<PathBuf> = Vec::new();
+    let mut content_files: Vec<PathBuf> = Vec::new();
+    fn walk(
+        dir: &Path,
+        depth: u32,
+        all_files: &mut Vec<PathBuf>,
+        content_files: &mut Vec<PathBuf>,
+        ignore: &[&str],
+        extensions: &[&str],
+        max_size: u64,
+    ) {
         if depth > 5 { return; }
         let entries = match fs::read_dir(dir) { Ok(e) => e, Err(_) => return };
         for entry in entries.flatten() {
@@ -291,21 +301,48 @@ fn search_in_files(folder_path: String, query: String) -> Result<Vec<SearchResul
             let path = entry.path();
             if let Ok(meta) = entry.metadata() {
                 if meta.is_dir() {
-                    walk(&path, depth + 1, files, ignore, extensions, max_size);
-                } else if meta.len() <= max_size {
-                    if let Some(ext) = path.extension() {
-                        if extensions.contains(&ext.to_string_lossy().as_ref()) {
-                            files.push(path);
+                    walk(&path, depth + 1, all_files, content_files, ignore, extensions, max_size);
+                } else {
+                    all_files.push(path.clone());
+                    if meta.len() <= max_size {
+                        if let Some(ext) = path.extension() {
+                            if extensions.contains(&ext.to_string_lossy().as_ref()) {
+                                content_files.push(path);
+                            }
                         }
                     }
                 }
             }
         }
     }
-    walk(&root, 0, &mut files, &ignore, &extensions, max_file_size);
+    walk(&root, 0, &mut all_files, &mut content_files, &ignore, &extensions, max_file_size);
+    all_files.sort();
+    content_files.sort();
 
     let mut results: Vec<SearchResult> = Vec::new();
-    for file_path in files {
+
+    for file_path in &all_files {
+        if results.len() >= max_results { break; }
+        let file_name = match file_path.file_name().and_then(|name| name.to_str()) {
+            Some(name) => name,
+            None => continue,
+        };
+        let file_name_lower = file_name.to_lowercase();
+        if let Some(byte_pos) = file_name_lower.find(&query_lower) {
+            let char_start = file_name_lower[..byte_pos].chars().count();
+            let char_end = char_start + query_lower.chars().count();
+            results.push(SearchResult {
+                result_type: "filename".to_string(),
+                file_path: file_path.to_string_lossy().to_string(),
+                line_number: 0,
+                line_content: String::new(),
+                match_start: char_start,
+                match_end: char_end,
+            });
+        }
+    }
+
+    for file_path in content_files {
         if results.len() >= max_results { break; }
         let content = match fs::read_to_string(&file_path) { Ok(c) => c, Err(_) => continue };
         let path_str = file_path.to_string_lossy().to_string();
@@ -317,6 +354,7 @@ fn search_in_files(folder_path: String, query: String) -> Result<Vec<SearchResul
                 let char_start = line_lower[..byte_pos].chars().count();
                 let char_end = char_start + query_lower.chars().count();
                 results.push(SearchResult {
+                    result_type: "content".to_string(),
                     file_path: path_str.clone(),
                     line_number: i + 1,
                     line_content: line.to_string(),

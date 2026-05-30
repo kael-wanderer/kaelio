@@ -27,19 +27,20 @@ flowchart TB
 | `word_count` | `text: String` | `WordCount { chars, words, lines }` | Count chars/words/lines |
 | `list_directory` | `path: String` | `Vec<DirEntry>` | List directory entries |
 | `get_home_dir` | none | `String` | Return `$HOME` |
-| `search_in_files` | `folder_path: String, query: String` | `Vec<SearchResult>` | Case-insensitive keyword search across all `.md`/`.markdown`/`.txt` files |
+| `search_in_files` | `folder_path: String, query: String` | `Vec<SearchResult>` | Case-insensitive filename matches first, then content search across `.md`/`.markdown`/`.txt` files |
 
-## 2. Content Search
+## 2. Sidebar Search
 
-`search_in_files` recursively walks the folder, reads each eligible file, and searches line-by-line for the query string (case-insensitive). Returns up to 200 `SearchResult` items with:
+`search_in_files` recursively walks the folder, returns filename matches across all non-ignored files first, then reads each eligible content file and searches line-by-line for the query string (case-insensitive). Content search is limited to `.md`, `.markdown`, and `.txt` files up to 1MB. Returns up to 200 `SearchResult` items with:
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `result_type` | `String` | `filename` or `content` |
 | `file_path` | `String` | Absolute path to the file |
-| `line_number` | `usize` | 1-based line number of the match |
-| `line_content` | `String` | Full text of the matched line |
-| `match_start` | `usize` | Byte offset of match start within the line |
-| `match_end` | `usize` | Byte offset of match end within the line |
+| `line_number` | `usize` | 1-based line number for content matches, `0` for filename matches |
+| `line_content` | `String` | Full text of the matched line for content matches |
+| `match_start` | `usize` | Character offset of match start within the line or filename |
+| `match_end` | `usize` | Character offset of match end within the line or filename |
 
 Skips: `node_modules`, `.git`, `target`, `.DS_Store`, `__pycache__`. Ignores files larger than 1 MB.
 

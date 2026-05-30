@@ -3325,9 +3325,10 @@ function navigatePreviewSearch(delta: number) {
     `${previewSearchIndex + 1} / ${previewSearchMatches.length}`;
 }
 
-// --- Content search (sidebar) ---
+// --- Sidebar search ---
 
 interface SearchResult {
+  result_type: "filename" | "content";
   file_path: string;
   line_number: number;
   line_content: string;
@@ -3439,6 +3440,15 @@ function renderSidebarSearchResults() {
     const relPath = r.file_path.startsWith(prefix) ? r.file_path.slice(prefix.length) : r.file_path;
     const fileName = relPath.split("/").pop()!;
     const dir = relPath.substring(0, relPath.lastIndexOf("/"));
+    if (r.result_type === "filename") {
+      const before = escapeHtml(fileName.substring(0, r.match_start));
+      const match = escapeHtml(fileName.substring(r.match_start, r.match_end));
+      const after = escapeHtml(fileName.substring(r.match_end));
+      return `<div class="sidebar-search-item filename-result${active}" data-index="${i}">
+        <div><span class="ss-file">${before}<span class="ss-match">${match}</span>${after}</span></div>
+        ${dir ? `<span class="ss-content">${escapeHtml(dir)}</span>` : ""}
+      </div>`;
+    }
     const before = escapeHtml(r.line_content.substring(0, r.match_start));
     const match = escapeHtml(r.line_content.substring(r.match_start, r.match_end));
     const after = escapeHtml(r.line_content.substring(r.match_end));
@@ -3456,6 +3466,10 @@ function renderSidebarSearchResults() {
 async function openSidebarSearchResult(index: number) {
   const result = sidebarSearchResults[index];
   if (!result) return;
+  if (result.result_type === "filename") {
+    await openFile(result.file_path);
+    return;
+  }
   await openFile(result.file_path, true);
   navigateToSearchResult(result);
 }
