@@ -22,7 +22,8 @@ flowchart TB
 
 | Command | Input | Output | Purpose |
 |---------|-------|--------|---------|
-| `read_file` | `path: String` | `FileInfo { path, content, size }` | Read file + metadata |
+| `read_file` | `path: String` | `FileInfo { path, content, size, modified_ms }` | Read file + metadata |
+| `file_metadata` | `path: String` | `FileMetadata { path, size, modified_ms }` | Check disk metadata for external change detection |
 | `save_file` | `path: String, content: String` | `()` | Write content to path |
 | `word_count` | `text: String` | `WordCount { chars, words, lines }` | Count chars/words/lines |
 | `list_directory` | `path: String` | `Vec<DirEntry>` | List directory entries |
@@ -46,7 +47,7 @@ Skips: `node_modules`, `.git`, `target`, `.DS_Store`, `__pycache__`. Ignores fil
 
 ## 3. Directory Listing
 
-`list_directory` filters dotfiles, sorts directories first then alphabetically (case-insensitive). Returns `DirEntry` with `name`, `path`, `is_dir`, `extension`.
+`list_directory` filters dotfiles, sorts directories first, then uses case-insensitive natural ordering so numbered names sort by numeric value (`2` before `10`). Returns `DirEntry` with `name`, `path`, `is_dir`, `extension`.
 
 ## 4. Frontend File Flow
 

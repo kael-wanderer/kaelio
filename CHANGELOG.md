@@ -13,6 +13,18 @@
 - Scroll position and cursor offset are now preserved across app restarts for all open tabs.
 - Session data (open tabs, active tab, scroll, cursor, folder) is persisted to `~/.kaelio/session.json` on disk, surviving app reinstalls and WebView storage resets. localStorage is used as a synchronous backup for reliability on close.
 
+### Project Explorer
+
+- Sidebar search now combines filename and content results in one flow, with filename matches shown first.
+- Folder changes made outside Kaelio, such as adding, deleting, or renaming files in VSCode, now refresh the explorer automatically.
+- Folder and file names in the explorer now use natural numeric-aware sorting, so `2.gws` appears before `10.salesforce`.
+
+### External File Changes
+
+- Open files changed outside Kaelio now reload automatically when the editor has no unsaved changes.
+- If the open file changed on disk while Kaelio has unsaved edits, the existing reload/keep-current-content banner is shown.
+- Kaelio also checks for disk changes when the app regains focus, covering cases where the OS file watcher misses an event.
+
 ## 0.9.0
 
 Initial Kaelio release after forking and rebranding mx.

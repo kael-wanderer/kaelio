@@ -1277,11 +1277,45 @@ function updateCursorPosition(view: EditorView) {
 let fileWatchSuppressed = false; // suppress events right after we save
 let externalReload = false; // suppress onContentChange during external reload
 let fileChangeDebounce: ReturnType<typeof setTimeout> | null = null;
+let diskChangeCheckInFlight = false;
+
+interface FileSnapshot {
+  path: string;
+  size: number;
+  modified_ms: number;
+}
+
+const fileSnapshots = new Map<string, FileSnapshot>();
+
+function rememberFileSnapshot(info: FileSnapshot) {
+  const snapshot = {
+    path: info.path,
+    size: info.size,
+    modified_ms: info.modified_ms,
+  };
+  fileSnapshots.set(snapshot.path, snapshot);
+}
+
+async function refreshCurrentFileSnapshot(path = currentFilePath) {
+  if (!path) {
+    return;
+  }
+  try {
+    const metadata = await invoke<FileSnapshot>("file_metadata", { path });
+    if (metadata.path === currentFilePath) rememberFileSnapshot(metadata);
+  } catch {
+    if (path) fileSnapshots.delete(path);
+  }
+}
 
 async function startFileWatch(path: string | null) {
   try { await invoke("unwatch_file"); } catch { /* ok */ }
   if (path) {
-    try { await invoke("watch_file", { path }); } catch { /* ok */ }
+    try {
+      await invoke("watch_file", { path });
+    } catch (e) {
+      console.warn("watch_file failed:", e);
+    }
   }
 }
 
@@ -1293,17 +1327,49 @@ function isEditorDirty(): boolean {
 async function reloadCurrentFile() {
   if (!currentFilePath) return;
   try {
-    const result = await invoke<{ path: string; content: string }>("read_file", { path: currentFilePath });
+    const result = await invoke<{ path: string; content: string; size: number; modified_ms: number }>("read_file", { path: currentFilePath });
     externalReload = true;
     editor.dispatch({
       changes: { from: 0, to: editor.state.doc.length, insert: result.content },
     });
     externalReload = false;
+    rememberFileSnapshot(result);
     setModified(false);
     updatePreview(result.content);
     updateWordCount(result.content);
     updateOutline(result.content);
   } catch { /* file may have been deleted */ }
+}
+
+async function handleCurrentFileChangedOnDisk() {
+  if (!currentFilePath || isPreviewOnlyPath(currentFilePath)) return;
+  if (isEditorDirty()) {
+    showFileChangedBanner();
+  } else {
+    await reloadCurrentFile();
+  }
+}
+
+async function checkCurrentFileForDiskChanges() {
+  if (!currentFilePath || isPreviewOnlyPath(currentFilePath) || diskChangeCheckInFlight) return;
+  diskChangeCheckInFlight = true;
+  try {
+    const metadata = await invoke<FileSnapshot>("file_metadata", { path: currentFilePath });
+    const previous = fileSnapshots.get(metadata.path);
+    if (!previous) {
+      rememberFileSnapshot(metadata);
+      return;
+    }
+    const changed = metadata.size !== previous.size
+      || metadata.modified_ms !== previous.modified_ms;
+    if (changed) {
+      await handleCurrentFileChangedOnDisk();
+    }
+  } catch {
+    if (currentFilePath) fileSnapshots.delete(currentFilePath);
+  } finally {
+    diskChangeCheckInFlight = false;
+  }
 }
 
 let fileChangeBanner: HTMLElement | null = null;
@@ -1336,11 +1402,7 @@ listen<string>("file-changed", async (event) => {
 
   if (fileChangeDebounce) clearTimeout(fileChangeDebounce);
   fileChangeDebounce = setTimeout(async () => {
-    if (isEditorDirty()) {
-      showFileChangedBanner();
-    } else {
-      await reloadCurrentFile();
-    }
+    await handleCurrentFileChangedOnDisk();
   }, 200);
 });
 
@@ -1360,6 +1422,16 @@ listen("folder-changed", () => {
   folderWatchDebounce = setTimeout(() => {
     if (currentFolderPath) refreshSidebar();
   }, 500);
+});
+
+function checkDiskChangesOnFocus() {
+  if (currentFolderPath) refreshSidebar();
+  checkCurrentFileForDiskChanges();
+}
+
+window.addEventListener("focus", checkDiskChangesOnFocus);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") checkDiskChangesOnFocus();
 });
 
 // --- Modified state ---
@@ -1407,6 +1479,7 @@ async function saveFile() {
     try {
       await invoke("save_file", { path, content });
       setFilename(path);
+      await refreshCurrentFileSnapshot(path);
       setModified(false);
       deleteRecoveryForCurrent();
       persistOpenTabs();
@@ -1419,6 +1492,7 @@ async function saveFile() {
   try {
     fileWatchSuppressed = true;
     await invoke("save_file", { path: currentFilePath, content });
+    await refreshCurrentFileSnapshot(currentFilePath);
     setModified(false);
     deleteRecoveryForCurrent();
     persistOpenTabs();
@@ -1469,13 +1543,14 @@ async function openFile(path: string, skipScrollRestore = false) {
     updateWordCount("");
     updateCursorPosition(editor);
     startFileWatch(path);
+    refreshCurrentFileSnapshot(path);
     if (!skipScrollRestore) restoreScrollPosition(path);
     return;
   }
 
   try {
     saveScrollPosition();
-    const result = await invoke<{ path: string; content: string }>("read_file", { path });
+    const result = await invoke<{ path: string; content: string; size: number; modified_ms: number }>("read_file", { path });
 
     // Check again after async (race condition guard)
     const existingAfter = tabs.find(t => t.filePath === result.path);
@@ -1499,6 +1574,7 @@ async function openFile(path: string, skipScrollRestore = false) {
     deleteRecoveryForCurrent(); // clean up stale recovery for this file
     renderTabs();
     persistOpenTabs();
+    rememberFileSnapshot(result);
     // Use result.content directly to avoid stale editor state on Windows
     updatePreview(result.content);
     updateWordCount(result.content);
@@ -3583,6 +3659,7 @@ function switchToTab(tabId: string) {
 
   updateBreadcrumb();
   startFileWatch(newTab.filePath);
+  checkCurrentFileForDiskChanges();
   updatePreview(tabContent);
   updateWordCount(tabContent);
   updateCursorPosition(editor);
@@ -3700,6 +3777,7 @@ async function closeTab(tabId: string) {
 
     updateBreadcrumb();
     startFileWatch(newTab.filePath);
+    checkCurrentFileForDiskChanges();
     updatePreview(editor.state.doc.toString());
     updateWordCount(editor.state.doc.toString());
     updateCursorPosition(editor);

@@ -1,8 +1,10 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
+use std::time::UNIX_EPOCH;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -57,6 +59,14 @@ struct FileInfo {
     path: String,
     content: String,
     size: u64,
+    modified_ms: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FileMetadata {
+    path: String,
+    size: u64,
+    modified_ms: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -65,6 +75,68 @@ struct DirEntry {
     path: String,
     is_dir: bool,
     extension: Option<String>,
+}
+
+fn next_natural_chunk(s: &str, start: usize) -> Option<(&str, usize, bool)> {
+    if start >= s.len() {
+        return None;
+    }
+    let mut end = start;
+    let first = s[start..].chars().next()?;
+    let is_digit = first.is_ascii_digit();
+    while end < s.len() {
+        let c = s[end..].chars().next()?;
+        if c.is_ascii_digit() != is_digit {
+            break;
+        }
+        end += c.len_utf8();
+    }
+    Some((&s[start..end], end, is_digit))
+}
+
+fn compare_number_chunks(a: &str, b: &str) -> Ordering {
+    let a_trimmed = a.trim_start_matches('0');
+    let b_trimmed = b.trim_start_matches('0');
+    let a_normalized = if a_trimmed.is_empty() { "0" } else { a_trimmed };
+    let b_normalized = if b_trimmed.is_empty() { "0" } else { b_trimmed };
+
+    a_normalized
+        .len()
+        .cmp(&b_normalized.len())
+        .then_with(|| a_normalized.cmp(b_normalized))
+        .then_with(|| a.len().cmp(&b.len()))
+}
+
+fn natural_name_cmp(a: &str, b: &str) -> Ordering {
+    let mut a_pos = 0;
+    let mut b_pos = 0;
+
+    loop {
+        match (
+            next_natural_chunk(a, a_pos),
+            next_natural_chunk(b, b_pos),
+        ) {
+            (Some((a_chunk, next_a, true)), Some((b_chunk, next_b, true))) => {
+                let cmp = compare_number_chunks(a_chunk, b_chunk);
+                if cmp != Ordering::Equal {
+                    return cmp;
+                }
+                a_pos = next_a;
+                b_pos = next_b;
+            }
+            (Some((a_chunk, next_a, _)), Some((b_chunk, next_b, _))) => {
+                let cmp = a_chunk.to_lowercase().cmp(&b_chunk.to_lowercase());
+                if cmp != Ordering::Equal {
+                    return cmp;
+                }
+                a_pos = next_a;
+                b_pos = next_b;
+            }
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -130,6 +202,26 @@ fn read_file(path: String) -> Result<FileInfo, String> {
         path,
         content,
         size: metadata.len(),
+        modified_ms: metadata_modified_ms(&metadata),
+    })
+}
+
+fn metadata_modified_ms(metadata: &fs::Metadata) -> u64 {
+    metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or(0)
+}
+
+#[tauri::command]
+fn file_metadata(path: String) -> Result<FileMetadata, String> {
+    let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
+    Ok(FileMetadata {
+        path,
+        size: metadata.len(),
+        modified_ms: metadata_modified_ms(&metadata),
     })
 }
 
@@ -182,7 +274,9 @@ fn list_directory(path: String) -> Result<Vec<DirEntry>, String> {
         })
         .collect();
     result.sort_by(|a, b| {
-        b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        b.is_dir
+            .cmp(&a.is_dir)
+            .then_with(|| natural_name_cmp(&a.name, &b.name))
     });
     Ok(result)
 }
@@ -1288,11 +1382,8 @@ fn watch_folder(path: String, window: tauri::Window) -> Result<(), String> {
                         p.components().any(|c| c.as_os_str() == ".git")
                     });
                     if dominated_by_git { return; }
-                    match event.kind {
-                        EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(notify::event::ModifyKind::Name(_)) => {
-                            let _ = window.emit("folder-changed", ());
-                        }
-                        _ => {}
+                    if !matches!(event.kind, EventKind::Access(_)) {
+                        let _ = window.emit("folder-changed", ());
                     }
                 },
                 Err(e) => eprintln!("[kaelio] folder watcher error: {}", e),
@@ -2193,7 +2284,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_file, save_binary_base64, save_file, word_count, list_directory, get_home_dir, get_initial_file, export_pdf, export_docx, create_file, create_directory, delete_entry, rename_entry, list_files_recursive, save_recovery, get_recovery_files, read_recovery_content, delete_recovery, duplicate_entry, reveal_in_finder, export_html, load_custom_css, watch_file, unwatch_file, watch_folder, unwatch_folder, search_in_files, create_window, git_repo_info, git_status, git_diff_file, git_log, git_commit, git_push, git_pull, git_auto_sync, git_init, git_setup_sync, git_check_auth, git_discard_file, git_stage_file, git_file_at_commit, git_restore_file, git_conflict_info, git_resolve_conflict, save_snapshot, list_snapshots, read_snapshot, save_session, load_session])
+        .invoke_handler(tauri::generate_handler![read_file, file_metadata, save_binary_base64, save_file, word_count, list_directory, get_home_dir, get_initial_file, export_pdf, export_docx, create_file, create_directory, delete_entry, rename_entry, list_files_recursive, save_recovery, get_recovery_files, read_recovery_content, delete_recovery, duplicate_entry, reveal_in_finder, export_html, load_custom_css, watch_file, unwatch_file, watch_folder, unwatch_folder, search_in_files, create_window, git_repo_info, git_status, git_diff_file, git_log, git_commit, git_push, git_pull, git_auto_sync, git_init, git_setup_sync, git_check_auth, git_discard_file, git_stage_file, git_file_at_commit, git_restore_file, git_conflict_info, git_resolve_conflict, save_snapshot, list_snapshots, read_snapshot, save_session, load_session])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, _event| {
@@ -2216,4 +2307,35 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::natural_name_cmp;
+
+    #[test]
+    fn natural_name_cmp_sorts_numbered_names_by_numeric_value() {
+        let mut names = vec![
+            "10.salesforce",
+            "2.gws",
+            "0.man",
+            "11.sisense",
+            "9.azure",
+            "1.okta",
+        ];
+
+        names.sort_by(|a, b| natural_name_cmp(a, b));
+
+        assert_eq!(
+            names,
+            vec![
+                "0.man",
+                "1.okta",
+                "2.gws",
+                "9.azure",
+                "10.salesforce",
+                "11.sisense",
+            ]
+        );
+    }
 }
