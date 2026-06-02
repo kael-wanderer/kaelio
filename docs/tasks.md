@@ -9,7 +9,8 @@
 [x] 6. Focus editor after click-jump
 
 ### Testing Tasks
-[ ] Long-doc scroll sync both directions
+[x] Build verification — `npm run build` (TS compile + Vite bundle) passes 2026-06-02
+[ ] Long-doc scroll sync both directions  ← manual GUI test, human-in-loop
 [ ] Toggle OFF restores independent scroll
 [ ] Click heading / list / paragraph / code block lands on correct line
 [ ] No jitter / infinite loop
