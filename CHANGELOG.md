@@ -7,6 +7,7 @@
 - Editor ↔ preview scroll sync: new toolbar toggle (⇅) keeps both panes aligned to the same source line when scrolling either side.
 - Click-to-cursor: clicking any heading, paragraph, list item, code block, callout, or table in the preview moves the editor cursor to the matching source line and scrolls it into view.
 - Preview search: Cmd+F in reading view (preview-only mode) opens a search bar with match highlighting, match count, and next/prev navigation (Enter / Shift+Enter).
+- Tables in the preview now size their columns to fit content instead of stretching to full width. Wide tables scroll horizontally within their own container rather than breaking the page layout.
 
 ### Session Restore
 

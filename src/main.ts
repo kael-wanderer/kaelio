@@ -645,6 +645,10 @@ md.renderer.rules.heading_close = (tokens, idx, _options, _env, _self) => {
   return `${btn}</${tokens[idx].tag}>\n`;
 };
 
+// Wrap tables in a horizontally-scrollable container so wide tables don't break layout
+md.renderer.rules.table_open = () => '<div class="table-scroll">\n<table>\n';
+md.renderer.rules.table_close = () => '</table>\n</div>\n';
+
 // --- Wikilinks support ---
 
 md.inline.ruler.push("wikilink", (state, silent) => {

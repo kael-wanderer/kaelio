@@ -960,10 +960,15 @@ body {
   line-height: 1.6;
 }
 
+#preview-pane .table-scroll {
+  overflow-x: auto;
+  margin: 0.5em 0;
+  max-width: 100%;
+}
+
 #preview-pane table {
   border-collapse: collapse;
-  margin: 0.5em 0;
-  width: 100%;
+  width: auto;
   font-size: 0.95em;
 }
 
@@ -972,6 +977,7 @@ body {
   border: 1px solid var(--border);
   padding: 8px 12px;
   text-align: left;
+  white-space: nowrap;
 }
 
 #preview-pane th {
