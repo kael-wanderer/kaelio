@@ -30,10 +30,21 @@
               <div id="btn-autosave" class="dropdown-item">Auto-save: <span id="autosave-label">Off</span></div>
               <div id="btn-autosync" class="dropdown-item">Auto-sync: <span id="autosync-git-label">Off</span></div>
               <div class="dropdown-divider"></div>
-              <div id="btn-export-pdf" class="dropdown-item">Export PDF</div>
-              <div id="btn-export-png" class="dropdown-item">Export PNG</div>
-              <div id="btn-export-jpg" class="dropdown-item">Export JPG</div>
-              <div id="btn-export-docx" class="dropdown-item">Export DOCX</div>
+              <div class="dropdown-submenu">
+                <div class="dropdown-item">HTML <span class="arrow">▸</span></div>
+                <div class="dropdown-submenu-items">
+                  <div id="btn-export-html-png" class="dropdown-item">PNG</div>
+                  <div id="btn-export-html-jpg" class="dropdown-item">JPG</div>
+                  <div id="btn-export-html-pdf" class="dropdown-item">PDF</div>
+                </div>
+              </div>
+              <div class="dropdown-submenu">
+                <div class="dropdown-item">Markdown <span class="arrow">▸</span></div>
+                <div class="dropdown-submenu-items">
+                  <div id="btn-export-md-pdf" class="dropdown-item">PDF</div>
+                  <div id="btn-export-md-docx" class="dropdown-item">DOCX</div>
+                </div>
+              </div>
             </div>
           </div>
           <div class="toolbar-dropdown app-menu-dropdown">
@@ -122,10 +133,21 @@
           <div class="toolbar-dropdown" style="position:relative">
             <button id="btn-export-menu" title="Export document">Export ▾</button>
             <div id="export-dropdown" class="dropdown-menu hidden">
-              <div id="btn-toolbar-export-pdf" class="dropdown-item">Export PDF</div>
-              <div id="btn-toolbar-export-png" class="dropdown-item">Export PNG</div>
-              <div id="btn-toolbar-export-jpg" class="dropdown-item">Export JPG</div>
-              <div id="btn-toolbar-export-docx" class="dropdown-item">Export DOCX</div>
+              <div class="dropdown-submenu">
+                <div class="dropdown-item">HTML <span class="arrow">▸</span></div>
+                <div class="dropdown-submenu-items">
+                  <div id="btn-toolbar-export-html-png" class="dropdown-item">PNG</div>
+                  <div id="btn-toolbar-export-html-jpg" class="dropdown-item">JPG</div>
+                  <div id="btn-toolbar-export-html-pdf" class="dropdown-item">PDF</div>
+                </div>
+              </div>
+              <div class="dropdown-submenu">
+                <div class="dropdown-item">Markdown <span class="arrow">▸</span></div>
+                <div class="dropdown-submenu-items">
+                  <div id="btn-toolbar-export-md-pdf" class="dropdown-item">PDF</div>
+                  <div id="btn-toolbar-export-md-docx" class="dropdown-item">DOCX</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

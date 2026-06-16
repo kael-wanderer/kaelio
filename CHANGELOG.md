@@ -15,6 +15,7 @@
 
 ### Fixes
 
+- Restructured Export into HTML capture and Markdown document groups; HTML PNG/JPG/PDF now capture full-width documents, while Markdown PDF/DOCX use Pandoc for real editable output.
 - Moved split, sync-scroll, and main zoom controls into the activity bar and added styled hover tooltips for main and sub activity icons.
 - Renamed Column wrap to Page Guide, added a persistent guide-column control, and cleaned up relocated activity-bar zoom/sync controls.
 - Polished split-view menus and tab strips: native Soft Wrap menu, separated compare context sections, divider-aligned tab strips with overflow menus, and larger split controls.

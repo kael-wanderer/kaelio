@@ -14,7 +14,6 @@ import panzoom from "panzoom";
 import katex from "katex";
 import { toJpeg, toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
-import { Document as DocxDocument, ImageRun, Packer, Paragraph } from "docx";
 import "katex/dist/katex.min.css";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -3155,7 +3154,7 @@ async function copyFormattedHTML() {
   }
 }
 
-// --- Export rendered preview ---
+// --- Export rendered preview / source documents ---
 
 // --- Sidebar / File tree ---
 
@@ -3651,10 +3650,11 @@ function getCommands(): PaletteCommand[] {
     { label: "Show/Hide Explorer", shortcut: sk("view.toggle-sidebar"), action: toggleSidebar },
     { label: "Reading View", shortcut: sk("view.read-mode"), action: toggleReadMode },
     { label: "Copy Formatted HTML", shortcut: sk("edit.copy-formatted"), action: copyFormattedHTML },
-    { label: "Export PDF", action: exportPDF },
-    { label: "Export PNG", action: () => exportPreviewImage("png") },
-    { label: "Export JPG", action: () => exportPreviewImage("jpg") },
-    { label: "Export DOCX", action: exportDOCX },
+    { label: "Export HTML PDF", action: exportHtmlPdf },
+    { label: "Export HTML PNG", action: exportHtmlPng },
+    { label: "Export HTML JPG", action: exportHtmlJpg },
+    { label: "Export Markdown PDF", action: exportMarkdownPdf },
+    { label: "Export Markdown DOCX", action: exportMarkdownDocx },
     { label: "Copy Raw Markdown", action: copyRawMarkdown },
     { label: "Copy Plain Text", action: copyPlainText },
     { label: "Toggle Outline", action: toggleOutline },
@@ -4745,6 +4745,12 @@ async function ctxCompareWith() {
   compareSelected = null;
 }
 
+const EXPORT_CAPTURE_WIDTH = 920;
+
+function getCaptureWidth(sourceWidth: number) {
+  return Math.max(EXPORT_CAPTURE_WIDTH, Math.min(Math.max(sourceWidth, 1), 1200));
+}
+
 function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void } {
   const previewPane = document.getElementById("preview-pane");
   if (!previewPane) throw new Error("Preview pane is not available");
@@ -4752,12 +4758,10 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
   const frame = previewPane.querySelector(".html-preview-frame") as HTMLIFrameElement | null;
   const doc = frame?.contentDocument;
   if (frame && doc?.body) {
-    const width = Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth, frame?.clientWidth || 1);
-    const height = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight, frame?.clientHeight || 1);
+    const width = getCaptureWidth(Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth, frame?.clientWidth || 1));
     const host = document.createElement("div");
     host.className = "export-capture-host export-print-theme";
     host.style.width = `${width}px`;
-    host.style.minHeight = `${height}px`;
     applyLightExportTheme(host);
 
     const base = doc.createElement("base");
@@ -4783,6 +4787,8 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
     host.appendChild(style);
     appendSanitizedHtml(host, doc.body.innerHTML);
     document.body.appendChild(host);
+    const height = Math.max(host.scrollHeight, host.clientHeight, doc.documentElement.scrollHeight, doc.body.scrollHeight, 1);
+    host.style.height = `${height}px`;
     return {
       node: host,
       cleanup: () => host.remove(),
@@ -4791,8 +4797,7 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
 
   // Markdown / structured / plain preview: clone into an off-flow host so the
   // capture isn't clipped by `#preview-pane`'s `overflow:auto` + flex sizing.
-  const fullWidth = Math.max(previewPane.scrollWidth, previewPane.clientWidth, 1);
-  const fullHeight = Math.max(previewPane.scrollHeight, previewPane.clientHeight, 1);
+  const fullWidth = getCaptureWidth(Math.max(previewPane.scrollWidth, previewPane.clientWidth, 1));
   const host = document.createElement("div");
   host.id = "preview-pane";
   host.className = `${previewPane.className} export-print-theme`.trim();
@@ -4800,12 +4805,13 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
   host.style.left = "-100000px";
   host.style.top = "0";
   host.style.width = `${fullWidth}px`;
-  host.style.height = `${fullHeight}px`;
   host.style.overflow = "visible";
   host.style.flex = "none";
   applyLightExportTheme(host);
   appendSanitizedHtml(host, previewPane.innerHTML);
   document.body.appendChild(host);
+  const fullHeight = Math.max(host.scrollHeight, host.clientHeight, previewPane.scrollHeight, previewPane.clientHeight, 1);
+  host.style.height = `${fullHeight}px`;
   return {
     node: host,
     cleanup: () => host.remove(),
@@ -4957,13 +4963,6 @@ function dataUrlBase64(dataUrl: string): string {
   return dataUrl.slice(comma + 1);
 }
 
-function dataUrlToUint8Array(dataUrl: string): Uint8Array {
-  const binary = atob(dataUrlBase64(dataUrl));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
 function nextPaint(): Promise<void> {
   return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 }
@@ -4983,14 +4982,14 @@ async function waitForPreviewAssets(node: HTMLElement) {
 
 async function withPreviewAvailable<T>(work: () => Promise<T>): Promise<T> {
   const previousViewMode = currentViewMode;
-  if (previousViewMode === "editor") {
+  if (previousViewMode !== "preview") {
     setViewMode("preview");
     await nextPaint();
   }
   try {
     return await work();
   } finally {
-    if (previousViewMode === "editor") setViewMode(previousViewMode);
+    if (previousViewMode !== "preview") setViewMode(previousViewMode);
   }
 }
 
@@ -5052,10 +5051,33 @@ async function sliceImageDataUrl(dataUrl: string, maxSliceHeight: number): Promi
   return slices;
 }
 
-async function exportPreviewImage(format: "png" | "jpg") {
-  const defaultName = currentFilePath
-    ? currentFilePath.replace(/\.[^.]+$/, `.${format}`).split("/").pop()!
-    : `export.${format}`;
+function getActiveMarkdownContent(): string {
+  if (activePane === "sub" && splitOpen) {
+    if (editorSub) {
+      saveActiveSubTabState();
+      return editorSub.state.doc.toString();
+    }
+    const tab = getActiveSubTab();
+    return tab ? tab.editorState.doc.toString() : "";
+  }
+  saveActiveTabState();
+  return editor.state.doc.toString();
+}
+
+function getActiveExportPath(): string | null {
+  if (activePane === "sub" && splitOpen) {
+    return getActiveSubTab()?.filePath ?? subFilePath;
+  }
+  return currentFilePath;
+}
+
+function defaultExportName(extension: string): string {
+  const path = getActiveExportPath();
+  return path ? path.replace(/\.[^.]+$/, `.${extension}`).split("/").pop()! : `export.${extension}`;
+}
+
+async function exportHtmlImage(format: "png" | "jpg") {
+  const defaultName = defaultExportName(format);
   const outputPath = await save({
     filters: [{ name: format.toUpperCase(), extensions: [format] }],
     defaultPath: defaultName,
@@ -5096,10 +5118,16 @@ async function exportPreviewImage(format: "png" | "jpg") {
   }
 }
 
-async function exportPDF() {
-  const defaultName = currentFilePath
-    ? currentFilePath.replace(/\.[^.]+$/, ".pdf").split("/").pop()!
-    : "export.pdf";
+async function exportHtmlPng() {
+  return exportHtmlImage("png");
+}
+
+async function exportHtmlJpg() {
+  return exportHtmlImage("jpg");
+}
+
+async function exportHtmlPdf() {
+  const defaultName = defaultExportName("pdf");
   const outputPath = await save({
     filters: [{ name: "PDF", extensions: ["pdf"] }],
     defaultPath: defaultName,
@@ -5135,54 +5163,43 @@ async function exportPDF() {
   }
 }
 
-async function exportDOCX() {
-  const defaultName = currentFilePath
-    ? currentFilePath.replace(/\.[^.]+$/, ".docx").split("/").pop()!
-    : "export.docx";
+async function exportMarkdownPdf() {
   const outputPath = await save({
-    filters: [{ name: "Word", extensions: ["docx"] }],
-    defaultPath: defaultName,
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+    defaultPath: defaultExportName("pdf"),
   });
   if (!outputPath) return;
 
   try {
-    flashStatus("Capturing preview as DOCX...", "var(--accent)");
-    const capture = await capturePreviewPng();
-    const docWidth = 624;
-    const docPageHeight = 900;
-    const maxSliceHeight = capture.width * (docPageHeight / docWidth);
-    const slices = await sliceImageDataUrl(capture.dataUrl, maxSliceHeight);
-    const children = slices.map((slice, index) => new Paragraph({
-      pageBreakBefore: index > 0,
-      children: [
-        new ImageRun({
-          type: "png",
-          data: dataUrlToUint8Array(slice.dataUrl),
-          transformation: {
-            width: docWidth,
-            height: Math.round(slice.height * (docWidth / slice.width)),
-          },
-        }),
-      ],
-    }));
-    const doc = new DocxDocument({
-      sections: [{
-        properties: {
-          page: {
-            margin: { top: 360, right: 360, bottom: 360, left: 360 },
-          },
-        },
-        children,
-      }],
+    flashStatus("Exporting Markdown PDF...", "var(--accent)");
+    await invoke("export_pdf", {
+      markdownContent: getActiveMarkdownContent(),
+      outputPath,
+      sourceFormat: "markdown",
     });
-    const dataBase64 = await Packer.toBase64String(doc);
-    await invoke("save_binary_base64", {
-      path: outputPath,
-      dataBase64,
+    flashStatus(`PDF saved: ${outputPath.split("/").pop()}`, "var(--success)", 3000);
+  } catch (e) {
+    console.error("Markdown PDF export failed:", e);
+    flashStatus(`Export failed: ${e}`, "var(--error)", 8000);
+  }
+}
+
+async function exportMarkdownDocx() {
+  const outputPath = await save({
+    filters: [{ name: "Word", extensions: ["docx"] }],
+    defaultPath: defaultExportName("docx"),
+  });
+  if (!outputPath) return;
+
+  try {
+    flashStatus("Exporting Markdown DOCX...", "var(--accent)");
+    await invoke("export_docx", {
+      markdownContent: getActiveMarkdownContent(),
+      outputPath,
     });
     flashStatus(`DOCX saved: ${outputPath.split("/").pop()}`, "var(--success)", 3000);
   } catch (e) {
-    console.error("DOCX export failed:", e);
+    console.error("Markdown DOCX export failed:", e);
     flashStatus(`Export failed: ${e}`, "var(--error)", 8000);
   }
 }
@@ -5464,10 +5481,11 @@ async function handleNativeMenuCommand(command: string) {
     case "file.new-window": return void invoke("create_window", { filePath: null });
     case "file.save": return saveActivePane();
     case "file.close-tab": return closeActiveTab();
-    case "file.export-pdf": return exportPDF();
-    case "file.export-png": return exportPreviewImage("png");
-    case "file.export-jpg": return exportPreviewImage("jpg");
-    case "file.export-docx": return exportDOCX();
+    case "export.html.png": return exportHtmlPng();
+    case "export.html.jpg": return exportHtmlJpg();
+    case "export.html.pdf": return exportHtmlPdf();
+    case "export.md.pdf": return exportMarkdownPdf();
+    case "export.md.docx": return exportMarkdownDocx();
     case "edit.copy-formatted": return copyFormattedHTML();
     case "edit.copy-raw": return copyRawMarkdown();
     case "edit.copy-plain": return copyPlainText();
@@ -5794,10 +5812,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-save")?.addEventListener("click", () => saveActivePane());
   document.getElementById("btn-autosave")?.addEventListener("click", () => toggleAutoSave());
   document.getElementById("btn-autosync")?.addEventListener("click", () => toggleAutoSync());
-  document.getElementById("btn-export-pdf")?.addEventListener("click", () => exportPDF());
-  document.getElementById("btn-export-png")?.addEventListener("click", () => exportPreviewImage("png"));
-  document.getElementById("btn-export-jpg")?.addEventListener("click", () => exportPreviewImage("jpg"));
-  document.getElementById("btn-export-docx")?.addEventListener("click", () => exportDOCX());
+  document.getElementById("btn-export-html-png")?.addEventListener("click", exportHtmlPng);
+  document.getElementById("btn-export-html-jpg")?.addEventListener("click", exportHtmlJpg);
+  document.getElementById("btn-export-html-pdf")?.addEventListener("click", exportHtmlPdf);
+  document.getElementById("btn-export-md-pdf")?.addEventListener("click", exportMarkdownPdf);
+  document.getElementById("btn-export-md-docx")?.addEventListener("click", exportMarkdownDocx);
 
   // View menu items
   document.getElementById("btn-toggle-sidebar")?.addEventListener("click", () => toggleSidebar());
@@ -5881,10 +5900,11 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // Primary toolbar buttons
   document.getElementById("btn-copy-html")?.addEventListener("click", copyFormattedHTML);
-  document.getElementById("btn-toolbar-export-pdf")?.addEventListener("click", exportPDF);
-  document.getElementById("btn-toolbar-export-png")?.addEventListener("click", () => exportPreviewImage("png"));
-  document.getElementById("btn-toolbar-export-jpg")?.addEventListener("click", () => exportPreviewImage("jpg"));
-  document.getElementById("btn-toolbar-export-docx")?.addEventListener("click", exportDOCX);
+  document.getElementById("btn-toolbar-export-html-png")?.addEventListener("click", exportHtmlPng);
+  document.getElementById("btn-toolbar-export-html-jpg")?.addEventListener("click", exportHtmlJpg);
+  document.getElementById("btn-toolbar-export-html-pdf")?.addEventListener("click", exportHtmlPdf);
+  document.getElementById("btn-toolbar-export-md-pdf")?.addEventListener("click", exportMarkdownPdf);
+  document.getElementById("btn-toolbar-export-md-docx")?.addEventListener("click", exportMarkdownDocx);
   document.getElementById("btn-zoom-in")?.addEventListener("click", zoomIn);
   document.getElementById("btn-split")?.addEventListener("click", () => toggleSplit());
   document.getElementById("btn-sub-mode")?.addEventListener("click", () => toggleSubMode());

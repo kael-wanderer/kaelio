@@ -259,6 +259,32 @@ body {
   background: var(--border);
 }
 
+.dropdown-submenu {
+  position: relative;
+}
+
+.dropdown-submenu-items {
+  position: absolute;
+  left: calc(100% - 4px);
+  top: -4px;
+  display: none;
+  min-width: 140px;
+  padding: 4px 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+.dropdown-submenu:hover > .dropdown-submenu-items,
+.dropdown-submenu:focus-within > .dropdown-submenu-items {
+  display: block;
+}
+
+.dropdown-submenu > .dropdown-item .arrow {
+  margin-left: auto;
+}
+
 .dropdown-control {
   padding: 6px 14px;
   font-size: 12px;

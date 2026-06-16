@@ -1897,6 +1897,22 @@ pub fn run() {
                 &PredefinedMenuItem::quit(handle, Some("Quit Kaelio"))?,
             ])?;
 
+            let export_html_menu = Submenu::with_items(handle, "HTML", true, &[
+                &MenuItem::with_id(handle, "export.html.png", "PNG...", true, None::<&str>)?,
+                &MenuItem::with_id(handle, "export.html.jpg", "JPG...", true, None::<&str>)?,
+                &MenuItem::with_id(handle, "export.html.pdf", "PDF...", true, None::<&str>)?,
+            ])?;
+
+            let export_markdown_menu = Submenu::with_items(handle, "Markdown", true, &[
+                &MenuItem::with_id(handle, "export.md.pdf", "PDF...", true, None::<&str>)?,
+                &MenuItem::with_id(handle, "export.md.docx", "DOCX...", true, None::<&str>)?,
+            ])?;
+
+            let export_menu = Submenu::with_items(handle, "Export", true, &[
+                &export_html_menu,
+                &export_markdown_menu,
+            ])?;
+
             let file_menu = Submenu::with_items(handle, "File", true, &[
                 &MenuItem::with_id(handle, "file.new", "New File", true, Some("CmdOrCtrl+N"))?,
                 &MenuItem::with_id(handle, "file.open", "Open File...", true, Some("CmdOrCtrl+O"))?,
@@ -1906,10 +1922,7 @@ pub fn run() {
                 &MenuItem::with_id(handle, "file.save", "Save", true, Some("CmdOrCtrl+S"))?,
                 &MenuItem::with_id(handle, "file.close-tab", "Close Tab", true, Some("CmdOrCtrl+W"))?,
                 &PredefinedMenuItem::separator(handle)?,
-                &MenuItem::with_id(handle, "file.export-pdf", "Export PDF...", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "file.export-png", "Export PNG...", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "file.export-jpg", "Export JPG...", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "file.export-docx", "Export DOCX...", true, None::<&str>)?,
+                &export_menu,
             ])?;
 
             let edit_menu = Submenu::with_items(handle, "Edit", true, &[
