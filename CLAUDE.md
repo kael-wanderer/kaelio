@@ -39,7 +39,7 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 ### Backend (`src-tauri/`)
 - `src/lib.rs` (~2150 lines): all Tauri commands
 - File commands: `read_file`, `save_file`, `word_count`, `list_directory`, `get_home_dir`, `get_initial_file`
-- Export: `export_pdf` (Pandoc + task_lists), `export_html` (custom renderer with callout/tag CSS), `export_docx`
+- Export (two families): **HTML group** (PNG/JPG/PDF) via frontend preview capture (`html-to-image` + `jsPDF`, full-width capture); **Markdown group** (PDF/DOCX) via Rust `export_pdf`/`export_docx` (Pandoc + Typst/LaTeX, editable DOCX). (`export_html` removed.)
 - Git commands (git2 crate): `git_repo_info`, `git_status`, `git_diff_file`, `git_log`, `git_commit`, `git_push`, `git_pull`, `git_auto_sync`, `git_setup_sync`, `git_check_auth`, `git_init`, `git_discard_file`, `git_stage_file`, `git_file_at_commit`, `git_restore_file`, `git_conflict_info`, `git_resolve_conflict`
 - Snapshot commands: `save_snapshot`, `list_snapshots`, `read_snapshot`
 - Session commands: `save_session`, `load_session` (read/write `~/.kaelio/session.json`)

@@ -1,5 +1,7 @@
 # 04-pdf-export
 
+> **Export menu (0.9.2+) has two families.** **HTML group** (PNG / JPG / PDF) captures the rendered preview as an image via `html-to-image` (+ `jsPDF` for PDF) — visual output, full-width/full-height capture (forces preview mode so split panes don't clip it). **Markdown group** (PDF / DOCX) converts the markdown source via the Rust Pandoc commands below — real, editable documents. The Pandoc/LaTeX flow described here is the **Markdown → PDF** path.
+
 PDF export converts markdown to PDF via Pandoc with LaTeX. Mermaid diagrams are pre-rendered to PNG via the mermaid.ink API before Pandoc processing.
 
 ## System Diagram
