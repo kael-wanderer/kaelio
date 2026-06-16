@@ -109,6 +109,11 @@ let showLineNumbers = localStorage.getItem("kaelio-line-numbers") !== "false";
 const lineNumbersCompartment = new Compartment();
 const keymapCompartment = new Compartment();
 
+type WrapMode = "off" | "window" | "column";
+let wrapMode: WrapMode = (localStorage.getItem("kaelio-wrap-mode") as WrapMode) || "window";
+const wrapColumn = 80;
+const lineWrapCompartment = new Compartment();
+
 // Typography state
 const FONT_OPTIONS = ["System", "Inter", "Georgia", "Merriweather", "JetBrains Mono", "Custom..."] as const;
 const TEXT_SIZE_OPTIONS = ["12", "14", "16", "18", "20", "24", "Custom..."] as const;
@@ -3575,9 +3580,14 @@ function restoreScrollPosition(path: string) {
 
 // --- Tab management ---
 
+function wrapExtension() {
+  return wrapMode === "off" ? [] : EditorView.lineWrapping;
+}
+
 function createEditorExtensions() {
   return [
     lineNumbersCompartment.of(showLineNumbers ? lineNumbers() : []),
+    lineWrapCompartment.of(wrapExtension()),
     highlightActiveLine(),
     highlightActiveLineGutter(),
     history(),
