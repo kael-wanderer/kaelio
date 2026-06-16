@@ -109,6 +109,11 @@ let showLineNumbers = localStorage.getItem("kaelio-line-numbers") !== "false";
 const lineNumbersCompartment = new Compartment();
 const keymapCompartment = new Compartment();
 
+type WrapMode = "off" | "window" | "column";
+let wrapMode: WrapMode = (localStorage.getItem("kaelio-wrap-mode") as WrapMode) || "window";
+const wrapColumn = 80;
+const lineWrapCompartment = new Compartment();
+
 // Typography state
 const FONT_OPTIONS = ["System", "Inter", "Georgia", "Merriweather", "JetBrains Mono", "Custom..."] as const;
 const TEXT_SIZE_OPTIONS = ["12", "14", "16", "18", "20", "24", "Custom..."] as const;
@@ -2265,6 +2270,28 @@ function updateLineNumbersUI() {
   updateActivityBarUI();
 }
 
+function setWrapMode(mode: WrapMode) {
+  wrapMode = mode;
+  localStorage.setItem("kaelio-wrap-mode", mode);
+  editor.dispatch({
+    effects: lineWrapCompartment.reconfigure(wrapExtension()),
+  });
+  applyWrapColumnStyle();
+  updateWrapModeUI();
+}
+
+function applyWrapColumnStyle() {
+  const wrapper = document.getElementById("editor-wrapper");
+  if (!wrapper) return;
+  wrapper.style.setProperty("--wrap-col", `${wrapColumn}ch`);
+  wrapper.classList.toggle("wrap-column", wrapMode === "column");
+}
+
+function updateWrapModeUI() {
+  const select = document.getElementById("wrap-mode-select") as HTMLSelectElement | null;
+  if (select) select.value = wrapMode;
+}
+
 // --- Status flash ---
 
 function flashStatus(text: string, color: string, duration = 2000) {
@@ -3575,9 +3602,14 @@ function restoreScrollPosition(path: string) {
 
 // --- Tab management ---
 
+function wrapExtension() {
+  return wrapMode === "off" ? [] : EditorView.lineWrapping;
+}
+
 function createEditorExtensions() {
   return [
     lineNumbersCompartment.of(showLineNumbers ? lineNumbers() : []),
+    lineWrapCompartment.of(wrapExtension()),
     highlightActiveLine(),
     highlightActiveLineGutter(),
     history(),
@@ -5069,6 +5101,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-read-mode")?.addEventListener("click", () => toggleReadMode());
   document.getElementById("btn-toggle-outline")?.addEventListener("click", () => toggleOutline());
   document.getElementById("btn-toggle-linenumbers")?.addEventListener("click", () => toggleLineNumbers());
+  const wrapModeSelect = document.getElementById("wrap-mode-select") as HTMLSelectElement | null;
+  if (wrapModeSelect) {
+    wrapModeSelect.value = wrapMode;
+    wrapModeSelect.addEventListener("change", () => setWrapMode(wrapModeSelect.value as WrapMode));
+  }
 
   // Appearance controls
   document.getElementById("font-select")?.addEventListener("change", (e) => {
@@ -5499,6 +5536,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   updateWordCount(SAMPLE_CONTENT);
   updateAutoSaveUI();
   updateLineNumbersUI();
+  applyWrapColumnStyle();
+  updateWrapModeUI();
   updateGitUI();
 
   applyTheme();

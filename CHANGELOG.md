@@ -8,6 +8,7 @@
 - Click-to-cursor: clicking any heading, paragraph, list item, code block, callout, or table in the preview moves the editor cursor to the matching source line and scrolls it into view.
 - Preview search: Cmd+F in reading view (preview-only mode) opens a search bar with match highlighting, match count, and next/prev navigation (Enter / Shift+Enter).
 - Tables in the preview now size their columns to fit content instead of stretching to full width. Wide tables scroll horizontally within their own container rather than breaking the page layout.
+- Soft Wrap modes for the editor (View → Soft Wrap): Off (horizontal scroll), Window Width, or Column (80) with a vertical guide line. Long lines no longer clip in the raw pane. Persists across restarts.
 
 ### Session Restore
 
