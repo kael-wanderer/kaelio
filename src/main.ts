@@ -69,6 +69,8 @@ function getActiveTab(): Tab | null {
 // --- State ---
 
 let currentFilePath: string | null = null;
+let splitOpen = false;
+let subFilePath: string | null = null;
 let restoreLastSession = localStorage.getItem("kaelio-restore-session") !== "false";
 let currentFolderPath: string | null = null;
 
@@ -1140,6 +1142,51 @@ async function updatePreview(content: string) {
     });
   });
   reapplyPreviewSearch();
+}
+
+function renderSubPreview(content: string) {
+  const pane = document.getElementById("sub-pane");
+  if (!pane) return;
+  if (subFilePath && !isMarkdownPath(subFilePath)) {
+    pane.innerHTML = `<pre class="plain-text-preview">${escapeHtml(content)}</pre>`;
+    return;
+  }
+  const { frontmatter, body } = extractFrontmatter(content);
+  let html = "";
+  if (frontmatter) html += renderFrontmatter(frontmatter);
+  html += md.render(body, { lineOffset: 0 });
+  html = renderCallouts(html);
+  html = renderChecklists(html);
+  html = renderKaTeX(html);
+  pane.innerHTML = html;
+}
+
+async function openInSubPane(path: string) {
+  try {
+    const result = await invoke<{ path: string; content: string }>("read_file", { path });
+    subFilePath = result.path;
+    renderSubPreview(result.content);
+    setSplit(true);
+  } catch (e) {
+    flashStatus(`Could not open: ${path}`, "var(--red, #f38ba8)");
+  }
+}
+
+function setSplit(open: boolean) {
+  splitOpen = open;
+  const wrapper = document.getElementById("sub-pane-wrapper");
+  const divider = document.getElementById("sub-divider");
+  const btn = document.getElementById("btn-split");
+  wrapper?.classList.toggle("hidden", !open);
+  divider?.classList.toggle("hidden", !open);
+  btn?.classList.toggle("active", open);
+}
+
+function toggleSplit() {
+  if (!splitOpen && !subFilePath) {
+    if (currentFilePath) { openInSubPane(currentFilePath); return; }
+  }
+  setSplit(!splitOpen);
 }
 
 function reapplyPreviewSearch() {
@@ -2390,6 +2437,36 @@ function initDividerDrag() {
     previewPane.style.flexBasis = `${100 - pct}%`;
   });
 
+  window.addEventListener("mouseup", () => {
+    if (dragging) {
+      dragging = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+  });
+}
+
+function initSubDividerDrag() {
+  const divider = document.getElementById("sub-divider");
+  const subWrapper = document.getElementById("sub-pane-wrapper");
+  const previewPane = document.getElementById("preview-pane-wrapper");
+  const container = document.getElementById("editor-container");
+  if (!divider || !subWrapper || !previewPane || !container) return;
+
+  let dragging = false;
+  divider.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    dragging = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const rect = subWrapper.getBoundingClientRect();
+    const right = rect.right;
+    const newWidth = Math.max(200, Math.min(right - 200, right - e.clientX));
+    subWrapper.style.flexBasis = `${newWidth}px`;
+  });
   window.addEventListener("mouseup", () => {
     if (dragging) {
       dragging = false;
@@ -5139,6 +5216,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-toolbar-export-jpg")?.addEventListener("click", () => exportPreviewImage("jpg"));
   document.getElementById("btn-toolbar-export-docx")?.addEventListener("click", exportDOCX);
   document.getElementById("btn-zoom-in")?.addEventListener("click", zoomIn);
+  document.getElementById("btn-split")?.addEventListener("click", () => toggleSplit());
   document.getElementById("btn-zoom-out")?.addEventListener("click", zoomOut);
 
   // Sidebar action buttons
@@ -5352,6 +5430,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // Divider drag
   initDividerDrag();
+  initSubDividerDrag();
 
   // Sidebar resize
   initSidebarResize();
