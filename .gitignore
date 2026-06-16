@@ -28,3 +28,6 @@ src-tauri/target/
 
 # Bundled binaries (downloaded/installed locally, fetched in CI)
 src-tauri/binaries/
+
+# Personal wiki (synced separately; excluded from the public repo)
+wiki/

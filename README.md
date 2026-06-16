@@ -20,7 +20,7 @@ Kaelio is a fork of [mx](https://github.com/vibery-studio/mx) (GPL-3.0), continu
 |---------|--------------|
 | **Split view** | Toggle a second pane (`⊟`) beside the editor — a full editor with its own tabs and edit/preview toggle. `Cmd+S` saves whichever pane has focus. |
 | **File compare** | Right-click → *Open in Split Window*, or *Select for Compare* → *Compare with Selected* to view two files side by side. |
-| **Soft wrap** | View → Soft Wrap: Off, Window Width, or Column (80) with a guide line — long lines stop clipping. |
+| **Soft wrap** | View → Soft Wrap: Off, Window Width, or Page Guide (a configurable guide column) — long lines stop clipping. |
 | **Preview search** | `Cmd+F` in reading view highlights matches with next/prev navigation. |
 | **Session restore** | Reopens your tabs with scroll and cursor positions on launch. |
 
