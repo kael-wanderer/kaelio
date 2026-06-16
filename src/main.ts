@@ -76,6 +76,8 @@ let subTabs: Tab[] = [];
 let subActiveTabId: string | null = null;
 let subMode: "edit" | "preview" = "preview";
 let activePane: "main" | "sub" = "main";
+let subZoomLevel = 100;
+let subShowLineNumbers = localStorage.getItem("kaelio-line-numbers") !== "false";
 let restoreLastSession = localStorage.getItem("kaelio-restore-session") !== "false";
 let currentFolderPath: string | null = null;
 
@@ -114,12 +116,14 @@ const RECOVERY_INTERVAL = 30000;
 // Line numbers state
 let showLineNumbers = localStorage.getItem("kaelio-line-numbers") !== "false";
 const lineNumbersCompartment = new Compartment();
+const subLineNumbersCompartment = new Compartment();
 const keymapCompartment = new Compartment();
 
 type WrapMode = "off" | "window" | "column";
 let wrapMode: WrapMode = (localStorage.getItem("kaelio-wrap-mode") as WrapMode) || "window";
 const wrapColumn = 80;
 const lineWrapCompartment = new Compartment();
+const subLineWrapCompartment = new Compartment();
 
 // Typography state
 const FONT_OPTIONS = ["System", "Inter", "Georgia", "Merriweather", "JetBrains Mono", "Custom..."] as const;
@@ -363,9 +367,52 @@ function applyZoom() {
   if (el) el.textContent = `${zoomLevel}%`;
 }
 
-function zoomIn() { zoomLevel = Math.min(200, zoomLevel + 10); applyZoom(); }
-function zoomOut() { zoomLevel = Math.max(50, zoomLevel - 10); applyZoom(); }
-function zoomReset() { zoomLevel = 100; applyZoom(); }
+function applySubZoom() {
+  subZoomLevel = Math.round(Math.min(200, Math.max(50, subZoomLevel)));
+  applySubTypography();
+}
+
+function zoomIn() {
+  if (activePane === "sub" && splitOpen) {
+    subZoomLevel = Math.min(200, subZoomLevel + 10);
+    applySubZoom();
+    return;
+  }
+  zoomLevel = Math.min(200, zoomLevel + 10);
+  applyZoom();
+}
+
+function zoomOut() {
+  if (activePane === "sub" && splitOpen) {
+    subZoomLevel = Math.max(50, subZoomLevel - 10);
+    applySubZoom();
+    return;
+  }
+  zoomLevel = Math.max(50, zoomLevel - 10);
+  applyZoom();
+}
+
+function zoomReset() {
+  if (activePane === "sub" && splitOpen) {
+    subZoomLevel = 100;
+    applySubZoom();
+    return;
+  }
+  zoomLevel = 100;
+  applyZoom();
+}
+
+function subZoomIn() {
+  activePane = "sub";
+  subZoomLevel = Math.min(200, subZoomLevel + 10);
+  applySubZoom();
+}
+
+function subZoomOut() {
+  activePane = "sub";
+  subZoomLevel = Math.max(50, subZoomLevel - 10);
+  applySubZoom();
+}
 
 function getFontStack(fontName: string) {
   if (fontName === "System") return "var(--font-reading)";
@@ -400,6 +447,44 @@ function editorTypographyTheme() {
   });
 }
 
+function subEditorTypographyTheme() {
+  const scaledSize = currentTextSize * (subZoomLevel / 100);
+  return EditorView.theme({
+    "&": {
+      fontSize: `${scaledSize}px`,
+      backgroundColor: "var(--editor-bg)",
+    },
+    ".cm-scroller, .cm-content": {
+      fontFamily: getFontStack(currentFont),
+    },
+    ".cm-content": {
+      color: "var(--editor-text)",
+      caretColor: "var(--editor-text)",
+    },
+    ".cm-gutters": {
+      backgroundColor: "var(--surface)",
+      borderRight: "1px solid var(--border)",
+      color: "var(--muted)",
+    },
+    ".cm-activeLineGutter, .cm-activeLine": {
+      backgroundColor: "var(--hover-bg)",
+    },
+    ".cm-cursor": {
+      borderLeftColor: "var(--editor-text)",
+    },
+  });
+}
+
+function applySubTypography() {
+  const subPane = document.getElementById("sub-pane");
+  if (subPane) subPane.style.fontSize = `${currentTextSize * (subZoomLevel / 100)}px`;
+  if (editorSub) {
+    editorSub.dispatch({
+      effects: subEditorTypographyCompartment.reconfigure(subEditorTypographyTheme()),
+    });
+  }
+}
+
 function applyTypography() {
   const root = document.documentElement;
   const scaledSize = currentTextSize * (zoomLevel / 100);
@@ -414,6 +499,7 @@ function applyTypography() {
       effects: editorTypographyCompartment.reconfigure(editorTypographyTheme()),
     });
   }
+  applySubTypography();
 
   const label = document.getElementById("font-label");
   if (label) label.textContent = currentFont;
@@ -526,6 +612,7 @@ const savedTheme = localStorage.getItem("kaelio-theme") as ThemeMode | null;
 let currentThemeMode: ThemeMode = savedTheme && THEME_OPTIONS.includes(savedTheme) ? savedTheme : "auto";
 const themeCompartment = new Compartment();
 const editorTypographyCompartment = new Compartment();
+const subEditorTypographyCompartment = new Compartment();
 
 function getEffectiveTheme(): "light" | "dark" {
   if (currentThemeMode === "auto") {
@@ -1172,19 +1259,22 @@ function renderSubPreview(content: string) {
   html = renderKaTeX(html);
   html = sanitizeHtmlString(html);
   pane.innerHTML = html;
+  applySubTypography();
 }
 
 function renderSubTabs() {
   const container = document.getElementById("sub-tabs");
   if (!container) return;
+  container.classList.toggle("hidden", !splitOpen);
   container.innerHTML = subTabs.map(tab => {
     const activeClass = tab.id === subActiveTabId ? " active" : "";
     const dot = tab.isModified ? ' <span class="tab-modified">●</span>' : "";
-    return `<div class="sub-tab${activeClass}" data-sub-tab-id="${tab.id}">
-      <span class="sub-tab-title">${escapeHtml(tab.title)}</span>${dot}
-      <span class="sub-tab-close" data-sub-tab-id="${tab.id}">✕</span>
+    return `<div class="tab sub-tab${activeClass}" data-sub-tab-id="${tab.id}">
+      <span class="tab-title sub-tab-title">${escapeHtml(tab.title)}</span>${dot}
+      <span class="tab-close sub-tab-close" data-sub-tab-id="${tab.id}">✕</span>
     </div>`;
   }).join("");
+  updateTabBarVisibility();
   container.querySelectorAll(".sub-tab").forEach(el => {
     const id = (el as HTMLElement).dataset.subTabId!;
     el.addEventListener("click", (e) => {
@@ -1205,6 +1295,13 @@ function renderActiveSubTab() {
   if (subMode === "edit") {
     const view = ensureSubEditor();
     view.setState(tab.editorState);
+    view.dispatch({
+      effects: [
+        subLineNumbersCompartment.reconfigure(subShowLineNumbers ? lineNumbers() : []),
+        subLineWrapCompartment.reconfigure(wrapExtension()),
+        subEditorTypographyCompartment.reconfigure(subEditorTypographyTheme()),
+      ],
+    });
   } else {
     renderSubPreview(tab.editorState.doc.toString());
   }
@@ -1213,6 +1310,7 @@ function renderActiveSubTab() {
 function switchSubTab(id: string) {
   if (id === subActiveTabId) return;
   if (subMode === "edit") saveActiveSubTabState();
+  activePane = "sub";
   subActiveTabId = id;
   renderActiveSubTab();
   renderSubTabs();
@@ -1267,6 +1365,7 @@ async function openInSubPane(path: string) {
 function updateSubModeIcon() {
   const btn = document.getElementById("btn-sub-mode");
   if (btn) btn.textContent = subMode === "edit" ? "👁" : "✎";
+  updateSubControlsUI();
 }
 
 function setSubMode(mode: "edit" | "preview") {
@@ -1277,6 +1376,13 @@ function setSubMode(mode: "edit" | "preview") {
     const view = ensureSubEditor();
     const tab = getActiveSubTab();
     if (tab) view.setState(tab.editorState);
+    view.dispatch({
+      effects: [
+        subLineNumbersCompartment.reconfigure(subShowLineNumbers ? lineNumbers() : []),
+        subLineWrapCompartment.reconfigure(wrapExtension()),
+        subEditorTypographyCompartment.reconfigure(subEditorTypographyTheme()),
+      ],
+    });
     editPane?.classList.remove("hidden");
     prevPane?.classList.add("hidden");
     view.focus();
@@ -1300,10 +1406,15 @@ function setSplit(open: boolean) {
   splitOpen = open;
   const wrapper = document.getElementById("sub-pane-wrapper");
   const divider = document.getElementById("sub-divider");
+  const bar = document.getElementById("sub-activity-bar");
   const btn = document.getElementById("btn-split");
   wrapper?.classList.toggle("hidden", !open);
   divider?.classList.toggle("hidden", !open);
+  bar?.classList.toggle("hidden", !open);
   btn?.classList.toggle("active", open);
+  if (!open && activePane === "sub") activePane = "main";
+  updateSubControlsUI();
+  updateTabBarVisibility();
 }
 
 async function toggleSplit() {
@@ -2463,10 +2574,25 @@ function toggleLineNumbers() {
   updateLineNumbersUI();
 }
 
+function toggleSubLineNumbers() {
+  subShowLineNumbers = !subShowLineNumbers;
+  if (editorSub) {
+    editorSub.dispatch({
+      effects: subLineNumbersCompartment.reconfigure(subShowLineNumbers ? lineNumbers() : []),
+    });
+  }
+  updateSubControlsUI();
+}
+
 function updateLineNumbersUI() {
   const label = document.getElementById("linenumbers-label");
   if (label) label.textContent = showLineNumbers ? "On" : "Off";
   updateActivityBarUI();
+}
+
+function updateSubControlsUI() {
+  document.getElementById("btn-sub-mode")?.classList.toggle("active", subMode === "edit");
+  document.getElementById("btn-sub-linenumbers")?.classList.toggle("active", subShowLineNumbers);
 }
 
 function setWrapMode(mode: WrapMode) {
@@ -2475,6 +2601,11 @@ function setWrapMode(mode: WrapMode) {
   editor.dispatch({
     effects: lineWrapCompartment.reconfigure(wrapExtension()),
   });
+  if (editorSub) {
+    editorSub.dispatch({
+      effects: subLineWrapCompartment.reconfigure(wrapExtension()),
+    });
+  }
   applyWrapColumnStyle();
   updateWrapModeUI();
 }
@@ -3886,7 +4017,8 @@ function createTab(filePath: string | null, content: string): Tab {
 
 function createSubEditorExtensions() {
   return [
-    showLineNumbers ? lineNumbers() : [],
+    subLineNumbersCompartment.of(subShowLineNumbers ? lineNumbers() : []),
+    subLineWrapCompartment.of(wrapExtension()),
     highlightActiveLine(),
     highlightActiveLineGutter(),
     history(),
@@ -3897,7 +4029,7 @@ function createSubEditorExtensions() {
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     search(),
     getEffectiveTheme() === "dark" ? oneDark : editorLightTheme,
-    editorTypographyTheme(),
+    subEditorTypographyCompartment.of(subEditorTypographyTheme()),
     editorFillTheme,
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]),
     buildKeymap(),
@@ -3995,12 +4127,13 @@ function switchToTab(tabId: string) {
 }
 
 function renderTabs() {
-  const tabBar = document.getElementById("tab-bar");
+  const tabBar = document.getElementById("main-tabs");
   if (!tabBar) return;
 
   // Hide tab bar if 0 or 1 tabs
   if (tabs.length <= 1) {
     tabBar.innerHTML = "";
+    updateTabBarVisibility();
     return;
   }
 
@@ -4046,6 +4179,19 @@ function renderTabs() {
       closeTab(tabId);
     });
   });
+  updateTabBarVisibility();
+}
+
+function updateTabBarVisibility() {
+  const tabBar = document.getElementById("tab-bar");
+  const mainTabs = document.getElementById("main-tabs");
+  const subTabsEl = document.getElementById("sub-tabs");
+  if (!tabBar || !mainTabs || !subTabsEl) return;
+  const hasMainTabs = mainTabs.children.length > 0;
+  const hasSubTabs = splitOpen && subTabs.length > 0;
+  tabBar.classList.toggle("hidden", !hasMainTabs && !hasSubTabs);
+  tabBar.classList.toggle("split-tabs", splitOpen);
+  subTabsEl.classList.toggle("hidden", !splitOpen);
 }
 
 async function closeTab(tabId: string) {
@@ -5572,7 +5718,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-zoom-in")?.addEventListener("click", zoomIn);
   document.getElementById("btn-split")?.addEventListener("click", () => toggleSplit());
   document.getElementById("btn-sub-mode")?.addEventListener("click", () => toggleSubMode());
+  document.getElementById("btn-sub-linenumbers")?.addEventListener("click", () => toggleSubLineNumbers());
+  document.getElementById("btn-sub-zoom-out")?.addEventListener("click", () => subZoomOut());
+  document.getElementById("btn-sub-zoom-in")?.addEventListener("click", () => subZoomIn());
   document.getElementById("btn-zoom-out")?.addEventListener("click", zoomOut);
+  document.getElementById("main-region")?.addEventListener("pointerdown", () => { activePane = "main"; });
+  document.getElementById("sub-pane-wrapper")?.addEventListener("pointerdown", () => { activePane = "sub"; });
+  document.getElementById("sub-activity-bar")?.addEventListener("pointerdown", () => { activePane = "sub"; });
 
   // Sidebar action buttons
   document.getElementById("btn-sidebar-new-file")?.addEventListener("click", async () => {
@@ -5936,6 +6088,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   updateWordCount(SAMPLE_CONTENT);
   updateAutoSaveUI();
   updateLineNumbersUI();
+  updateSubControlsUI();
   applyWrapColumnStyle();
   updateWrapModeUI();
   updateGitUI();

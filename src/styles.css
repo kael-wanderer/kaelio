@@ -388,16 +388,40 @@ body {
   height: 33px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  overflow-x: auto;
   user-select: none;
   flex-shrink: 0;
 }
 
-#tab-bar:empty {
+#tab-bar.hidden {
   display: none;
 }
 
-#tab-bar::-webkit-scrollbar {
+.tab-strip {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+#main-tabs {
+  flex: 1 1 auto;
+}
+
+#sub-tabs {
+  flex: 1 1 0;
+  border-left: 1px solid var(--border);
+}
+
+#tab-bar:not(.split-tabs) #sub-tabs {
+  display: none;
+}
+
+#tab-bar.split-tabs #main-tabs,
+#tab-bar.split-tabs #sub-tabs {
+  flex: 1 1 0;
+}
+
+.tab-strip::-webkit-scrollbar {
   display: none;
 }
 
@@ -509,6 +533,23 @@ body {
   padding: 8px 4px;
   background: var(--surface);
   border-right: 1px solid var(--border);
+}
+
+#sub-activity-bar {
+  width: 44px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+}
+
+#sub-activity-bar .activity-btn.active::before {
+  left: auto;
+  right: -4px;
 }
 
 #appearance-popover {
@@ -2776,9 +2817,6 @@ mark.preview-search-match.active {
   border-left: 1px solid var(--border, #45475a);
 }
 #sub-pane-wrapper.hidden { display: none; }
-#sub-tab-bar {
-  flex: 0 0 auto;
-}
 /* #sub-pane inherits :is(#preview-pane, #sub-pane) styling via the shared :is() selectors */
 #sub-divider {
   flex: 0 0 4px;
@@ -2788,21 +2826,20 @@ mark.preview-search-match.active {
 #sub-divider.hidden { display: none; }
 
 /* Split view — Phase 2 (editable sub pane) */
-#sub-tab-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border, #45475a);
+#btn-sub-mode,
+#btn-split {
+  font-size: 18px;
 }
-#sub-tabs { display: flex; overflow-x: auto; }
-#btn-sub-mode {
-  flex: 0 0 auto;
-  background: none;
-  border: none;
-  color: var(--fg, #cdd6f4);
-  cursor: pointer;
-  padding: 4px 8px;
+
+#btn-sub-linenumbers {
+  font-size: 17px;
 }
+
+#btn-sub-zoom-out,
+#btn-sub-zoom-in {
+  font-size: 20px;
+}
+
 #sub-editor-pane {
   flex: 1 1 auto;
   overflow: hidden;
@@ -2811,15 +2848,3 @@ mark.preview-search-match.active {
 }
 #sub-editor-pane.hidden { display: none; }
 #sub-editor-pane .cm-editor { height: 100%; }
-.sub-tab {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-right: 1px solid var(--border, #45475a);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.sub-tab.active { background: var(--bg-alt, #313244); }
-.sub-tab-close { opacity: 0.6; }
-.sub-tab-close:hover { opacity: 1; }

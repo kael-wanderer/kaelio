@@ -141,7 +141,10 @@
       <div id="recent-panel" class="hidden">
         <div id="recent-list"></div>
       </div>
-      <div id="tab-bar"></div>
+      <div id="tab-bar" class="hidden">
+        <div id="main-tabs" class="tab-strip"></div>
+        <div id="sub-tabs" class="tab-strip hidden"></div>
+      </div>
       <div id="breadcrumb" class="hidden"></div>
       <!-- Recovery banner -->
       <div id="recovery-banner" class="hidden">
@@ -238,13 +241,15 @@
         </div>
         <div id="sub-divider" class="hidden"></div>
         <div id="sub-pane-wrapper" class="hidden">
-          <div id="sub-tab-bar">
-            <div id="sub-tabs"></div>
-            <button id="btn-sub-mode" title="Toggle edit / preview">✎</button>
-          </div>
           <div id="sub-editor-pane" class="hidden"></div>
           <div id="sub-pane"></div>
         </div>
+        <nav id="sub-activity-bar" class="hidden" aria-label="Split pane controls">
+          <button id="btn-sub-mode" class="activity-btn" title="Toggle edit / preview" aria-label="Toggle edit / preview">✎</button>
+          <button id="btn-sub-linenumbers" class="activity-btn" title="Show/Hide sub line numbers" aria-label="Show/Hide sub line numbers">#</button>
+          <button id="btn-sub-zoom-out" class="activity-btn" title="Sub pane zoom out" aria-label="Sub pane zoom out">−</button>
+          <button id="btn-sub-zoom-in" class="activity-btn" title="Sub pane zoom in" aria-label="Sub pane zoom in">+</button>
+        </nav>
       </div>
       <!-- Tab context menu -->
       <div id="tab-context-menu" class="hidden">
