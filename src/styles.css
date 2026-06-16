@@ -400,7 +400,22 @@ body {
   display: flex;
   align-items: stretch;
   min-width: 0;
-  overflow-x: auto;
+  overflow: hidden;
+}
+
+#tab-bar-leading {
+  flex: 0 0 0;
+}
+
+#tab-bar-seam {
+  flex: 0 0 4px;
+  background: var(--border);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+#tab-bar-seam.hidden {
+  display: none;
 }
 
 #main-tabs {
@@ -418,7 +433,7 @@ body {
 
 #tab-bar.split-tabs #main-tabs,
 #tab-bar.split-tabs #sub-tabs {
-  flex: 1 1 0;
+  flex: 0 0 auto;
 }
 
 .tab-strip::-webkit-scrollbar {
@@ -452,6 +467,69 @@ body {
   background: var(--bg);
   color: var(--text);
   border-bottom: 2px solid var(--accent);
+}
+
+.tab-overflow-btn {
+  flex: 0 0 28px;
+  width: 28px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.tab-overflow-btn:hover {
+  color: var(--text);
+  background: var(--hover-bg);
+}
+
+.tab-overflow-btn.hidden,
+.overflow-hidden-tab {
+  display: none !important;
+}
+
+#tab-overflow-menu {
+  position: fixed;
+  z-index: 300;
+  min-width: 190px;
+  max-width: 280px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+#tab-overflow-menu.hidden {
+  display: none;
+}
+
+#tab-overflow-menu .overflow-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 10px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#tab-overflow-menu .overflow-tab-item:hover,
+#tab-overflow-menu .overflow-tab-item.active {
+  background: var(--hover-bg);
+  color: var(--accent);
+}
+
+#tab-overflow-menu .overflow-tab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tab-title {
@@ -2828,7 +2906,7 @@ mark.preview-search-match.active {
 /* Split view — Phase 2 (editable sub pane) */
 #btn-sub-mode,
 #btn-split {
-  font-size: 18px;
+  font-size: 22px;
 }
 
 #btn-sub-linenumbers {

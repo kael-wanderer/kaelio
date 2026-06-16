@@ -1969,11 +1969,18 @@ pub fn run() {
                 &MenuItem::with_id(handle, "theme.custom", "Custom...", true, None::<&str>)?,
             ])?;
 
+            let soft_wrap_menu = Submenu::with_items(handle, "Soft Wrap", true, &[
+                &MenuItem::with_id(handle, "view.soft-wrap.off", "Off", true, None::<&str>)?,
+                &MenuItem::with_id(handle, "view.soft-wrap.window", "Window Width", true, None::<&str>)?,
+                &MenuItem::with_id(handle, "view.soft-wrap.column", "Column (80)", true, None::<&str>)?,
+            ])?;
+
             let view_menu = Submenu::with_items(handle, "View", true, &[
                 &MenuItem::with_id(handle, "view.explorer", "Show/Hide Explorer", true, Some("CmdOrCtrl+B"))?,
                 &MenuItem::with_id(handle, "view.preview", "Show/Hide Preview", true, Some("CmdOrCtrl+P"))?,
                 &MenuItem::with_id(handle, "view.reading", "Reading View", true, Some("CmdOrCtrl+E"))?,
                 &MenuItem::with_id(handle, "view.line-numbers", "Show/Hide Line Numbers", true, None::<&str>)?,
+                &soft_wrap_menu,
                 &PredefinedMenuItem::separator(handle)?,
                 &MenuItem::with_id(handle, "view.zoom-in", "Zoom In", true, Some("CmdOrCtrl+="))?,
                 &MenuItem::with_id(handle, "view.zoom-out", "Zoom Out", true, Some("CmdOrCtrl+-"))?,

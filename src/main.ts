@@ -76,6 +76,7 @@ let subTabs: Tab[] = [];
 let subActiveTabId: string | null = null;
 let subMode: "edit" | "preview" = "preview";
 let activePane: "main" | "sub" = "main";
+let splitTabLayoutFrame: number | null = null;
 let subZoomLevel = 100;
 let subShowLineNumbers = localStorage.getItem("kaelio-line-numbers") !== "false";
 let restoreLastSession = localStorage.getItem("kaelio-restore-session") !== "false";
@@ -1266,7 +1267,7 @@ function renderSubTabs() {
   const container = document.getElementById("sub-tabs");
   if (!container) return;
   container.classList.toggle("hidden", !splitOpen);
-  container.innerHTML = subTabs.map(tab => {
+  const tabHtml = subTabs.map(tab => {
     const activeClass = tab.id === subActiveTabId ? " active" : "";
     const dot = tab.isModified ? ' <span class="tab-modified">●</span>' : "";
     return `<div class="tab sub-tab${activeClass}" data-sub-tab-id="${tab.id}">
@@ -1274,7 +1275,9 @@ function renderSubTabs() {
       <span class="tab-close sub-tab-close" data-sub-tab-id="${tab.id}">✕</span>
     </div>`;
   }).join("");
+  container.innerHTML = tabHtml ? `${tabHtml}<button class="tab-overflow-btn hidden" data-pane="sub" title="More split tabs" aria-label="More split tabs">▾</button>` : "";
   updateTabBarVisibility();
+  scheduleSplitTabLayout();
   container.querySelectorAll(".sub-tab").forEach(el => {
     const id = (el as HTMLElement).dataset.subTabId!;
     el.addEventListener("click", (e) => {
@@ -1286,6 +1289,133 @@ function renderSubTabs() {
     const id = (el as HTMLElement).dataset.subTabId!;
     el.addEventListener("click", (e) => { e.stopPropagation(); closeSubTab(id); });
   });
+  container.querySelector(".tab-overflow-btn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    showTabOverflowMenu("sub", e.currentTarget as HTMLElement);
+  });
+}
+
+function scheduleSplitTabLayout() {
+  if (splitTabLayoutFrame !== null) cancelAnimationFrame(splitTabLayoutFrame);
+  splitTabLayoutFrame = requestAnimationFrame(() => {
+    splitTabLayoutFrame = null;
+    syncSplitTabWidths();
+  });
+}
+
+function syncSplitTabWidths() {
+  const tabBar = document.getElementById("tab-bar");
+  const leading = document.getElementById("tab-bar-leading") as HTMLElement | null;
+  const mainTabs = document.getElementById("main-tabs") as HTMLElement | null;
+  const subTabsEl = document.getElementById("sub-tabs") as HTMLElement | null;
+  const seam = document.getElementById("tab-bar-seam");
+  if (!tabBar || !leading || !mainTabs || !subTabsEl || !seam) return;
+
+  if (!splitOpen || tabBar.classList.contains("hidden")) {
+    leading.style.flexBasis = "0px";
+    mainTabs.style.width = "";
+    mainTabs.style.flex = "";
+    subTabsEl.style.width = "";
+    subTabsEl.style.flex = "";
+    seam.classList.add("hidden");
+    applyTabOverflow(mainTabs);
+    return;
+  }
+
+  const mainRegion = document.getElementById("main-region");
+  const subWrapper = document.getElementById("sub-pane-wrapper");
+  if (!mainRegion || !subWrapper) return;
+
+  const tabBarRect = tabBar.getBoundingClientRect();
+  const mainRect = mainRegion.getBoundingClientRect();
+  const leadingWidth = Math.max(0, mainRect.left - tabBarRect.left);
+  leading.style.flexBasis = `${leadingWidth}px`;
+  mainTabs.style.flex = "0 0 auto";
+  mainTabs.style.width = `${mainRegion.offsetWidth}px`;
+  subTabsEl.style.flex = "0 0 auto";
+  subTabsEl.style.width = `${subWrapper.offsetWidth}px`;
+  seam.classList.remove("hidden");
+
+  applyTabOverflow(mainTabs);
+  applyTabOverflow(subTabsEl);
+}
+
+function applyTabOverflow(strip: HTMLElement) {
+  const overflowButton = strip.querySelector(".tab-overflow-btn") as HTMLButtonElement | null;
+  const tabEls = Array.from(strip.querySelectorAll<HTMLElement>(".tab"));
+  if (!overflowButton || tabEls.length === 0) return;
+
+  tabEls.forEach(tab => tab.classList.remove("overflow-hidden-tab"));
+  overflowButton.classList.add("hidden");
+
+  const stripWidth = strip.clientWidth;
+  if (stripWidth <= 0) return;
+
+  const totalWidth = tabEls.reduce((sum, tab) => sum + tab.offsetWidth, 0);
+  if (totalWidth <= stripWidth) return;
+
+  overflowButton.classList.remove("hidden");
+  const availableWidth = Math.max(0, stripWidth - overflowButton.offsetWidth);
+  const activeTab = strip.querySelector<HTMLElement>(".tab.active");
+  let usedWidth = totalWidth;
+
+  for (let i = tabEls.length - 1; i >= 0 && usedWidth > availableWidth; i -= 1) {
+    const tab = tabEls[i];
+    if (tab === activeTab && tabEls.length > 1) continue;
+    usedWidth -= tab.offsetWidth;
+    tab.classList.add("overflow-hidden-tab");
+  }
+
+  if (usedWidth > availableWidth && activeTab) {
+    usedWidth -= activeTab.offsetWidth;
+    activeTab.classList.add("overflow-hidden-tab");
+  }
+}
+
+function showTabOverflowMenu(pane: "main" | "sub", button: HTMLElement) {
+  const menu = getTabOverflowMenu();
+  const paneTabs = pane === "main" ? tabs : subTabs;
+  const activeId = pane === "main" ? activeTabId : subActiveTabId;
+  menu.innerHTML = paneTabs.map(tab => {
+    const activeClass = tab.id === activeId ? " active" : "";
+    const dot = tab.isModified ? '<span class="tab-modified">●</span>' : "";
+    const title = escapeHtml(tab.title || "Untitled");
+    return `<div class="overflow-tab-item${activeClass}" data-pane="${pane}" data-tab-id="${tab.id}">
+      <span class="overflow-tab-title">${title}</span>${dot}
+    </div>`;
+  }).join("");
+
+  menu.querySelectorAll<HTMLElement>(".overflow-tab-item").forEach(item => {
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const tabId = item.dataset.tabId;
+      const targetPane = item.dataset.pane as "main" | "sub";
+      hideTabOverflowMenu();
+      if (!tabId) return;
+      if (targetPane === "main") switchToTab(tabId);
+      else switchSubTab(tabId);
+    });
+  });
+
+  const rect = button.getBoundingClientRect();
+  menu.style.left = `${Math.max(0, Math.min(rect.left, window.innerWidth - 280))}px`;
+  menu.style.top = `${rect.bottom + 2}px`;
+  menu.classList.remove("hidden");
+}
+
+function getTabOverflowMenu(): HTMLElement {
+  let menu = document.getElementById("tab-overflow-menu");
+  if (!menu) {
+    menu = document.createElement("div");
+    menu.id = "tab-overflow-menu";
+    menu.className = "hidden";
+    document.body.appendChild(menu);
+  }
+  return menu;
+}
+
+function hideTabOverflowMenu() {
+  document.getElementById("tab-overflow-menu")?.classList.add("hidden");
 }
 
 function renderActiveSubTab() {
@@ -2773,6 +2903,7 @@ function initSubDividerDrag() {
     const right = rect.right;
     const newWidth = Math.max(200, Math.min(right - 200, right - e.clientX));
     subWrapper.style.flexBasis = `${newWidth}px`;
+    scheduleSplitTabLayout();
   });
   window.addEventListener("mouseup", () => {
     if (dragging) {
@@ -3288,6 +3419,7 @@ function showContextMenu(x: number, y: number, target: { path: string; isDir: bo
   const hasCompare = !!compareSelected && compareSelected !== target.path;
   document.getElementById("ctx-split-divider")?.classList.toggle("hidden", !isFile);
   document.getElementById("ctx-open-split")?.classList.toggle("hidden", !isFile);
+  document.getElementById("ctx-compare-divider")?.classList.toggle("hidden", !isFile);
   document.getElementById("ctx-select-compare")?.classList.toggle("hidden", !isFile);
   document.getElementById("ctx-compare-with")?.classList.toggle("hidden", !(isFile && hasCompare));
 
@@ -4137,7 +4269,7 @@ function renderTabs() {
     return;
   }
 
-  tabBar.innerHTML = tabs.map(tab => {
+  const tabHtml = tabs.map(tab => {
     const activeClass = tab.id === activeTabId ? " active" : "";
     const modifiedDot = tab.isModified ? '<span class="tab-modified">●</span>' : "";
     const title = tab.title || "Untitled";
@@ -4147,6 +4279,7 @@ function renderTabs() {
       <span class="tab-close" data-tab-id="${tab.id}">✕</span>
     </div>`;
   }).join("");
+  tabBar.innerHTML = `${tabHtml}<button class="tab-overflow-btn hidden" data-pane="main" title="More tabs" aria-label="More tabs">▾</button>`;
 
   // Event listeners
   tabBar.querySelectorAll(".tab").forEach(el => {
@@ -4179,7 +4312,12 @@ function renderTabs() {
       closeTab(tabId);
     });
   });
+  tabBar.querySelector(".tab-overflow-btn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    showTabOverflowMenu("main", e.currentTarget as HTMLElement);
+  });
   updateTabBarVisibility();
+  scheduleSplitTabLayout();
 }
 
 function updateTabBarVisibility() {
@@ -4187,11 +4325,12 @@ function updateTabBarVisibility() {
   const mainTabs = document.getElementById("main-tabs");
   const subTabsEl = document.getElementById("sub-tabs");
   if (!tabBar || !mainTabs || !subTabsEl) return;
-  const hasMainTabs = mainTabs.children.length > 0;
+  const hasMainTabs = !!mainTabs.querySelector(".tab");
   const hasSubTabs = splitOpen && subTabs.length > 0;
   tabBar.classList.toggle("hidden", !hasMainTabs && !hasSubTabs);
   tabBar.classList.toggle("split-tabs", splitOpen);
   subTabsEl.classList.toggle("hidden", !splitOpen);
+  scheduleSplitTabLayout();
 }
 
 async function closeTab(tabId: string) {
@@ -5317,6 +5456,9 @@ async function handleNativeMenuCommand(command: string) {
     case "view.preview": return togglePreview();
     case "view.reading": return toggleReadMode();
     case "view.line-numbers": return toggleLineNumbers();
+    case "view.soft-wrap.off": return setWrapMode("off");
+    case "view.soft-wrap.window": return setWrapMode("window");
+    case "view.soft-wrap.column": return setWrapMode("column");
     case "view.zoom-in": return zoomIn();
     case "view.zoom-out": return zoomOut();
     case "view.zoom-reset": return zoomReset();
@@ -5619,8 +5761,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     document.querySelectorAll(".dropdown-menu").forEach(m => m.classList.add("hidden"));
     hideContextMenu();
     hideTabContextMenu();
+    hideTabOverflowMenu();
     closeAppearancePopover();
   });
+  window.addEventListener("resize", scheduleSplitTabLayout);
 
   // File menu items
   document.getElementById("btn-new")?.addEventListener("click", () => newFile());
