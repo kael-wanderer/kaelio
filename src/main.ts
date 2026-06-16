@@ -2270,6 +2270,28 @@ function updateLineNumbersUI() {
   updateActivityBarUI();
 }
 
+function setWrapMode(mode: WrapMode) {
+  wrapMode = mode;
+  localStorage.setItem("kaelio-wrap-mode", mode);
+  editor.dispatch({
+    effects: lineWrapCompartment.reconfigure(wrapExtension()),
+  });
+  applyWrapColumnStyle();
+  updateWrapModeUI();
+}
+
+function applyWrapColumnStyle() {
+  const wrapper = document.getElementById("editor-wrapper");
+  if (!wrapper) return;
+  wrapper.style.setProperty("--wrap-col", `${wrapColumn}ch`);
+  wrapper.classList.toggle("wrap-column", wrapMode === "column");
+}
+
+function updateWrapModeUI() {
+  const select = document.getElementById("wrap-mode-select") as HTMLSelectElement | null;
+  if (select) select.value = wrapMode;
+}
+
 // --- Status flash ---
 
 function flashStatus(text: string, color: string, duration = 2000) {

@@ -2740,3 +2740,19 @@ mark.preview-search-match.active {
   #editor-container { display: block !important; overflow: visible !important; height: auto !important; }
   body, html { height: auto !important; overflow: visible !important; background: white !important; }
 }
+
+/* Soft wrap: column mode constrains content width and shows a guide line */
+#editor-wrapper.wrap-column .cm-content {
+  max-width: var(--wrap-col, 80ch);
+}
+#editor-wrapper.wrap-column .cm-content::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--wrap-col, 80ch);
+  width: 1px;
+  background: var(--border, #45475a);
+  opacity: 0.5;
+  pointer-events: none;
+}
