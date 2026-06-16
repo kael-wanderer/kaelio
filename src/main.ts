@@ -1110,6 +1110,7 @@ async function updatePreview(content: string) {
   html = renderChecklists(html);
   html = renderKaTeX(html);
   html = processMermaidBlocks(html);
+  html = sanitizeHtmlString(html);
   previewPane.innerHTML = html;
   await renderMermaidDivs();
   // Wire up interactive checklists
@@ -1169,6 +1170,7 @@ function renderSubPreview(content: string) {
   html = renderCallouts(html);
   html = renderChecklists(html);
   html = renderKaTeX(html);
+  html = sanitizeHtmlString(html);
   pane.innerHTML = html;
 }
 
@@ -2590,7 +2592,7 @@ function initDividerDrag() {
   const divider = $("#divider");
   const editorWrapper = $("#editor-wrapper");
   const previewPane = $("#preview-pane-wrapper");
-  const container = $("#editor-container");
+  const container = $("#main-region");
   if (!divider || !editorWrapper || !previewPane || !container) return;
 
   let dragging = false;
@@ -2605,11 +2607,8 @@ function initDividerDrag() {
   window.addEventListener("mousemove", (e) => {
     if (!dragging) return;
     const rect = container.getBoundingClientRect();
-    const sidebar = document.getElementById("sidebar");
-    const sidebarWidth = sidebar && !sidebar.classList.contains("hidden") ? sidebar.offsetWidth + 4 : 0;
-    const offset = e.clientX - rect.left - sidebarWidth;
-    const total = rect.width - sidebarWidth;
-    const pct = Math.max(20, Math.min(80, (offset / total) * 100));
+    const offset = e.clientX - rect.left;
+    const pct = Math.max(20, Math.min(80, (offset / rect.width) * 100));
     editorWrapper.style.flexBasis = `${pct}%`;
     previewPane.style.flexBasis = `${100 - pct}%`;
   });
@@ -3371,7 +3370,6 @@ function getCommands(): PaletteCommand[] {
     { label: "Reading View", shortcut: sk("view.read-mode"), action: toggleReadMode },
     { label: "Copy Formatted HTML", shortcut: sk("edit.copy-formatted"), action: copyFormattedHTML },
     { label: "Export PDF", action: exportPDF },
-    { label: "Export HTML", action: exportHTML },
     { label: "Export PNG", action: () => exportPreviewImage("png") },
     { label: "Export JPG", action: () => exportPreviewImage("jpg") },
     { label: "Export DOCX", action: exportDOCX },
@@ -4443,59 +4441,6 @@ async function ctxCompareWith() {
   compareSelected = null;
 }
 
-// --- Export HTML (#34) ---
-
-/** Pre-process markdown for HTML export: convert callouts to HTML divs */
-function preprocessForHtmlExport(content: string): string {
-  let result = content;
-  // Convert callout blockquotes to HTML divs
-  result = result.replace(
-    /^(> \[!([\w-]+)\]\s*(.*)\n(?:> .*\n)*)/gm,
-    (_match, block: string, type: string, title: string) => {
-      const lines = block.split("\n").map((l: string) => l.replace(/^>\s?/, "")).filter((l: string) => l.trim());
-      lines.shift(); // remove [!type] line
-      const t = type.toLowerCase();
-      const icon = CALLOUT_ICONS[t] || "📌";
-      const displayTitle = title.trim() || type.charAt(0).toUpperCase() + type.slice(1);
-      const body = lines.join("<br>");
-      return `<div class="callout callout-${t}"><div class="callout-title">${icon} ${displayTitle}</div><div class="callout-content">${body}</div></div>\n`;
-    }
-  );
-  // Convert checklists to HTML checkboxes
-  result = result.replace(/^- \[x\] /gm, "- ☑ ");
-  result = result.replace(/^- \[ \] /gm, "- ☐ ");
-  // Convert frontmatter tags to styled spans
-  result = result.replace(/^---\n([\s\S]*?)\n---\n?/, (match, yaml: string) => {
-    const tagMatch = yaml.match(/^tags:\s*\n((?:\s+-\s+.*\n?)+)/m);
-    if (!tagMatch) return match;
-    const tags = tagMatch[1].split("\n").map(l => l.replace(/^\s+-\s+/, "").trim()).filter(Boolean);
-    const tagHtml = tags.map(t => `<span class="fm-tag">${t}</span>`).join(" ");
-    const cleanYaml = yaml.replace(/^tags:\s*\n(?:\s+-\s+.*\n?)+/m, `tags: ${tagHtml}`);
-    return `---\n${cleanYaml}\n---\n`;
-  });
-  return result;
-}
-
-async function exportHTML() {
-  const content = preprocessForHtmlExport(editor.state.doc.toString());
-  const theme = getEffectiveTheme();
-  try {
-    const html = await invoke<string>("export_html", { markdownContent: content, theme });
-    const defaultName = currentFilePath
-      ? currentFilePath.replace(/\.md$/, ".html").split("/").pop()!
-      : "export.html";
-    const outputPath = await save({
-      filters: [{ name: "HTML", extensions: ["html"] }],
-      defaultPath: defaultName,
-    });
-    if (!outputPath) return;
-    await invoke("save_file", { path: outputPath, content: html });
-    flashStatus(`HTML saved: ${outputPath.split("/").pop()}`, "var(--success)");
-  } catch (e) {
-    flashStatus(`Export failed: ${e}`, "var(--error)", 3000);
-  }
-}
-
 function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void } {
   const previewPane = document.getElementById("preview-pane");
   if (!previewPane) throw new Error("Preview pane is not available");
@@ -4503,17 +4448,13 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
   const frame = previewPane.querySelector(".html-preview-frame") as HTMLIFrameElement | null;
   const doc = frame?.contentDocument;
   if (frame && doc?.body) {
-    const bodyStyle = frame.contentWindow?.getComputedStyle(doc.body);
-    const htmlStyle = frame.contentWindow?.getComputedStyle(doc.documentElement);
     const width = Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth, frame?.clientWidth || 1);
     const height = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight, frame?.clientHeight || 1);
     const host = document.createElement("div");
-    host.className = "export-capture-host";
+    host.className = "export-capture-host export-print-theme";
     host.style.width = `${width}px`;
     host.style.minHeight = `${height}px`;
-    host.style.background = bodyStyle?.backgroundColor && bodyStyle.backgroundColor !== "rgba(0, 0, 0, 0)"
-      ? bodyStyle.backgroundColor
-      : (htmlStyle?.backgroundColor && htmlStyle.backgroundColor !== "rgba(0, 0, 0, 0)" ? htmlStyle.backgroundColor : "#ffffff");
+    applyLightExportTheme(host);
 
     const base = doc.createElement("base");
     if (currentFilePath) {
@@ -4524,19 +4465,19 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
     const styles = Array.from(doc.querySelectorAll("style"))
       .map(style => style.textContent || "")
       .join("\n");
-    const links = Array.from(doc.querySelectorAll('link[rel="stylesheet"]'))
-      .map(link => {
-        const href = (link as HTMLLinkElement).href;
-        return href ? `<link rel="stylesheet" href="${escapeHtml(href)}">` : "";
-      })
-      .join("");
-    host.innerHTML = `${base.outerHTML}${links}<style>${styles}</style>${doc.body.innerHTML}`;
-    host.querySelectorAll("script").forEach(script => script.remove());
-    host.querySelectorAll("*").forEach(el => {
-      for (const attr of Array.from(el.attributes)) {
-        if (attr.name.toLowerCase().startsWith("on")) el.removeAttribute(attr.name);
-      }
+    host.appendChild(base);
+    Array.from(doc.querySelectorAll('link[rel="stylesheet"]')).forEach(link => {
+      const href = (link as HTMLLinkElement).href;
+      if (!href) return;
+      const clone = document.createElement("link");
+      clone.rel = "stylesheet";
+      clone.href = href;
+      host.appendChild(clone);
     });
+    const style = document.createElement("style");
+    style.textContent = `${styles}\n${EXPORT_LIGHT_THEME_CSS}`;
+    host.appendChild(style);
+    appendSanitizedHtml(host, doc.body.innerHTML);
     document.body.appendChild(host);
     return {
       node: host,
@@ -4546,12 +4487,11 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
 
   // Markdown / structured / plain preview: clone into an off-flow host so the
   // capture isn't clipped by `#preview-pane`'s `overflow:auto` + flex sizing.
-  const computed = getComputedStyle(previewPane);
   const fullWidth = Math.max(previewPane.scrollWidth, previewPane.clientWidth, 1);
   const fullHeight = Math.max(previewPane.scrollHeight, previewPane.clientHeight, 1);
   const host = document.createElement("div");
   host.id = "preview-pane";
-  host.className = previewPane.className;
+  host.className = `${previewPane.className} export-print-theme`.trim();
   host.style.position = "fixed";
   host.style.left = "-100000px";
   host.style.top = "0";
@@ -4559,13 +4499,152 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
   host.style.height = `${fullHeight}px`;
   host.style.overflow = "visible";
   host.style.flex = "none";
-  host.style.background = computed.backgroundColor || "#ffffff";
-  host.innerHTML = previewPane.innerHTML;
+  applyLightExportTheme(host);
+  appendSanitizedHtml(host, previewPane.innerHTML);
   document.body.appendChild(host);
   return {
     node: host,
     cleanup: () => host.remove(),
   };
+}
+
+const EXPORT_LIGHT_THEME_CSS = `
+  .export-print-theme,
+  #preview-pane.export-print-theme {
+    --bg: #ffffff;
+    --surface: #f8fafc;
+    --border: #d1d5db;
+    --text: #111827;
+    --accent: #2563eb;
+    --warning: #b45309;
+    --muted: #6b7280;
+    --heading-color: #111827;
+    --strong-color: #111827;
+    --code-bg: #f3f4f6;
+    --code-color: #9f1239;
+    --preview-bg: #ffffff;
+    --preview-text: #111827;
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+  .export-print-theme *,
+  #preview-pane.export-print-theme * {
+    text-shadow: none !important;
+  }
+  .export-print-theme h1,
+  .export-print-theme h2,
+  .export-print-theme h3,
+  .export-print-theme h4,
+  .export-print-theme h5,
+  .export-print-theme h6,
+  .export-print-theme strong,
+  #preview-pane.export-print-theme h1,
+  #preview-pane.export-print-theme h2,
+  #preview-pane.export-print-theme h3,
+  #preview-pane.export-print-theme h4,
+  #preview-pane.export-print-theme h5,
+  #preview-pane.export-print-theme h6,
+  #preview-pane.export-print-theme strong {
+    color: #111827 !important;
+  }
+  .export-print-theme a,
+  #preview-pane.export-print-theme a {
+    color: #1d4ed8 !important;
+  }
+  .export-print-theme blockquote,
+  #preview-pane.export-print-theme blockquote {
+    color: #374151 !important;
+    background: #f9fafb !important;
+    border-color: #d1d5db !important;
+  }
+  .export-print-theme code,
+  #preview-pane.export-print-theme code {
+    color: #9f1239 !important;
+    background: #f3f4f6 !important;
+  }
+  .export-print-theme pre,
+  #preview-pane.export-print-theme pre,
+  .export-print-theme th,
+  #preview-pane.export-print-theme th {
+    color: #111827 !important;
+    background: #f3f4f6 !important;
+  }
+  .export-print-theme pre code,
+  #preview-pane.export-print-theme pre code {
+    color: #111827 !important;
+    background: transparent !important;
+  }
+  .export-print-theme td,
+  #preview-pane.export-print-theme td,
+  .export-print-theme li,
+  #preview-pane.export-print-theme li,
+  .export-print-theme p,
+  #preview-pane.export-print-theme p {
+    color: #111827 !important;
+  }
+  .export-print-theme th,
+  .export-print-theme td,
+  #preview-pane.export-print-theme th,
+  #preview-pane.export-print-theme td {
+    border-color: #d1d5db !important;
+  }
+  .export-print-theme .callout,
+  #preview-pane.export-print-theme .callout {
+    color: #111827 !important;
+    background: #eff6ff !important;
+  }
+  .export-print-theme .mermaid,
+  #preview-pane.export-print-theme .mermaid {
+    background: #ffffff !important;
+    border-color: #d1d5db !important;
+  }
+`;
+
+function applyLightExportTheme(node: HTMLElement) {
+  node.style.setProperty("--bg", "#ffffff");
+  node.style.setProperty("--surface", "#f8fafc");
+  node.style.setProperty("--border", "#d1d5db");
+  node.style.setProperty("--text", "#111827");
+  node.style.setProperty("--accent", "#2563eb");
+  node.style.setProperty("--warning", "#b45309");
+  node.style.setProperty("--muted", "#6b7280");
+  node.style.setProperty("--heading-color", "#111827");
+  node.style.setProperty("--strong-color", "#111827");
+  node.style.setProperty("--code-bg", "#f3f4f6");
+  node.style.setProperty("--code-color", "#9f1239");
+  node.style.setProperty("--preview-bg", "#ffffff");
+  node.style.setProperty("--preview-text", "#111827");
+  node.style.background = "#ffffff";
+  node.style.color = "#111827";
+}
+
+function appendSanitizedHtml(target: HTMLElement, html: string) {
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  sanitizeDetachedHtml(template.content);
+  target.appendChild(template.content);
+}
+
+function sanitizeHtmlString(html: string): string {
+  const container = document.createElement("div");
+  container.innerHTML = html;
+  sanitizeDetachedHtml(container);
+  return container.innerHTML;
+}
+
+function sanitizeDetachedHtml(root: ParentNode) {
+  root.querySelectorAll("script, iframe[srcdoc]").forEach(el => el.remove());
+  root.querySelectorAll("*").forEach(el => {
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      const value = attr.value.trim().toLowerCase();
+      if (name.startsWith("on")) {
+        el.removeAttribute(attr.name);
+      } else if ((name === "href" || name === "src" || name === "xlink:href") && value.startsWith("javascript:")) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  });
 }
 
 function dataUrlBase64(dataUrl: string): string {
@@ -4627,7 +4706,7 @@ async function capturePreviewPng(): Promise<{ dataUrl: string; width: number; he
         pixelRatio: 2,
         width,
         height,
-        backgroundColor: getComputedStyle(node).backgroundColor || "#ffffff",
+        backgroundColor: "#ffffff",
       });
       const image = await loadImageDataUrl(dataUrl);
       return { dataUrl, width: image.naturalWidth, height: image.naturalHeight };
@@ -4693,7 +4772,7 @@ async function exportPreviewImage(format: "png" | "jpg") {
           pixelRatio: 2,
           width,
           height,
-          backgroundColor: format === "jpg" ? "#ffffff" : undefined,
+          backgroundColor: "#ffffff",
         };
         const dataUrl = format === "png"
           ? await toPng(node, options)
@@ -5082,7 +5161,6 @@ async function handleNativeMenuCommand(command: string) {
     case "file.save": return saveActivePane();
     case "file.close-tab": return closeActiveTab();
     case "file.export-pdf": return exportPDF();
-    case "file.export-html": return exportHTML();
     case "file.export-png": return exportPreviewImage("png");
     case "file.export-jpg": return exportPreviewImage("jpg");
     case "file.export-docx": return exportDOCX();
@@ -5408,7 +5486,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-autosave")?.addEventListener("click", () => toggleAutoSave());
   document.getElementById("btn-autosync")?.addEventListener("click", () => toggleAutoSync());
   document.getElementById("btn-export-pdf")?.addEventListener("click", () => exportPDF());
-  document.getElementById("btn-export-html")?.addEventListener("click", () => exportHTML());
   document.getElementById("btn-export-png")?.addEventListener("click", () => exportPreviewImage("png"));
   document.getElementById("btn-export-jpg")?.addEventListener("click", () => exportPreviewImage("jpg"));
   document.getElementById("btn-export-docx")?.addEventListener("click", () => exportDOCX());
@@ -5489,7 +5566,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Primary toolbar buttons
   document.getElementById("btn-copy-html")?.addEventListener("click", copyFormattedHTML);
   document.getElementById("btn-toolbar-export-pdf")?.addEventListener("click", exportPDF);
-  document.getElementById("btn-toolbar-export-html")?.addEventListener("click", exportHTML);
   document.getElementById("btn-toolbar-export-png")?.addEventListener("click", () => exportPreviewImage("png"));
   document.getElementById("btn-toolbar-export-jpg")?.addEventListener("click", () => exportPreviewImage("jpg"));
   document.getElementById("btn-toolbar-export-docx")?.addEventListener("click", exportDOCX);
