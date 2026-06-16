@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.2
+
+### Split View & Compare
+
+- **Split view** — toggle a second editable pane (⊟, next to zoom) beside the editor. It's a full editor with its own tabs and an edit/preview toggle (✎/👁); `Cmd+S` saves whichever pane has focus. Draggable divider.
+- **Sub-pane control bar** — a control strip beside the sub pane with its own edit/preview, line-numbers, and zoom controls. **Per-pane zoom and line numbers** are independent of the main editor.
+- **Unified tab bar** — main and sub tabs share the same styling, aligned over their panes.
+- **File compare** — right-click a file → *Open in Split Window*, or *Select for Compare* → *Compare with Selected* to view two files side by side.
+
+### Editor
+
+- **Soft Wrap** modes (View → Soft Wrap): Off (horizontal scroll), Window Width, or Column (80) with a vertical guide line. Long lines no longer clip in the raw pane. Persists across restarts.
+
+### Fixes
+
+- Reworked the split-view layout (main panes now live in their own region) so opening the sub pane no longer overflows or overlaps the main editor, the divider resizes only the main side, the sub preview matches the main preview's styling, and clicking to place the cursor no longer resizes the panes.
+
 ## 0.9.1
 
 ### Editor and Preview
@@ -8,8 +25,6 @@
 - Click-to-cursor: clicking any heading, paragraph, list item, code block, callout, or table in the preview moves the editor cursor to the matching source line and scrolls it into view.
 - Preview search: Cmd+F in reading view (preview-only mode) opens a search bar with match highlighting, match count, and next/prev navigation (Enter / Shift+Enter).
 - Tables in the preview now size their columns to fit content instead of stretching to full width. Wide tables scroll horizontally within their own container rather than breaking the page layout.
-- Soft Wrap modes for the editor (View → Soft Wrap): Off (horizontal scroll), Window Width, or Column (80) with a vertical guide line. Long lines no longer clip in the raw pane. Persists across restarts.
-- Split view: toggle a second pane (⊟ next to zoom) beside the editor — a full editor with its own tabs and an edit/preview toggle (✎/👁); Cmd+S saves whichever pane has focus. Open files into it via right-click → "Open in Split Window", or compare two files via "Select for Compare" → "Compare with Selected". Draggable divider.
 
 ### Session Restore
 
