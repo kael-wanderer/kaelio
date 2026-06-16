@@ -1298,11 +1298,22 @@ function setSplit(open: boolean) {
   btn?.classList.toggle("active", open);
 }
 
-function toggleSplit() {
-  if (!splitOpen && !subFilePath) {
-    if (currentFilePath) { openInSubPane(currentFilePath); return; }
+async function toggleSplit() {
+  if (!splitOpen) {
+    if (subTabs.length === 0 && currentFilePath) { await openInSubPane(currentFilePath); return; }
+    setSplit(true);
+    renderSubTabs();
+    return;
   }
-  setSplit(!splitOpen);
+  // Turning split OFF — guard unsaved sub tabs
+  const dirty = subTabs.filter(t => t.isModified);
+  if (dirty.length > 0) {
+    const shouldSave = await showConfirmDialog(`Save ${dirty.length} unsaved sub-pane file(s)? (Y/N)`);
+    if (shouldSave) {
+      for (const t of dirty) { subActiveTabId = t.id; if (subMode === "edit") saveActiveSubTabState(); await saveSubFile(); }
+    }
+  }
+  setSplit(false);
 }
 
 function reapplyPreviewSearch() {
