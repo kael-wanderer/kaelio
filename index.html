@@ -124,14 +124,6 @@
               <div id="btn-toolbar-export-docx" class="dropdown-item">Export DOCX</div>
             </div>
           </div>
-          <span class="toolbar-sep"></span>
-          <button id="btn-sync-scroll" title="Sync editor &amp; preview scroll">⇆</button>
-          <span class="toolbar-sep"></span>
-          <button id="btn-zoom-out" title="Zoom out (Cmd+-)">−</button>
-          <span id="status-zoom" class="toolbar-zoom">100%</span>
-          <button id="btn-zoom-in" title="Zoom in (Cmd+=)">+</button>
-          <span class="toolbar-sep"></span>
-          <button id="btn-split" title="Toggle split view">⊟</button>
         </div>
         <div id="token-info">
           <span id="token-count">0 words</span>
@@ -156,11 +148,16 @@
       </div>
       <div id="editor-container">
         <nav id="activity-bar" aria-label="Primary navigation">
-          <button id="activity-explorer" class="activity-btn" title="Show/Hide Explorer (⌘B)" aria-label="Show/Hide Explorer">☰</button>
-          <button id="activity-preview" class="activity-btn" title="Show/Hide Preview (⌘P)" aria-label="Show/Hide Preview">◧</button>
-          <button id="activity-reading" class="activity-btn" title="Reading View (⌘E)" aria-label="Reading View">◨</button>
-          <button id="activity-linenumbers" class="activity-btn" title="Show/Hide Line Numbers" aria-label="Show/Hide Line Numbers">#</button>
-          <button id="activity-settings" class="activity-btn activity-bottom" title="Appearance Settings" aria-label="Appearance Settings">⚙</button>
+          <button id="activity-explorer" class="activity-btn" data-tooltip="Show / Hide Explorer (⌘B)" aria-label="Show / Hide Explorer (⌘B)">☰</button>
+          <button id="activity-preview" class="activity-btn" data-tooltip="Show / Hide Preview (⌘P)" aria-label="Show / Hide Preview (⌘P)">◧</button>
+          <button id="activity-reading" class="activity-btn" data-tooltip="Reading View (⌘E)" aria-label="Reading View (⌘E)">◨</button>
+          <button id="activity-linenumbers" class="activity-btn" data-tooltip="Show / Hide Line Numbers" aria-label="Show / Hide Line Numbers">#</button>
+          <button id="btn-split" class="activity-btn" data-tooltip="Toggle Split View" aria-label="Toggle Split View">⊟</button>
+          <button id="btn-sync-scroll" class="activity-btn" data-tooltip="Sync Editor &amp; Preview Scroll" aria-label="Sync Editor &amp; Preview Scroll">⇆</button>
+          <button id="btn-zoom-out" class="activity-btn" data-tooltip="Zoom Out (⌘−)" aria-label="Zoom Out (⌘−)">−</button>
+          <span id="status-zoom" class="toolbar-zoom">100%</span>
+          <button id="btn-zoom-in" class="activity-btn" data-tooltip="Zoom In (⌘=)" aria-label="Zoom In (⌘=)">+</button>
+          <button id="activity-settings" class="activity-btn activity-bottom" data-tooltip="Appearance Settings" aria-label="Appearance Settings">⚙</button>
         </nav>
         <div id="appearance-popover" class="hidden">
           <div class="appearance-header">Appearance</div>
@@ -247,10 +244,10 @@
           <div id="sub-pane"></div>
         </div>
         <nav id="sub-activity-bar" class="hidden" aria-label="Split pane controls">
-          <button id="btn-sub-mode" class="activity-btn" title="Toggle edit / preview" aria-label="Toggle edit / preview">✎</button>
-          <button id="btn-sub-linenumbers" class="activity-btn" title="Show/Hide sub line numbers" aria-label="Show/Hide sub line numbers">#</button>
-          <button id="btn-sub-zoom-out" class="activity-btn" title="Sub pane zoom out" aria-label="Sub pane zoom out">−</button>
-          <button id="btn-sub-zoom-in" class="activity-btn" title="Sub pane zoom in" aria-label="Sub pane zoom in">+</button>
+          <button id="btn-sub-mode" class="activity-btn" data-tooltip="Toggle Sub Pane Edit / Preview" aria-label="Toggle Sub Pane Edit / Preview">✎</button>
+          <button id="btn-sub-linenumbers" class="activity-btn" data-tooltip="Sub Pane Line Numbers" aria-label="Sub Pane Line Numbers">#</button>
+          <button id="btn-sub-zoom-out" class="activity-btn" data-tooltip="Sub Pane Zoom Out" aria-label="Sub Pane Zoom Out">−</button>
+          <button id="btn-sub-zoom-in" class="activity-btn" data-tooltip="Sub Pane Zoom In" aria-label="Sub Pane Zoom In">+</button>
         </nav>
       </div>
       <!-- Tab context menu -->

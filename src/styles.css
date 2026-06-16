@@ -611,6 +611,8 @@ body {
   padding: 8px 4px;
   background: var(--surface);
   border-right: 1px solid var(--border);
+  overflow: visible;
+  z-index: 20;
 }
 
 #sub-activity-bar {
@@ -623,6 +625,8 @@ body {
   padding: 8px 4px;
   background: var(--surface);
   border-left: 1px solid var(--border);
+  overflow: visible;
+  z-index: 20;
 }
 
 #sub-activity-bar .activity-btn.active::before {
@@ -759,6 +763,53 @@ body {
   position: relative;
 }
 
+.activity-btn[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  z-index: 500;
+  width: max-content;
+  max-width: 220px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-align: left;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease 0.28s, transform 0.12s ease 0.28s, visibility 0s linear 0.4s;
+}
+
+.activity-btn[data-tooltip]:hover::after,
+.activity-btn[data-tooltip]:focus-visible::after {
+  transform: translateY(-50%) translateX(0);
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0.35s, 0.35s, 0s;
+}
+
+#sub-activity-bar .activity-btn[data-tooltip]::after {
+  left: auto;
+  right: calc(100% + 10px);
+  transform: translateY(-50%) translateX(4px);
+}
+
+#sub-activity-bar .activity-btn[data-tooltip]:hover::after,
+#sub-activity-bar .activity-btn[data-tooltip]:focus-visible::after {
+  transform: translateY(-50%) translateX(0);
+}
+
 .activity-btn:hover {
   background: var(--hover-bg);
   color: var(--text);
@@ -782,6 +833,20 @@ body {
 
 .activity-bottom {
   margin-top: auto;
+}
+
+#activity-bar #status-zoom {
+  width: 36px;
+  min-width: 0;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  align-self: center;
+  color: var(--muted);
+  font-size: 10px;
+  font-family: var(--font-ui);
+  line-height: 1;
+  text-align: center;
 }
 
 #activity-settings {
@@ -2662,9 +2727,9 @@ body {
 
 #btn-sync-scroll.active,
 #btn-split.active {
-  background: var(--accent);
-  color: var(--bg);
-  border-color: var(--accent);
+  background: var(--active-bg);
+  color: var(--accent);
+  border-color: transparent;
 }
 
 /* ── Copy dropdown ── */
