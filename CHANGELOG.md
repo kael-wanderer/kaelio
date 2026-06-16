@@ -8,7 +8,7 @@
 - Click-to-cursor: clicking any heading, paragraph, list item, code block, callout, or table in the preview moves the editor cursor to the matching source line and scrolls it into view.
 - Preview search: Cmd+F in reading view (preview-only mode) opens a search bar with match highlighting, match count, and next/prev navigation (Enter / Shift+Enter).
 - Tables in the preview now size their columns to fit content instead of stretching to full width. Wide tables scroll horizontally within their own container rather than breaking the page layout.
-- Split view (Phase 1): toggle a read-only second pane (⊟ next to zoom) to view another document beside the editor; draggable divider. Editable sub pane and right-click entry points land in later phases.
+- Split view: toggle a second pane (⊟ next to zoom) beside the editor. The sub pane is a full editor with its own tabs and an edit/preview toggle (✎/👁); Cmd+S saves whichever pane has focus. Open files into it via right-click (see below). Draggable divider.
 
 ### Session Restore
 
