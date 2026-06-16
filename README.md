@@ -5,6 +5,7 @@
 A fast, lightweight Markdown editor built with Tauri 2 + Rust. Open any `.md` file and get live preview, Mermaid diagrams, math, and Git-backed history — no vault, no config, just open and go.
 
 ![Kaelio](screenshot1.jpg)
+![Kaelio split view](screenshot2.jpg)
 
 ## Why Kaelio
 
@@ -23,8 +24,11 @@ Kaelio is a fork of [mx](https://github.com/vibery-studio/mx) (GPL-3.0), continu
 | **Soft wrap** | View → Soft Wrap: Off, Window Width, or Page Guide (a configurable guide column) — long lines stop clipping. |
 | **Preview search** | `Cmd+F` in reading view highlights matches with next/prev navigation. |
 | **Session restore** | Reopens your tabs with scroll and cursor positions on launch. |
+| **Custom themes** | Built-in Everforest and Nord themes plus your own custom theme — beyond mx's stock palette. |
+| **Custom fonts & sizes** | Pick your reading font and size, and zoom each split pane independently. |
+| **HTML rendering** | Preview `.html` files inline, and export clean, self-contained HTML. |
 
-Plus the full mx toolkit: zoom in/out, light/dark/custom themes, custom fonts & sizes, and HTML/PDF/DOCX export.
+Plus the full mx toolkit: Mermaid & KaTeX, Git sync, callouts, command palette, zoom, and PDF/DOCX export.
 
 ## Features
 
