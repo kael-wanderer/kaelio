@@ -2744,6 +2744,7 @@ mark.preview-search-match.active {
 /* Soft wrap: column mode constrains content width and shows a guide line */
 #editor-wrapper.wrap-column .cm-content {
   max-width: var(--wrap-col, 80ch);
+  position: relative;
 }
 #editor-wrapper.wrap-column .cm-content::before {
   content: "";
