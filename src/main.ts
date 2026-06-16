@@ -71,6 +71,11 @@ function getActiveTab(): Tab | null {
 let currentFilePath: string | null = null;
 let splitOpen = false;
 let subFilePath: string | null = null;
+let editorSub: EditorView | null = null;
+let subTabs: Tab[] = [];
+let subActiveTabId: string | null = null;
+let subMode: "edit" | "preview" = "preview";
+let activePane: "main" | "sub" = "main";
 let restoreLastSession = localStorage.getItem("kaelio-restore-session") !== "false";
 let currentFolderPath: string | null = null;
 
@@ -1161,15 +1166,126 @@ function renderSubPreview(content: string) {
   pane.innerHTML = html;
 }
 
+function renderSubTabs() {
+  const container = document.getElementById("sub-tabs");
+  if (!container) return;
+  container.innerHTML = subTabs.map(tab => {
+    const activeClass = tab.id === subActiveTabId ? " active" : "";
+    const dot = tab.isModified ? ' <span class="tab-modified">●</span>' : "";
+    return `<div class="sub-tab${activeClass}" data-sub-tab-id="${tab.id}">
+      <span class="sub-tab-title">${escapeHtml(tab.title)}</span>${dot}
+      <span class="sub-tab-close" data-sub-tab-id="${tab.id}">✕</span>
+    </div>`;
+  }).join("");
+  container.querySelectorAll(".sub-tab").forEach(el => {
+    const id = (el as HTMLElement).dataset.subTabId!;
+    el.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).classList.contains("sub-tab-close")) return;
+      switchSubTab(id);
+    });
+  });
+  container.querySelectorAll(".sub-tab-close").forEach(el => {
+    const id = (el as HTMLElement).dataset.subTabId!;
+    el.addEventListener("click", (e) => { e.stopPropagation(); closeSubTab(id); });
+  });
+}
+
+function renderActiveSubTab() {
+  const tab = getActiveSubTab();
+  if (!tab) return;
+  subFilePath = tab.filePath;
+  if (subMode === "edit") {
+    const view = ensureSubEditor();
+    view.setState(tab.editorState);
+  } else {
+    renderSubPreview(tab.editorState.doc.toString());
+  }
+}
+
+function switchSubTab(id: string) {
+  if (id === subActiveTabId) return;
+  if (subMode === "edit") saveActiveSubTabState();
+  subActiveTabId = id;
+  renderActiveSubTab();
+  renderSubTabs();
+}
+
+async function closeSubTab(id: string) {
+  const tab = subTabs.find(t => t.id === id);
+  if (!tab) return;
+  if (tab.isModified) {
+    if (id !== subActiveTabId) { subActiveTabId = id; renderActiveSubTab(); }
+    const shouldSave = await showConfirmDialog(`Save changes to ${tab.title}? (Y/N)`);
+    if (shouldSave) await saveSubFile();
+  }
+  const idx = subTabs.findIndex(t => t.id === id);
+  subTabs.splice(idx, 1);
+  if (subTabs.length === 0) {
+    subActiveTabId = null;
+    subFilePath = null;
+    setSplit(false);
+    renderSubTabs();
+    return;
+  }
+  if (id === subActiveTabId) {
+    subActiveTabId = subTabs[Math.min(idx, subTabs.length - 1)].id;
+    renderActiveSubTab();
+  }
+  renderSubTabs();
+}
+
 async function openInSubPane(path: string) {
+  const existing = subTabs.find(t => t.filePath === path);
+  if (existing) {
+    subActiveTabId = existing.id;
+    setSplit(true);
+    renderActiveSubTab();
+    renderSubTabs();
+    return;
+  }
   try {
     const result = await invoke<{ path: string; content: string }>("read_file", { path });
-    subFilePath = result.path;
-    renderSubPreview(result.content);
+    const tab = createSubTab(result.path, result.content);
+    subTabs.push(tab);
+    subActiveTabId = tab.id;
     setSplit(true);
+    renderActiveSubTab();
+    renderSubTabs();
   } catch (e) {
     flashStatus(`Could not open: ${path}`, "var(--red, #f38ba8)");
   }
+}
+
+function updateSubModeIcon() {
+  const btn = document.getElementById("btn-sub-mode");
+  if (btn) btn.textContent = subMode === "edit" ? "👁" : "✎";
+}
+
+function setSubMode(mode: "edit" | "preview") {
+  const editPane = document.getElementById("sub-editor-pane");
+  const prevPane = document.getElementById("sub-pane");
+  if (mode === "edit") {
+    subMode = "edit";
+    const view = ensureSubEditor();
+    const tab = getActiveSubTab();
+    if (tab) view.setState(tab.editorState);
+    editPane?.classList.remove("hidden");
+    prevPane?.classList.add("hidden");
+    view.focus();
+    activePane = "sub";
+  } else {
+    if (subMode === "edit") saveActiveSubTabState();
+    subMode = "preview";
+    const tab = getActiveSubTab();
+    if (tab) renderSubPreview(tab.editorState.doc.toString());
+    prevPane?.classList.remove("hidden");
+    editPane?.classList.add("hidden");
+  }
+  updateSubModeIcon();
+}
+
+function toggleSubMode() {
+  setSubMode(subMode === "edit" ? "preview" : "edit");
 }
 
 function setSplit(open: boolean) {
@@ -1553,6 +1669,28 @@ async function saveFile() {
     fileWatchSuppressed = false;
     console.error("Save failed:", e);
   }
+}
+
+async function saveSubFile() {
+  const tab = getActiveSubTab();
+  if (!tab) return;
+  if (subMode === "edit") saveActiveSubTabState();
+  if (!tab.filePath) { flashStatus("Sub pane file has no path.", "var(--warning)"); return; }
+  const content = tab.editorState.doc.toString();
+  try {
+    await invoke("save_file", { path: tab.filePath, content });
+    tab.isModified = false;
+    renderSubTabs();
+    if (subMode === "preview") renderSubPreview(content);
+    if (autoSyncEnabled && currentFolderPath) gitAutoSync(tab.filePath);
+  } catch (e) {
+    console.error("Sub save failed:", e);
+  }
+}
+
+function saveActivePane() {
+  if (activePane === "sub" && splitOpen) { saveSubFile(); return; }
+  saveFile();
 }
 
 async function openFileDialog() {
@@ -3180,7 +3318,7 @@ function getCommands(): PaletteCommand[] {
     { label: "Open File", shortcut: sk("file.open"), action: openFileDialog },
     { label: "Open Folder", action: () => openFolder() },
     { label: "New Window", shortcut: sk("file.new-window"), action: () => invoke("create_window", { filePath: null }) },
-    { label: "Save", shortcut: sk("file.save"), action: saveFile },
+    { label: "Save", shortcut: sk("file.save"), action: saveActivePane },
     { label: "Close Tab", shortcut: sk("file.close-tab"), action: closeActiveTab },
     { label: "Show/Hide Preview", shortcut: sk("view.toggle-preview"), action: togglePreview },
     { label: "Show/Hide Explorer", shortcut: sk("view.toggle-sidebar"), action: toggleSidebar },
@@ -3695,6 +3833,65 @@ function createTab(filePath: string | null, content: string): Tab {
     previewScrollTop: 0,
     isModified: false,
   };
+}
+
+function createSubEditorExtensions() {
+  return [
+    showLineNumbers ? lineNumbers() : [],
+    highlightActiveLine(),
+    highlightActiveLineGutter(),
+    history(),
+    bracketMatching(),
+    closeBrackets(),
+    foldGutter(),
+    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+    markdown({ base: markdownLanguage, codeLanguages: languages }),
+    search(),
+    getEffectiveTheme() === "dark" ? oneDark : editorLightTheme,
+    editorTypographyTheme(),
+    editorFillTheme,
+    keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]),
+    buildKeymap(),
+    EditorView.updateListener.of((update: ViewUpdate) => {
+      if (!update.docChanged) return;
+      const tab = subTabs.find(t => t.id === subActiveTabId);
+      if (tab && !tab.isModified) { tab.isModified = true; renderSubTabs(); }
+    }),
+  ];
+}
+
+function createSubTab(filePath: string | null, content: string): Tab {
+  return {
+    id: crypto.randomUUID(),
+    filePath,
+    title: filePath ? filePath.split("/").pop()! : "Untitled",
+    editorState: EditorState.create({ doc: content, extensions: createSubEditorExtensions() }),
+    scrollTop: 0,
+    previewScrollTop: 0,
+    isModified: false,
+  };
+}
+
+function getActiveSubTab(): Tab | null {
+  return subTabs.find(t => t.id === subActiveTabId) ?? null;
+}
+
+function ensureSubEditor(): EditorView {
+  if (editorSub) return editorSub;
+  const parent = document.getElementById("sub-editor-pane")!;
+  const active = getActiveSubTab();
+  editorSub = new EditorView({
+    state: active ? active.editorState : EditorState.create({ doc: "", extensions: createSubEditorExtensions() }),
+    parent,
+  });
+  editorSub.dom.addEventListener("focusin", () => { activePane = "sub"; });
+  return editorSub;
+}
+
+function saveActiveSubTabState() {
+  const tab = getActiveSubTab();
+  if (!tab || !editorSub) return;
+  tab.editorState = editorSub.state;
 }
 
 function saveActiveTabState() {
@@ -4786,7 +4983,7 @@ async function loadCustomCSS() {
 
 actions["file.new"] = () => newFile();
 actions["file.open"] = () => openFileDialog();
-actions["file.save"] = () => saveFile();
+actions["file.save"] = () => saveActivePane();
 actions["file.close-tab"] = () => closeActiveTab();
 actions["file.new-window"] = () => invoke("create_window", { filePath: null });
 actions["view.toggle-preview"] = () => togglePreview();
@@ -4807,7 +5004,7 @@ async function handleNativeMenuCommand(command: string) {
     case "file.open": return openFileDialog();
     case "file.open-folder": return openFolder();
     case "file.new-window": return void invoke("create_window", { filePath: null });
-    case "file.save": return saveFile();
+    case "file.save": return saveActivePane();
     case "file.close-tab": return closeActiveTab();
     case "file.export-pdf": return exportPDF();
     case "file.export-html": return exportHTML();
@@ -5041,6 +5238,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     state: initialTab.editorState,
     parent: editorPane,
   });
+  editor.dom.addEventListener("focusin", () => { activePane = "main"; });
 
   // Editor ↔ preview scroll sync wiring
   const previewPaneEl = document.getElementById("preview-pane");
@@ -5131,7 +5329,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-open-folder")?.addEventListener("click", () => openFolder());
   document.getElementById("btn-new-window")?.addEventListener("click", () => invoke("create_window", { filePath: null }));
   document.getElementById("btn-recent")?.addEventListener("click", () => toggleRecentPanel());
-  document.getElementById("btn-save")?.addEventListener("click", () => saveFile());
+  document.getElementById("btn-save")?.addEventListener("click", () => saveActivePane());
   document.getElementById("btn-autosave")?.addEventListener("click", () => toggleAutoSave());
   document.getElementById("btn-autosync")?.addEventListener("click", () => toggleAutoSync());
   document.getElementById("btn-export-pdf")?.addEventListener("click", () => exportPDF());
@@ -5217,6 +5415,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-toolbar-export-docx")?.addEventListener("click", exportDOCX);
   document.getElementById("btn-zoom-in")?.addEventListener("click", zoomIn);
   document.getElementById("btn-split")?.addEventListener("click", () => toggleSplit());
+  document.getElementById("btn-sub-mode")?.addEventListener("click", () => toggleSubMode());
   document.getElementById("btn-zoom-out")?.addEventListener("click", zoomOut);
 
   // Sidebar action buttons
