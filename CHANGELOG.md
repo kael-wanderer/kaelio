@@ -9,6 +9,7 @@
 - Preview search: Cmd+F in reading view (preview-only mode) opens a search bar with match highlighting, match count, and next/prev navigation (Enter / Shift+Enter).
 - Tables in the preview now size their columns to fit content instead of stretching to full width. Wide tables scroll horizontally within their own container rather than breaking the page layout.
 - Soft Wrap modes for the editor (View → Soft Wrap): Off (horizontal scroll), Window Width, or Column (80) with a vertical guide line. Long lines no longer clip in the raw pane. Persists across restarts.
+- Split view: toggle a second pane (⊟ next to zoom) beside the editor — a full editor with its own tabs and an edit/preview toggle (✎/👁); Cmd+S saves whichever pane has focus. Open files into it via right-click → "Open in Split Window", or compare two files via "Select for Compare" → "Compare with Selected". Draggable divider.
 
 ### Session Restore
 

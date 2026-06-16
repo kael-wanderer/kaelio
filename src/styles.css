@@ -2533,7 +2533,8 @@ body {
   background: var(--hover-bg);
 }
 
-#btn-sync-scroll.active {
+#btn-sync-scroll.active,
+#btn-split.active {
   background: var(--accent);
   color: var(--bg);
   border-color: var(--accent);
@@ -2757,3 +2758,63 @@ mark.preview-search-match.active {
   opacity: 0.5;
   pointer-events: none;
 }
+/* Split view — sub pane (Phase 1: read-only) */
+#sub-pane-wrapper {
+  flex: 1 1 40%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--border, #45475a);
+}
+#sub-pane-wrapper.hidden { display: none; }
+#sub-tab-bar {
+  flex: 0 0 auto;
+}
+#sub-pane {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 1rem 1.5rem;
+}
+#sub-divider {
+  flex: 0 0 4px;
+  cursor: col-resize;
+  background: var(--border, #45475a);
+}
+#sub-divider.hidden { display: none; }
+
+/* Split view — Phase 2 (editable sub pane) */
+#sub-tab-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border, #45475a);
+}
+#sub-tabs { display: flex; overflow-x: auto; }
+#btn-sub-mode {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  color: var(--fg, #cdd6f4);
+  cursor: pointer;
+  padding: 4px 8px;
+}
+#sub-editor-pane {
+  flex: 1 1 auto;
+  overflow: hidden;
+  min-height: 0;
+}
+#sub-editor-pane.hidden { display: none; }
+#sub-editor-pane .cm-editor { height: 100%; }
+.sub-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-right: 1px solid var(--border, #45475a);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sub-tab.active { background: var(--bg-alt, #313244); }
+.sub-tab-close { opacity: 0.6; }
+.sub-tab-close:hover { opacity: 1; }

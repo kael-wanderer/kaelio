@@ -132,6 +132,8 @@
           <button id="btn-zoom-out" title="Zoom out (Cmd+-)">−</button>
           <span id="status-zoom" class="toolbar-zoom">100%</span>
           <button id="btn-zoom-in" title="Zoom in (Cmd+=)">+</button>
+          <span class="toolbar-sep"></span>
+          <button id="btn-split" title="Toggle split view">⊟</button>
         </div>
         <div id="token-info">
           <span id="token-count">0 words</span>
@@ -234,6 +236,15 @@
           </div>
           <div id="preview-pane"></div>
         </div>
+        <div id="sub-divider" class="hidden"></div>
+        <div id="sub-pane-wrapper" class="hidden">
+          <div id="sub-tab-bar">
+            <div id="sub-tabs"></div>
+            <button id="btn-sub-mode" title="Toggle edit / preview">✎</button>
+          </div>
+          <div id="sub-editor-pane" class="hidden"></div>
+          <div id="sub-pane"></div>
+        </div>
       </div>
       <!-- Tab context menu -->
       <div id="tab-context-menu" class="hidden">
@@ -256,6 +267,10 @@
           </div>
         </div>
         <div id="ctx-reveal" class="ctx-item">Reveal in Finder</div>
+        <div class="ctx-divider" id="ctx-split-divider"></div>
+        <div id="ctx-open-split" class="ctx-item">Open in Split Window</div>
+        <div id="ctx-select-compare" class="ctx-item">Select for Compare</div>
+        <div id="ctx-compare-with" class="ctx-item">Compare with Selected</div>
         <div class="ctx-divider"></div>
         <div id="ctx-git-history" class="ctx-item">File History</div>
         <div id="ctx-git-discard" class="ctx-item ctx-danger">Discard Changes</div>

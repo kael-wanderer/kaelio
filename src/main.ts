@@ -69,6 +69,13 @@ function getActiveTab(): Tab | null {
 // --- State ---
 
 let currentFilePath: string | null = null;
+let splitOpen = false;
+let subFilePath: string | null = null;
+let editorSub: EditorView | null = null;
+let subTabs: Tab[] = [];
+let subActiveTabId: string | null = null;
+let subMode: "edit" | "preview" = "preview";
+let activePane: "main" | "sub" = "main";
 let restoreLastSession = localStorage.getItem("kaelio-restore-session") !== "false";
 let currentFolderPath: string | null = null;
 
@@ -135,6 +142,7 @@ let isScrollSyncing = false;
 
 // Context menu state
 let contextMenuTarget: { path: string; isDir: boolean; parentPath: string } | null = null;
+let compareSelected: string | null = null;
 let activeSidebarDir: string | null = null; // last clicked/expanded directory in sidebar
 
 // --- Keybinding registry ---
@@ -1147,6 +1155,173 @@ async function updatePreview(content: string) {
   reapplyPreviewSearch();
 }
 
+function renderSubPreview(content: string) {
+  const pane = document.getElementById("sub-pane");
+  if (!pane) return;
+  if (subFilePath && !isMarkdownPath(subFilePath)) {
+    pane.innerHTML = `<pre class="plain-text-preview">${escapeHtml(content)}</pre>`;
+    return;
+  }
+  const { frontmatter, body } = extractFrontmatter(content);
+  let html = "";
+  if (frontmatter) html += renderFrontmatter(frontmatter);
+  html += md.render(body, { lineOffset: 0 });
+  html = renderCallouts(html);
+  html = renderChecklists(html);
+  html = renderKaTeX(html);
+  pane.innerHTML = html;
+}
+
+function renderSubTabs() {
+  const container = document.getElementById("sub-tabs");
+  if (!container) return;
+  container.innerHTML = subTabs.map(tab => {
+    const activeClass = tab.id === subActiveTabId ? " active" : "";
+    const dot = tab.isModified ? ' <span class="tab-modified">●</span>' : "";
+    return `<div class="sub-tab${activeClass}" data-sub-tab-id="${tab.id}">
+      <span class="sub-tab-title">${escapeHtml(tab.title)}</span>${dot}
+      <span class="sub-tab-close" data-sub-tab-id="${tab.id}">✕</span>
+    </div>`;
+  }).join("");
+  container.querySelectorAll(".sub-tab").forEach(el => {
+    const id = (el as HTMLElement).dataset.subTabId!;
+    el.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).classList.contains("sub-tab-close")) return;
+      switchSubTab(id);
+    });
+  });
+  container.querySelectorAll(".sub-tab-close").forEach(el => {
+    const id = (el as HTMLElement).dataset.subTabId!;
+    el.addEventListener("click", (e) => { e.stopPropagation(); closeSubTab(id); });
+  });
+}
+
+function renderActiveSubTab() {
+  const tab = getActiveSubTab();
+  if (!tab) return;
+  subFilePath = tab.filePath;
+  if (subMode === "edit") {
+    const view = ensureSubEditor();
+    view.setState(tab.editorState);
+  } else {
+    renderSubPreview(tab.editorState.doc.toString());
+  }
+}
+
+function switchSubTab(id: string) {
+  if (id === subActiveTabId) return;
+  if (subMode === "edit") saveActiveSubTabState();
+  subActiveTabId = id;
+  renderActiveSubTab();
+  renderSubTabs();
+}
+
+async function closeSubTab(id: string) {
+  const tab = subTabs.find(t => t.id === id);
+  if (!tab) return;
+  if (tab.isModified) {
+    if (id !== subActiveTabId) { subActiveTabId = id; renderActiveSubTab(); }
+    const shouldSave = await showConfirmDialog(`Save changes to ${tab.title}? (Y/N)`);
+    if (shouldSave) await saveSubFile();
+  }
+  const idx = subTabs.findIndex(t => t.id === id);
+  subTabs.splice(idx, 1);
+  if (subTabs.length === 0) {
+    subActiveTabId = null;
+    subFilePath = null;
+    setSplit(false);
+    renderSubTabs();
+    return;
+  }
+  if (id === subActiveTabId) {
+    subActiveTabId = subTabs[Math.min(idx, subTabs.length - 1)].id;
+    renderActiveSubTab();
+  }
+  renderSubTabs();
+}
+
+async function openInSubPane(path: string) {
+  const existing = subTabs.find(t => t.filePath === path);
+  if (existing) {
+    subActiveTabId = existing.id;
+    setSplit(true);
+    renderActiveSubTab();
+    renderSubTabs();
+    return;
+  }
+  try {
+    const result = await invoke<{ path: string; content: string }>("read_file", { path });
+    const tab = createSubTab(result.path, result.content);
+    subTabs.push(tab);
+    subActiveTabId = tab.id;
+    setSplit(true);
+    renderActiveSubTab();
+    renderSubTabs();
+  } catch (e) {
+    flashStatus(`Could not open: ${path}`, "var(--red, #f38ba8)");
+  }
+}
+
+function updateSubModeIcon() {
+  const btn = document.getElementById("btn-sub-mode");
+  if (btn) btn.textContent = subMode === "edit" ? "👁" : "✎";
+}
+
+function setSubMode(mode: "edit" | "preview") {
+  const editPane = document.getElementById("sub-editor-pane");
+  const prevPane = document.getElementById("sub-pane");
+  if (mode === "edit") {
+    subMode = "edit";
+    const view = ensureSubEditor();
+    const tab = getActiveSubTab();
+    if (tab) view.setState(tab.editorState);
+    editPane?.classList.remove("hidden");
+    prevPane?.classList.add("hidden");
+    view.focus();
+    activePane = "sub";
+  } else {
+    if (subMode === "edit") saveActiveSubTabState();
+    subMode = "preview";
+    const tab = getActiveSubTab();
+    if (tab) renderSubPreview(tab.editorState.doc.toString());
+    prevPane?.classList.remove("hidden");
+    editPane?.classList.add("hidden");
+  }
+  updateSubModeIcon();
+}
+
+function toggleSubMode() {
+  setSubMode(subMode === "edit" ? "preview" : "edit");
+}
+
+function setSplit(open: boolean) {
+  splitOpen = open;
+  const wrapper = document.getElementById("sub-pane-wrapper");
+  const divider = document.getElementById("sub-divider");
+  const btn = document.getElementById("btn-split");
+  wrapper?.classList.toggle("hidden", !open);
+  divider?.classList.toggle("hidden", !open);
+  btn?.classList.toggle("active", open);
+}
+
+async function toggleSplit() {
+  if (!splitOpen) {
+    if (subTabs.length === 0 && currentFilePath) { await openInSubPane(currentFilePath); return; }
+    setSplit(true);
+    renderSubTabs();
+    return;
+  }
+  // Turning split OFF — guard unsaved sub tabs
+  const dirty = subTabs.filter(t => t.isModified);
+  if (dirty.length > 0) {
+    const shouldSave = await showConfirmDialog(`Save ${dirty.length} unsaved sub-pane file(s)? (Y/N)`);
+    if (shouldSave) {
+      for (const t of dirty) { subActiveTabId = t.id; if (subMode === "edit") saveActiveSubTabState(); await saveSubFile(); }
+    }
+  }
+  setSplit(false);
+}
+
 function reapplyPreviewSearch() {
   const bar = document.getElementById("preview-search-bar");
   const input = document.getElementById("preview-search-input") as HTMLInputElement | null;
@@ -1511,6 +1686,28 @@ async function saveFile() {
     fileWatchSuppressed = false;
     console.error("Save failed:", e);
   }
+}
+
+async function saveSubFile() {
+  const tab = getActiveSubTab();
+  if (!tab) return;
+  if (subMode === "edit") saveActiveSubTabState();
+  if (!tab.filePath) { flashStatus("Sub pane file has no path.", "var(--warning)"); return; }
+  const content = tab.editorState.doc.toString();
+  try {
+    await invoke("save_file", { path: tab.filePath, content });
+    tab.isModified = false;
+    renderSubTabs();
+    if (subMode === "preview") renderSubPreview(content);
+    if (autoSyncEnabled && currentFolderPath) gitAutoSync(tab.filePath);
+  } catch (e) {
+    console.error("Sub save failed:", e);
+  }
+}
+
+function saveActivePane() {
+  if (activePane === "sub" && splitOpen) { saveSubFile(); return; }
+  saveFile();
 }
 
 async function openFileDialog() {
@@ -2426,6 +2623,36 @@ function initDividerDrag() {
   });
 }
 
+function initSubDividerDrag() {
+  const divider = document.getElementById("sub-divider");
+  const subWrapper = document.getElementById("sub-pane-wrapper");
+  const previewPane = document.getElementById("preview-pane-wrapper");
+  const container = document.getElementById("editor-container");
+  if (!divider || !subWrapper || !previewPane || !container) return;
+
+  let dragging = false;
+  divider.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    dragging = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const rect = subWrapper.getBoundingClientRect();
+    const right = rect.right;
+    const newWidth = Math.max(200, Math.min(right - 200, right - e.clientX));
+    subWrapper.style.flexBasis = `${newWidth}px`;
+  });
+  window.addEventListener("mouseup", () => {
+    if (dragging) {
+      dragging = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+  });
+}
+
 // --- Sidebar resize ---
 
 function initSidebarResize() {
@@ -2927,6 +3154,13 @@ function showContextMenu(x: number, y: number, target: { path: string; isDir: bo
   if (!menu) return;
   contextMenuTarget = target;
 
+  const isFile = !target.isDir;
+  const hasCompare = !!compareSelected && compareSelected !== target.path;
+  document.getElementById("ctx-split-divider")?.classList.toggle("hidden", !isFile);
+  document.getElementById("ctx-open-split")?.classList.toggle("hidden", !isFile);
+  document.getElementById("ctx-select-compare")?.classList.toggle("hidden", !isFile);
+  document.getElementById("ctx-compare-with")?.classList.toggle("hidden", !(isFile && hasCompare));
+
   // Always show New File/Folder (for files, uses parent directory)
 
   menu.style.left = `${x}px`;
@@ -3130,7 +3364,7 @@ function getCommands(): PaletteCommand[] {
     { label: "Open File", shortcut: sk("file.open"), action: openFileDialog },
     { label: "Open Folder", action: () => openFolder() },
     { label: "New Window", shortcut: sk("file.new-window"), action: () => invoke("create_window", { filePath: null }) },
-    { label: "Save", shortcut: sk("file.save"), action: saveFile },
+    { label: "Save", shortcut: sk("file.save"), action: saveActivePane },
     { label: "Close Tab", shortcut: sk("file.close-tab"), action: closeActiveTab },
     { label: "Show/Hide Preview", shortcut: sk("view.toggle-preview"), action: togglePreview },
     { label: "Show/Hide Explorer", shortcut: sk("view.toggle-sidebar"), action: toggleSidebar },
@@ -3652,6 +3886,65 @@ function createTab(filePath: string | null, content: string): Tab {
   };
 }
 
+function createSubEditorExtensions() {
+  return [
+    showLineNumbers ? lineNumbers() : [],
+    highlightActiveLine(),
+    highlightActiveLineGutter(),
+    history(),
+    bracketMatching(),
+    closeBrackets(),
+    foldGutter(),
+    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+    markdown({ base: markdownLanguage, codeLanguages: languages }),
+    search(),
+    getEffectiveTheme() === "dark" ? oneDark : editorLightTheme,
+    editorTypographyTheme(),
+    editorFillTheme,
+    keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]),
+    buildKeymap(),
+    EditorView.updateListener.of((update: ViewUpdate) => {
+      if (!update.docChanged) return;
+      const tab = subTabs.find(t => t.id === subActiveTabId);
+      if (tab && !tab.isModified) { tab.isModified = true; renderSubTabs(); }
+    }),
+  ];
+}
+
+function createSubTab(filePath: string | null, content: string): Tab {
+  return {
+    id: crypto.randomUUID(),
+    filePath,
+    title: filePath ? filePath.split("/").pop()! : "Untitled",
+    editorState: EditorState.create({ doc: content, extensions: createSubEditorExtensions() }),
+    scrollTop: 0,
+    previewScrollTop: 0,
+    isModified: false,
+  };
+}
+
+function getActiveSubTab(): Tab | null {
+  return subTabs.find(t => t.id === subActiveTabId) ?? null;
+}
+
+function ensureSubEditor(): EditorView {
+  if (editorSub) return editorSub;
+  const parent = document.getElementById("sub-editor-pane")!;
+  const active = getActiveSubTab();
+  editorSub = new EditorView({
+    state: active ? active.editorState : EditorState.create({ doc: "", extensions: createSubEditorExtensions() }),
+    parent,
+  });
+  editorSub.dom.addEventListener("focusin", () => { activePane = "sub"; });
+  return editorSub;
+}
+
+function saveActiveSubTabState() {
+  const tab = getActiveSubTab();
+  if (!tab || !editorSub) return;
+  tab.editorState = editorSub.state;
+}
+
 function saveActiveTabState() {
   const tab = getActiveTab();
   if (!tab || !editor) return;
@@ -4124,6 +4417,30 @@ async function ctxReveal() {
   } catch (e) {
     flashStatus(`Failed: ${e}`, "var(--error)", 3000);
   }
+}
+
+function ctxOpenSplit() {
+  if (!contextMenuTarget) return;
+  const path = contextMenuTarget.path;
+  hideContextMenu();
+  openInSubPane(path);
+}
+
+function ctxSelectCompare() {
+  if (!contextMenuTarget) return;
+  compareSelected = contextMenuTarget.path;
+  flashStatus(`Selected for compare: ${compareSelected.split("/").pop()}`, "var(--accent)");
+  hideContextMenu();
+}
+
+async function ctxCompareWith() {
+  if (!contextMenuTarget || !compareSelected) return;
+  const a = compareSelected;
+  const b = contextMenuTarget.path;
+  hideContextMenu();
+  await openFile(a);
+  await openInSubPane(b);
+  compareSelected = null;
 }
 
 // --- Export HTML (#34) ---
@@ -4741,7 +5058,7 @@ async function loadCustomCSS() {
 
 actions["file.new"] = () => newFile();
 actions["file.open"] = () => openFileDialog();
-actions["file.save"] = () => saveFile();
+actions["file.save"] = () => saveActivePane();
 actions["file.close-tab"] = () => closeActiveTab();
 actions["file.new-window"] = () => invoke("create_window", { filePath: null });
 actions["view.toggle-preview"] = () => togglePreview();
@@ -4762,7 +5079,7 @@ async function handleNativeMenuCommand(command: string) {
     case "file.open": return openFileDialog();
     case "file.open-folder": return openFolder();
     case "file.new-window": return void invoke("create_window", { filePath: null });
-    case "file.save": return saveFile();
+    case "file.save": return saveActivePane();
     case "file.close-tab": return closeActiveTab();
     case "file.export-pdf": return exportPDF();
     case "file.export-html": return exportHTML();
@@ -4996,6 +5313,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     state: initialTab.editorState,
     parent: editorPane,
   });
+  editor.dom.addEventListener("focusin", () => { activePane = "main"; });
 
   // Editor ↔ preview scroll sync wiring
   const previewPaneEl = document.getElementById("preview-pane");
@@ -5086,7 +5404,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-open-folder")?.addEventListener("click", () => openFolder());
   document.getElementById("btn-new-window")?.addEventListener("click", () => invoke("create_window", { filePath: null }));
   document.getElementById("btn-recent")?.addEventListener("click", () => toggleRecentPanel());
-  document.getElementById("btn-save")?.addEventListener("click", () => saveFile());
+  document.getElementById("btn-save")?.addEventListener("click", () => saveActivePane());
   document.getElementById("btn-autosave")?.addEventListener("click", () => toggleAutoSave());
   document.getElementById("btn-autosync")?.addEventListener("click", () => toggleAutoSync());
   document.getElementById("btn-export-pdf")?.addEventListener("click", () => exportPDF());
@@ -5176,6 +5494,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-toolbar-export-jpg")?.addEventListener("click", () => exportPreviewImage("jpg"));
   document.getElementById("btn-toolbar-export-docx")?.addEventListener("click", exportDOCX);
   document.getElementById("btn-zoom-in")?.addEventListener("click", zoomIn);
+  document.getElementById("btn-split")?.addEventListener("click", () => toggleSplit());
+  document.getElementById("btn-sub-mode")?.addEventListener("click", () => toggleSubMode());
   document.getElementById("btn-zoom-out")?.addEventListener("click", zoomOut);
 
   // Sidebar action buttons
@@ -5316,6 +5636,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   // Context menu items
+  document.getElementById("ctx-open-split")?.addEventListener("click", ctxOpenSplit);
+  document.getElementById("ctx-select-compare")?.addEventListener("click", ctxSelectCompare);
+  document.getElementById("ctx-compare-with")?.addEventListener("click", ctxCompareWith);
   document.getElementById("ctx-new-file")?.addEventListener("click", ctxNewFile);
   document.getElementById("ctx-new-folder")?.addEventListener("click", ctxNewFolder);
   document.getElementById("ctx-rename")?.addEventListener("click", ctxRename);
@@ -5389,6 +5712,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // Divider drag
   initDividerDrag();
+  initSubDividerDrag();
 
   // Sidebar resize
   initSidebarResize();
