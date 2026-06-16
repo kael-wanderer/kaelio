@@ -2533,7 +2533,8 @@ body {
   background: var(--hover-bg);
 }
 
-#btn-sync-scroll.active {
+#btn-sync-scroll.active,
+#btn-split.active {
   background: var(--accent);
   color: var(--bg);
   border-color: var(--accent);
