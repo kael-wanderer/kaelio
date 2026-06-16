@@ -122,7 +122,7 @@ const keymapCompartment = new Compartment();
 
 type WrapMode = "off" | "window" | "column";
 let wrapMode: WrapMode = (localStorage.getItem("kaelio-wrap-mode") as WrapMode) || "window";
-const wrapColumn = 80;
+let wrapColumn = parseInt(localStorage.getItem("kaelio-wrap-column") || "80", 10) || 80;
 const lineWrapCompartment = new Compartment();
 const subLineWrapCompartment = new Compartment();
 
@@ -2728,6 +2728,20 @@ function updateSubControlsUI() {
 function setWrapMode(mode: WrapMode) {
   wrapMode = mode;
   localStorage.setItem("kaelio-wrap-mode", mode);
+  reconfigureWrapEditors();
+  applyWrapColumnStyle();
+  updateWrapModeUI();
+}
+
+function setWrapColumn(value: number) {
+  wrapColumn = Math.max(20, Math.min(200, Math.round(value) || 80));
+  localStorage.setItem("kaelio-wrap-column", String(wrapColumn));
+  reconfigureWrapEditors();
+  applyWrapColumnStyle();
+  updateWrapModeUI();
+}
+
+function reconfigureWrapEditors() {
   editor.dispatch({
     effects: lineWrapCompartment.reconfigure(wrapExtension()),
   });
@@ -2736,20 +2750,25 @@ function setWrapMode(mode: WrapMode) {
       effects: subLineWrapCompartment.reconfigure(wrapExtension()),
     });
   }
-  applyWrapColumnStyle();
-  updateWrapModeUI();
 }
 
 function applyWrapColumnStyle() {
   const wrapper = document.getElementById("editor-wrapper");
-  if (!wrapper) return;
-  wrapper.style.setProperty("--wrap-col", `${wrapColumn}ch`);
-  wrapper.classList.toggle("wrap-column", wrapMode === "column");
+  const subWrapper = document.getElementById("sub-editor-pane");
+  [wrapper, subWrapper].forEach(el => {
+    if (!el) return;
+    el.style.setProperty("--wrap-col", `${wrapColumn}ch`);
+    el.classList.toggle("wrap-column", wrapMode === "column");
+  });
 }
 
 function updateWrapModeUI() {
   const select = document.getElementById("wrap-mode-select") as HTMLSelectElement | null;
   if (select) select.value = wrapMode;
+  const control = document.getElementById("wrap-column-control");
+  control?.classList.toggle("hidden", wrapMode !== "column");
+  const input = document.getElementById("wrap-column-input") as HTMLInputElement | null;
+  if (input) input.value = String(wrapColumn);
 }
 
 // --- Status flash ---
@@ -5790,6 +5809,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (wrapModeSelect) {
     wrapModeSelect.value = wrapMode;
     wrapModeSelect.addEventListener("change", () => setWrapMode(wrapModeSelect.value as WrapMode));
+  }
+  const wrapColumnInput = document.getElementById("wrap-column-input") as HTMLInputElement | null;
+  if (wrapColumnInput) {
+    wrapColumnInput.value = String(wrapColumn);
+    wrapColumnInput.addEventListener("change", () => {
+      setWrapColumn(parseInt(wrapColumnInput.value, 10));
+    });
   }
 
   // Appearance controls

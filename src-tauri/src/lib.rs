@@ -1972,7 +1972,7 @@ pub fn run() {
             let soft_wrap_menu = Submenu::with_items(handle, "Soft Wrap", true, &[
                 &MenuItem::with_id(handle, "view.soft-wrap.off", "Off", true, None::<&str>)?,
                 &MenuItem::with_id(handle, "view.soft-wrap.window", "Window Width", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "view.soft-wrap.column", "Column (80)", true, None::<&str>)?,
+                &MenuItem::with_id(handle, "view.soft-wrap.column", "Page Guide", true, None::<&str>)?,
             ])?;
 
             let view_menu = Submenu::with_items(handle, "View", true, &[

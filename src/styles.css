@@ -269,7 +269,8 @@ body {
   gap: 6px;
 }
 
-.dropdown-control select {
+.dropdown-control select,
+.dropdown-control input {
   width: 100%;
   min-width: 180px;
   color: var(--text);
@@ -282,7 +283,8 @@ body {
   outline: none;
 }
 
-.dropdown-control select:focus {
+.dropdown-control select:focus,
+.dropdown-control input:focus {
   border-color: var(--accent);
 }
 
@@ -833,20 +835,6 @@ body {
 
 .activity-bottom {
   margin-top: auto;
-}
-
-#activity-bar #status-zoom {
-  width: 36px;
-  min-width: 0;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  align-self: center;
-  color: var(--muted);
-  font-size: 10px;
-  font-family: var(--font-ui);
-  line-height: 1;
-  text-align: center;
 }
 
 #activity-settings {
@@ -2703,28 +2691,6 @@ body {
   background: var(--hover-bg);
 }
 
-#btn-sync-scroll {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: 54px;
-  line-height: 1;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  overflow: visible;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-
-#btn-sync-scroll:hover {
-  background: var(--hover-bg);
-}
-
 #btn-sync-scroll.active,
 #btn-split.active {
   background: var(--active-bg);
@@ -2935,11 +2901,13 @@ mark.preview-search-match.active {
 }
 
 /* Soft wrap: column mode constrains content width and shows a guide line */
-#editor-wrapper.wrap-column .cm-content {
+#editor-wrapper.wrap-column .cm-content,
+#sub-editor-pane.wrap-column .cm-content {
   max-width: var(--wrap-col, 80ch);
   position: relative;
 }
-#editor-wrapper.wrap-column .cm-content::before {
+#editor-wrapper.wrap-column .cm-content::before,
+#sub-editor-pane.wrap-column .cm-content::before {
   content: "";
   position: absolute;
   top: 0;
@@ -2969,8 +2937,7 @@ mark.preview-search-match.active {
 #sub-divider.hidden { display: none; }
 
 /* Split view — Phase 2 (editable sub pane) */
-#btn-sub-mode,
-#btn-split {
+#btn-sub-mode {
   font-size: 22px;
 }
 

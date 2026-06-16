@@ -11,11 +11,12 @@
 
 ### Editor
 
-- **Soft Wrap** modes (View → Soft Wrap): Off (horizontal scroll), Window Width, or Column (80) with a vertical guide line. Long lines no longer clip in the raw pane. Persists across restarts.
+- **Soft Wrap** modes (View → Soft Wrap): Off (horizontal scroll), Window Width, or Page Guide with a configurable guide column. Long lines no longer clip in the raw pane. Persists across restarts.
 
 ### Fixes
 
 - Moved split, sync-scroll, and main zoom controls into the activity bar and added styled hover tooltips for main and sub activity icons.
+- Renamed Column wrap to Page Guide, added a persistent guide-column control, and cleaned up relocated activity-bar zoom/sync controls.
 - Polished split-view menus and tab strips: native Soft Wrap menu, separated compare context sections, divider-aligned tab strips with overflow menus, and larger split controls.
 - Reworked the split-view layout (main panes now live in their own region) so opening the sub pane no longer overflows or overlaps the main editor, the divider resizes only the main side, the sub preview matches the main preview's styling, and clicking to place the cursor no longer resizes the panes.
 - **Export** — image/PDF exports now render on a light print theme so output is no longer dark/unreadable, and exported HTML is sanitized. Removed the broken standalone HTML-export path (and its unused Rust command).

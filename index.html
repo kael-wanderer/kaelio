@@ -50,8 +50,12 @@
                 <select id="wrap-mode-select">
                   <option value="off">Off</option>
                   <option value="window">Window Width</option>
-                  <option value="column">Column (80)</option>
+                  <option value="column">Page Guide</option>
                 </select>
+              </label>
+              <label id="wrap-column-control" class="dropdown-control hidden" for="wrap-column-input">
+                <span>Page guide column</span>
+                <input id="wrap-column-input" type="number" min="20" max="200" value="80" />
               </label>
               <div class="dropdown-divider"></div>
               <label class="dropdown-control" for="font-select">
@@ -155,7 +159,6 @@
           <button id="btn-split" class="activity-btn" data-tooltip="Toggle Split View" aria-label="Toggle Split View">⊟</button>
           <button id="btn-sync-scroll" class="activity-btn" data-tooltip="Sync Editor &amp; Preview Scroll" aria-label="Sync Editor &amp; Preview Scroll">⇆</button>
           <button id="btn-zoom-out" class="activity-btn" data-tooltip="Zoom Out (⌘−)" aria-label="Zoom Out (⌘−)">−</button>
-          <span id="status-zoom" class="toolbar-zoom">100%</span>
           <button id="btn-zoom-in" class="activity-btn" data-tooltip="Zoom In (⌘=)" aria-label="Zoom In (⌘=)">+</button>
           <button id="activity-settings" class="activity-btn activity-bottom" data-tooltip="Appearance Settings" aria-label="Appearance Settings">⚙</button>
         </nav>
