@@ -137,6 +137,7 @@ let isScrollSyncing = false;
 
 // Context menu state
 let contextMenuTarget: { path: string; isDir: boolean; parentPath: string } | null = null;
+let compareSelected: string | null = null;
 let activeSidebarDir: string | null = null; // last clicked/expanded directory in sidebar
 
 // --- Keybinding registry ---
@@ -3126,6 +3127,13 @@ function showContextMenu(x: number, y: number, target: { path: string; isDir: bo
   if (!menu) return;
   contextMenuTarget = target;
 
+  const isFile = !target.isDir;
+  const hasCompare = !!compareSelected && compareSelected !== target.path;
+  document.getElementById("ctx-split-divider")?.classList.toggle("hidden", !isFile);
+  document.getElementById("ctx-open-split")?.classList.toggle("hidden", !isFile);
+  document.getElementById("ctx-select-compare")?.classList.toggle("hidden", !isFile);
+  document.getElementById("ctx-compare-with")?.classList.toggle("hidden", !(isFile && hasCompare));
+
   // Always show New File/Folder (for files, uses parent directory)
 
   menu.style.left = `${x}px`;
@@ -4379,6 +4387,30 @@ async function ctxReveal() {
   }
 }
 
+function ctxOpenSplit() {
+  if (!contextMenuTarget) return;
+  const path = contextMenuTarget.path;
+  hideContextMenu();
+  openInSubPane(path);
+}
+
+function ctxSelectCompare() {
+  if (!contextMenuTarget) return;
+  compareSelected = contextMenuTarget.path;
+  flashStatus(`Selected for compare: ${compareSelected.split("/").pop()}`, "var(--accent)");
+  hideContextMenu();
+}
+
+async function ctxCompareWith() {
+  if (!contextMenuTarget || !compareSelected) return;
+  const a = compareSelected;
+  const b = contextMenuTarget.path;
+  hideContextMenu();
+  await openFile(a);
+  await openInSubPane(b);
+  compareSelected = null;
+}
+
 // --- Export HTML (#34) ---
 
 /** Pre-process markdown for HTML export: convert callouts to HTML divs */
@@ -5567,6 +5599,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   // Context menu items
+  document.getElementById("ctx-open-split")?.addEventListener("click", ctxOpenSplit);
+  document.getElementById("ctx-select-compare")?.addEventListener("click", ctxSelectCompare);
+  document.getElementById("ctx-compare-with")?.addEventListener("click", ctxCompareWith);
   document.getElementById("ctx-new-file")?.addEventListener("click", ctxNewFile);
   document.getElementById("ctx-new-folder")?.addEventListener("click", ctxNewFolder);
   document.getElementById("ctx-rename")?.addEventListener("click", ctxRename);
