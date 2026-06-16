@@ -33,6 +33,7 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 - Theme: Catppuccin Mocha dark palette via CSS variables (`--bg: #1e1e2e`, `--accent: #89b4fa`, etc.)
 - View modes: split | editor-only | preview-only
 - Editor soft-wrap: off | window | column (80, with guide line) — View → Soft Wrap, persisted in localStorage as `kaelio-wrap-mode` (default `window`) via a `lineWrapCompartment`
+- Split view: second pane (⊟ toolbar toggle) with its own editor (`editorSub`), tabs, and edit/preview toggle — capped at 2 panes (explicit `editor`/`editorSub`, no generic pane system). `activePane` routes Cmd+S (`saveActivePane`). Opened via right-click "Open in Split Window" or "Select for Compare → Compare with Selected". Not persisted across restart.
 - Key bindings: Cmd+O (open), Cmd+S (save), Cmd+P (toggle preview), Cmd+E (read mode), Cmd+B (sidebar), Cmd+F (search — editor or preview depending on view mode)
 
 ### Backend (`src-tauri/`)

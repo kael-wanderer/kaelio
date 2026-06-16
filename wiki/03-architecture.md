@@ -64,7 +64,7 @@ Two processes, IPC-first: a **Rust backend** exposing commands, and a **webview 
 
 ## State & persistence
 
-- **In-memory / module-level:** `currentFilePath`, `editor` (CM6 instance), Git state maps (`gitStatusMap`, `gitRepoInfo`, `autoSyncEnabled`), `syncScrollEnabled`.
+- **In-memory / module-level:** `currentFilePath`, `editor` (main CM6 instance), Git state maps (`gitStatusMap`, `gitRepoInfo`, `autoSyncEnabled`), `syncScrollEnabled`. Split view adds a second editor `editorSub` with its own `subTabs`, `subMode`, and `compareSelected`; `activePane` ("main"/"sub") routes save/focus. Wrap mode is held in a `lineWrapCompartment`.
 - **localStorage:** `zoomLevel`, view mode, and a sync backup of session data.
 - **`~/.kaelio/`:** `session.json` (tabs, scroll, cursor), snapshots, optional `preview.css`. Written by Rust.
 

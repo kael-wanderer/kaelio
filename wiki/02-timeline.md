@@ -6,6 +6,7 @@ Dated milestones, newest first. Kaelio's own history begins at the fork-rebrand 
 
 | Date | Milestone |
 |------|-----------|
+| 2026-06-16 | Editor **Soft Wrap** modes (off / window-width / column-80 with guide line); **Split View** — a second editable pane with its own tabs and edit/preview toggle, plus right-click "Open in Split Window" and two-step "Select for Compare → Compare with Selected". |
 | 2026-05-31 | Explorer sort changed from lexicographic to numeric-aware (so `2-foo` sorts before `10-foo`). |
 | 2026-05-30 | Filename search added to the explorer. |
 | 2026-05-26 | **v0.9.1** — preview search (`Cmd+F` with match highlighting), persistent session restore (tabs, scroll, cursor) via `~/.kaelio/session.json`. |

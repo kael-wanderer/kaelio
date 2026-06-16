@@ -49,6 +49,18 @@ flowchart TB
 
 Editor dispatches `updateListener` on every change. If `docChanged`, a 300ms debounce triggers `updatePreview()` and `updateWordCount()`. Cursor position updates immediately on any selection change.
 
+## 4. Soft Wrap
+
+The editor supports three wrap modes via **View → Soft Wrap**, applied through a CodeMirror `Compartment` (`lineWrapCompartment`, mirroring `lineNumbersCompartment`):
+
+| Mode | Behavior |
+|------|----------|
+| Off | No wrapping; long lines scroll horizontally |
+| Window Width | `EditorView.lineWrapping` — wraps at the pane edge, reflows on resize |
+| Column (80) | `EditorView.lineWrapping` + `max-width: 80ch` on `.cm-content`, with a faint vertical guide line drawn at column 80 |
+
+State persists in localStorage as `kaelio-wrap-mode` (default `window`). `setWrapMode()` reconfigures the compartment and toggles the `.wrap-column` class + `--wrap-col` custom property on `#editor-wrapper`.
+
 ## File Reference
 
 | File | Purpose |

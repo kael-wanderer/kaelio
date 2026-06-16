@@ -6,7 +6,7 @@ Kaelio is a fast, lightweight desktop Markdown editor and project-folder reader 
 
 ## At a glance
 
-- **What it does:** open a folder → edit Markdown with live preview, callouts, Mermaid, math → export or auto-commit to Git on save.
+- **What it does:** open a folder → edit Markdown with live preview, callouts, Mermaid, math → export or auto-commit to Git on save. Soft-wrap modes and a split view (two documents side by side, with file comparison) keep long lines and multi-file work readable.
 - **Who uses it:** me (Kael), for notes, specs, READMEs, journals, and project knowledge bases.
 - **Stack:** Tauri 2 + Rust backend, vanilla TypeScript frontend (CodeMirror 6 + markdown-it), Catppuccin Mocha theme.
 

@@ -25,6 +25,7 @@ flowchart TB
 | Dropdown menus | `.toolbar-dropdown` | File ▾, View ▾, Help ▾ |
 | Copy button | `#btn-copy-html` | Copy formatted HTML |
 | Zoom controls | `#btn-zoom-out`, `#status-zoom`, `#btn-zoom-in` | − 100% + |
+| Split toggle | `#btn-split` | ⊟ — toggle split view (next to zoom) |
 | Stats | `#token-info` | Word count + line count |
 
 ### Dropdown Menus
@@ -32,7 +33,7 @@ flowchart TB
 | Menu | Items |
 |------|-------|
 | File ▾ | Open File (⌘O), Open Folder, Recent Files, Save (⌘S), Export PDF |
-| View ▾ | Toggle Sidebar (⌘B), Toggle Preview (⌘P), Read Mode (⌘E) |
+| View ▾ | Toggle Sidebar (⌘B), Toggle Preview (⌘P), Read Mode (⌘E), Toggle Outline, Line Numbers, Soft Wrap (Off / Window Width / Column 80) |
 | Help ▾ | Check for Updates..., About Kaelio |
 
 ## 2. View Modes
@@ -42,6 +43,25 @@ flowchart TB
 | split | visible | visible | visible | Default, `Cmd+P` toggle |
 | editor | 100% | hidden | hidden | `Cmd+P` from split |
 | preview | hidden | hidden | 100% | `Cmd+E` |
+
+These modes govern the **main** pane. When split view is on, the **sub** pane carries its own independent edit/preview mode (see §2a).
+
+## 2a. Split View
+
+A second pane can be toggled on the right via the `⊟` toolbar button (`#btn-split`), giving two documents side by side in one window. Capped at exactly two panes (`editorMain` + `editorSub` — two explicit editors, not a generic pane system).
+
+| Element | ID | Purpose |
+|---------|-----|---------|
+| Sub divider | `#sub-divider` | Draggable resize between preview and sub pane |
+| Sub pane wrapper | `#sub-pane-wrapper` | Right pane container (hidden when split off) |
+| Sub tab bar | `#sub-tabs` + `#btn-sub-mode` | Own tabs + edit/preview mode toggle (✎/👁) |
+| Sub editor mount | `#sub-editor-pane` | Hosts `editorSub` (edit mode) |
+| Sub preview | `#sub-pane` | Read-only rendered markdown (preview mode) |
+
+- **Main pane** keeps its full behavior (editor / preview / both) via the existing view switch. **Sub pane** shows one mode at a time, flipped by `#btn-sub-mode`.
+- Each pane has its own tabs and dirty state. `activePane` ("main" | "sub") tracks focus (focusin listeners on each editor's DOM); `Cmd+S` (`saveActivePane`) saves whichever pane has focus.
+- Opened via right-click → **Open in Split Window**, or the two-step **Select for Compare → Compare with Selected**. Turning split off prompts to save any unsaved sub tabs.
+- Split state does not persist across restart.
 
 ## 3. Sidebar
 
