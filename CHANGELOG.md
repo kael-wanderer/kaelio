@@ -16,6 +16,7 @@
 ### Fixes
 
 - Reworked the split-view layout (main panes now live in their own region) so opening the sub pane no longer overflows or overlaps the main editor, the divider resizes only the main side, the sub preview matches the main preview's styling, and clicking to place the cursor no longer resizes the panes.
+- **Export** — image/PDF exports now render on a light print theme so output is no longer dark/unreadable, and exported HTML is sanitized. Removed the broken standalone HTML-export path (and its unused Rust command).
 
 ## 0.9.1
 
