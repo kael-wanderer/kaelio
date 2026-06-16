@@ -124,6 +124,8 @@
           <button id="btn-zoom-out" title="Zoom out (Cmd+-)">−</button>
           <span id="status-zoom" class="toolbar-zoom">100%</span>
           <button id="btn-zoom-in" title="Zoom in (Cmd+=)">+</button>
+          <span class="toolbar-sep"></span>
+          <button id="btn-split" title="Toggle split view">⊟</button>
         </div>
         <div id="token-info">
           <span id="token-count">0 words</span>
@@ -225,6 +227,11 @@
             <button id="preview-search-close" title="Close">&times;</button>
           </div>
           <div id="preview-pane"></div>
+        </div>
+        <div id="sub-divider" class="hidden"></div>
+        <div id="sub-pane-wrapper" class="hidden">
+          <div id="sub-tab-bar"></div>
+          <div id="sub-pane"></div>
         </div>
       </div>
       <!-- Tab context menu -->
