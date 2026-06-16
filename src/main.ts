@@ -5101,6 +5101,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-read-mode")?.addEventListener("click", () => toggleReadMode());
   document.getElementById("btn-toggle-outline")?.addEventListener("click", () => toggleOutline());
   document.getElementById("btn-toggle-linenumbers")?.addEventListener("click", () => toggleLineNumbers());
+  const wrapModeSelect = document.getElementById("wrap-mode-select") as HTMLSelectElement | null;
+  if (wrapModeSelect) {
+    wrapModeSelect.value = wrapMode;
+    wrapModeSelect.addEventListener("change", () => setWrapMode(wrapModeSelect.value as WrapMode));
+  }
 
   // Appearance controls
   document.getElementById("font-select")?.addEventListener("change", (e) => {
@@ -5531,6 +5536,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   updateWordCount(SAMPLE_CONTENT);
   updateAutoSaveUI();
   updateLineNumbersUI();
+  applyWrapColumnStyle();
+  updateWrapModeUI();
   updateGitUI();
 
   applyTheme();
