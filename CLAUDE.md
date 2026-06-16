@@ -32,6 +32,7 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 - State: `currentFilePath`, `editor` (CM6 instance), `zoomLevel` — persisted in localStorage; session data (tabs, scroll, cursor) persisted to `~/.kaelio/session.json` via Rust with localStorage as sync backup
 - Theme: Catppuccin Mocha dark palette via CSS variables (`--bg: #1e1e2e`, `--accent: #89b4fa`, etc.)
 - View modes: split | editor-only | preview-only
+- Editor soft-wrap: off | window | column (80, with guide line) — View → Soft Wrap, persisted in localStorage as `kaelio-wrap-mode` (default `window`) via a `lineWrapCompartment`
 - Key bindings: Cmd+O (open), Cmd+S (save), Cmd+P (toggle preview), Cmd+E (read mode), Cmd+B (sidebar), Cmd+F (search — editor or preview depending on view mode)
 
 ### Backend (`src-tauri/`)
