@@ -26,7 +26,7 @@ Kaelio is a fork of [mx](https://github.com/vibery-studio/mx) (GPL-3.0), continu
 | **Session restore** | Reopens your tabs with scroll and cursor positions on launch. |
 | **Custom themes** | Built-in Everforest and Nord themes plus your own custom theme — beyond mx's stock palette. |
 | **Custom fonts & sizes** | Pick your reading font and size, and zoom each split pane independently. |
-| **HTML rendering** | Preview `.html` files inline, and export clean, self-contained HTML. |
+| **HTML rendering** | Open and render `.html` files inline in the preview pane. |
 
 Plus the full mx toolkit: Mermaid & KaTeX, Git sync, callouts, command palette, zoom, and PDF/DOCX export.
 
