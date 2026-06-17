@@ -393,6 +393,25 @@ fn read_binary_file(path: String) -> Result<BinaryFileInfo, String> {
     })
 }
 
+fn annotation_sidecar(pdf_path: &str) -> PathBuf {
+    PathBuf::from(format!("{pdf_path}.kaelio-annot.json"))
+}
+
+#[tauri::command]
+fn read_annotations(pdf_path: String) -> Result<String, String> {
+    let p = annotation_sidecar(&pdf_path);
+    if !p.exists() {
+        return Ok("[]".to_string());
+    }
+    fs::read_to_string(&p).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn write_annotations(pdf_path: String, json: String) -> Result<(), String> {
+    let p = annotation_sidecar(&pdf_path);
+    fs::write(&p, json).map_err(|e| e.to_string())
+}
+
 fn metadata_modified_ms(metadata: &fs::Metadata) -> u64 {
     metadata
         .modified()
@@ -3005,6 +3024,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_file,
             read_binary_file,
+            read_annotations,
+            write_annotations,
             file_metadata,
             save_binary_base64,
             save_file,
