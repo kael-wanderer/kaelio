@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, ViewUpdate } from "@codemirror/view";
 import { EditorState, Compartment } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -14,6 +16,9 @@ import panzoom from "panzoom";
 import katex from "katex";
 import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
+import * as pdfjsLib from "pdfjs-dist";
+// Vite bundles the worker as a local asset so PDF viewing works offline.
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import "katex/dist/katex.min.css";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -21,6 +26,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 // One-time migration of legacy "mx-*" localStorage keys to "kaelio-*".
 // Safe to ship indefinitely — does nothing once `kaelio-migrated` is set.
