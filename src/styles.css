@@ -1641,18 +1641,89 @@ body {
 
 .asset-preview {
   min-height: calc(100vh - 150px);
-  display: grid;
-  place-items: center;
-  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 24px 24px;
 }
 
-.asset-preview-image {
-  max-width: 100%;
-  max-height: calc(100vh - 190px);
+.asset-preview-toolbar {
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 8px 20px color-mix(in srgb, black 18%, transparent);
+}
+
+.asset-preview-tool {
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.asset-preview-tool:hover {
+  background: var(--hover-bg);
+  border-color: var(--border);
+}
+
+.asset-preview-zoom-label {
+  min-width: 44px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.asset-preview-stage {
+  flex: 1;
+  min-height: calc(100vh - 214px);
+  display: grid;
+  place-items: center;
+}
+
+.asset-preview-stage.is-zoomed {
+  display: block;
+}
+
+.asset-preview-message {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.asset-preview-message.error {
+  max-width: 520px;
+  color: var(--error);
+  text-align: center;
+  line-height: 1.5;
+}
+
+:is(#preview-pane, #sub-pane) .asset-preview-image {
+  display: block;
+  max-width: none;
+  max-height: none;
+  margin: 0 auto;
   object-fit: contain;
   background: color-mix(in srgb, var(--text) 4%, transparent);
   border: 1px solid var(--border);
   border-radius: 4px;
+}
+
+:is(#preview-pane, #sub-pane) .asset-preview-stage.is-zoomed .asset-preview-image {
+  margin: 0;
 }
 
 .structured-preview {
@@ -1717,6 +1788,26 @@ body {
   outline: 1px dashed var(--accent);
   outline-offset: -1px;
   border-radius: 3px;
+}
+
+.tree-item.drop-copy-target {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.tree-item.drop-copy-target::after {
+  content: "+";
+  flex: 0 0 16px;
+  height: 16px;
+  margin-left: auto;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bg);
+  background: var(--success);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .drag-ghost {

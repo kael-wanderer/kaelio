@@ -58,6 +58,14 @@ interface Tab {
   isModified: boolean;
 }
 
+interface BinaryFileInfo {
+  path: string;
+  data_base64: string;
+  mime_type: string;
+  size: number;
+  modified_ms: number;
+}
+
 let tabs: Tab[] = [];
 let activeTabId: string | null = null;
 
@@ -1061,7 +1069,44 @@ function isPreviewOnlyPath(path: string | null): boolean {
   return isImagePath(path) || isSvgPath(path) || isPdfPath(path);
 }
 
+function updatePreviewOrRevealPreviewOnly(content: string) {
+  if (currentFilePath && isPreviewOnlyPath(currentFilePath) && currentViewMode !== "preview") {
+    setViewMode("preview");
+    return;
+  }
+  updatePreview(content);
+}
+
 // --- Preview rendering ---
+
+const IMAGE_PREVIEW_MIN_ZOOM = 0.25;
+const IMAGE_PREVIEW_MAX_ZOOM = 5;
+const IMAGE_PREVIEW_ZOOM_STEP = 0.25;
+const imagePreviewZooms = new Map<string, number>();
+
+function clampImagePreviewZoom(zoom: number): number {
+  return Math.min(IMAGE_PREVIEW_MAX_ZOOM, Math.max(IMAGE_PREVIEW_MIN_ZOOM, zoom));
+}
+
+function applyImagePreviewZoom(
+  previewPane: HTMLElement,
+  stage: HTMLElement,
+  image: HTMLImageElement,
+  zoomLabel: HTMLElement,
+  zoom: number,
+) {
+  const naturalWidth = image.naturalWidth || 1;
+  const naturalHeight = image.naturalHeight || 1;
+  const availableWidth = Math.max(previewPane.clientWidth - 56, 1);
+  const availableHeight = Math.max(previewPane.clientHeight - 112, 1);
+  const fitScale = Math.min(1, availableWidth / naturalWidth, availableHeight / naturalHeight);
+  const displayScale = fitScale * zoom;
+
+  image.style.width = `${Math.max(1, Math.round(naturalWidth * displayScale))}px`;
+  image.style.height = "auto";
+  stage.classList.toggle("is-zoomed", zoom > 1);
+  zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+}
 
 function renderHtmlPreview(previewPane: HTMLElement, content: string) {
   previewPane.innerHTML = "";
@@ -1073,12 +1118,72 @@ function renderHtmlPreview(previewPane: HTMLElement, content: string) {
   previewPane.appendChild(frame);
 }
 
-function renderImagePreview(previewPane: HTMLElement, path: string) {
-  const src = convertFileSrc(path);
-  previewPane.innerHTML = `
-    <div class="asset-preview">
-      <img class="asset-preview-image" src="${escapeHtml(src)}" alt="${escapeHtml(path.split("/").pop() || "Image")}">
-    </div>`;
+async function renderImagePreview(previewPane: HTMLElement, path: string) {
+  const filename = path.split("/").pop() || "Image";
+  previewPane.innerHTML = "";
+
+  const wrap = document.createElement("div");
+  wrap.className = "asset-preview";
+  const toolbar = document.createElement("div");
+  toolbar.className = "asset-preview-toolbar";
+  const zoomOut = document.createElement("button");
+  zoomOut.type = "button";
+  zoomOut.className = "asset-preview-tool";
+  zoomOut.textContent = "-";
+  zoomOut.title = "Zoom out";
+  zoomOut.setAttribute("aria-label", "Zoom out");
+  const zoomLabel = document.createElement("span");
+  zoomLabel.className = "asset-preview-zoom-label";
+  zoomLabel.textContent = `${Math.round((imagePreviewZooms.get(path) || 1) * 100)}%`;
+  const zoomIn = document.createElement("button");
+  zoomIn.type = "button";
+  zoomIn.className = "asset-preview-tool";
+  zoomIn.textContent = "+";
+  zoomIn.title = "Zoom in";
+  zoomIn.setAttribute("aria-label", "Zoom in");
+  toolbar.append(zoomOut, zoomLabel, zoomIn);
+
+  const stage = document.createElement("div");
+  stage.className = "asset-preview-stage";
+  const loading = document.createElement("div");
+  loading.className = "asset-preview-message";
+  loading.textContent = "Loading image...";
+  stage.appendChild(loading);
+  wrap.append(toolbar, stage);
+  previewPane.appendChild(wrap);
+
+  try {
+    const file = await invoke<BinaryFileInfo>("read_binary_file", { path });
+    if (currentFilePath !== path) return;
+
+    const image = document.createElement("img");
+    image.className = "asset-preview-image";
+    image.alt = filename;
+    let currentZoom = clampImagePreviewZoom(imagePreviewZooms.get(path) ?? 1);
+    const setZoom = (nextZoom: number) => {
+      const zoom = clampImagePreviewZoom(nextZoom);
+      currentZoom = zoom;
+      imagePreviewZooms.set(path, zoom);
+      applyImagePreviewZoom(previewPane, stage, image, zoomLabel, zoom);
+    };
+    zoomOut.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setZoom(currentZoom - IMAGE_PREVIEW_ZOOM_STEP);
+    });
+    zoomIn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setZoom(currentZoom + IMAGE_PREVIEW_ZOOM_STEP);
+    });
+    image.addEventListener("load", () => setZoom(currentZoom), { once: true });
+    image.src = `data:${file.mime_type};base64,${file.data_base64}`;
+    stage.replaceChildren(image);
+  } catch (err) {
+    if (currentFilePath !== path) return;
+    loading.classList.add("error");
+    loading.textContent = `Could not load image: ${err}`;
+  }
 }
 
 function renderPdfPreview(previewPane: HTMLElement, path: string) {
@@ -1155,7 +1260,7 @@ async function updatePreview(content: string) {
   if (!previewPane || (previewWrapper && previewWrapper.style.display === "none")) return;
 
   if (currentFilePath && (isImagePath(currentFilePath) || isSvgPath(currentFilePath))) {
-    renderImagePreview(previewPane, currentFilePath);
+    await renderImagePreview(previewPane, currentFilePath);
     return;
   }
 
@@ -1956,6 +2061,7 @@ async function openFileDialog() {
   const path = await open({
     filters: [
       { name: "Markdown", extensions: ["md", "markdown"] },
+      { name: "Images", extensions: ["png", "jpg", "jpeg"] },
       { name: "Text and Code", extensions: ["txt", "yaml", "yml", "json", "toml", "xml", "csv", "log", "html", "htm", "css", "scss", "js", "jsx", "ts", "tsx", "rs", "py", "sh", "bash", "zsh", "sql", "svg", "ini", "conf"] },
       { name: "All Files", extensions: ["*"] },
     ],
@@ -1987,7 +2093,7 @@ async function openFile(path: string, skipScrollRestore = false) {
     addRecentFile(path);
     renderTabs();
     persistOpenTabs();
-    updatePreview("");
+    updatePreviewOrRevealPreviewOnly("");
     updateWordCount("");
     updateCursorPosition(editor);
     startFileWatch(path);
@@ -3046,11 +3152,161 @@ function toggleReadMode() {
 
 // --- Drag & drop via Tauri ---
 
+type DropPoint = { x: number; y: number };
+
+function clearTreeDragOver() {
+  document.querySelectorAll(".tree-item.drag-over, .tree-item.drop-copy-target").forEach(el => {
+    el.classList.remove("drag-over", "drop-copy-target");
+  });
+}
+
+function dragDropPointFromPayload(payload: unknown): DropPoint | null {
+  const position = (payload as { position?: { x: number; y: number } }).position;
+  if (!position) return null;
+  const raw = { x: position.x, y: position.y };
+  if (raw.x >= 0 && raw.y >= 0 && raw.x <= window.innerWidth && raw.y <= window.innerHeight) {
+    return raw;
+  }
+  const ratio = window.devicePixelRatio || 1;
+  return { x: position.x / ratio, y: position.y / ratio };
+}
+
+function resolveSidebarCopyDestination(point: DropPoint): { destDir: string; targetEl: HTMLElement | null } | null {
+  const hit = document.elementFromPoint(point.x, point.y);
+  const tree = hit?.closest("#sidebar-tree") as HTMLElement | null;
+  if (!tree || !currentFolderPath) return null;
+
+  const row = hit?.closest("#sidebar-tree .tree-item") as HTMLElement | null;
+  if (!row) return { destDir: currentFolderPath, targetEl: null };
+
+  const path = row.dataset.path;
+  if (!path) return { destDir: currentFolderPath, targetEl: null };
+  if (row.classList.contains("directory") || row.dataset.isDir === "true") {
+    return { destDir: path, targetEl: row };
+  }
+
+  const parent = row.dataset.parentPath || path.substring(0, path.lastIndexOf("/"));
+  if (!parent) return { destDir: currentFolderPath, targetEl: null };
+  return { destDir: parent, targetEl: row };
+}
+
+let sidebarDropExpandTimer: ReturnType<typeof setTimeout> | null = null;
+let sidebarDropExpandPath: string | null = null;
+
+function clearSidebarDropExpandTimer() {
+  if (sidebarDropExpandTimer) clearTimeout(sidebarDropExpandTimer);
+  sidebarDropExpandTimer = null;
+  sidebarDropExpandPath = null;
+}
+
+function treeDepthFromRow(row: HTMLElement): number {
+  const indent = row.querySelector(".tree-indent") as HTMLElement | null;
+  const width = parseFloat(indent?.style.width || "0");
+  return Number.isFinite(width) ? Math.round(width / 14) : 0;
+}
+
+async function expandSidebarDirectoryRow(row: HTMLElement) {
+  const path = row.dataset.path;
+  if (!path || expandedDirs.has(path)) return;
+  const childContainer = row.nextElementSibling as HTMLElement | null;
+  if (!childContainer?.classList.contains("tree-children")) return;
+
+  expandedDirs.add(path);
+  childContainer.classList.remove("hidden");
+  row.querySelector(".tree-chevron")?.classList.add("expanded");
+  if (childContainer.children.length === 0) {
+    const children = await invoke<DirEntry[]>("list_directory", { path });
+    await renderTreeEntries(children, childContainer, treeDepthFromRow(row) + 1);
+  }
+}
+
+function scheduleSidebarDirectoryExpand(row: HTMLElement) {
+  const path = row.dataset.path;
+  if (!path || expandedDirs.has(path) || sidebarDropExpandPath === path) return;
+  clearSidebarDropExpandTimer();
+  sidebarDropExpandPath = path;
+  sidebarDropExpandTimer = setTimeout(() => {
+    expandSidebarDirectoryRow(row).catch(err => console.warn("drop folder expand failed:", err));
+    sidebarDropExpandTimer = null;
+    sidebarDropExpandPath = null;
+  }, 650);
+}
+
+function highlightSidebarCopyDestination(point: DropPoint | null) {
+  clearTreeDragOver();
+  if (!point) {
+    clearSidebarDropExpandTimer();
+    return;
+  }
+  const destination = resolveSidebarCopyDestination(point);
+  const target = destination?.targetEl;
+  if (!target) {
+    clearSidebarDropExpandTimer();
+    return;
+  }
+
+  const isDirectory = target.classList.contains("directory") || target.dataset.isDir === "true";
+  const path = target.dataset.path;
+  if (isDirectory && path && !expandedDirs.has(path)) {
+    scheduleSidebarDirectoryExpand(target);
+    return;
+  }
+
+  clearSidebarDropExpandTimer();
+  target.classList.add("drop-copy-target");
+}
+
+async function copyDroppedPathsIntoFolder(paths: string[], destDir: string) {
+  const copied: string[] = [];
+  const failures: string[] = [];
+
+  for (const source of paths) {
+    try {
+      const newPath = await invoke<string>("copy_into_folder", { source, destDir });
+      copied.push(newPath);
+    } catch (err) {
+      failures.push(`${source.split("/").pop() || source}: ${err}`);
+    }
+  }
+
+  if (copied.length > 0) refreshSidebar();
+  if (failures.length === 0) {
+    const label = copied.length === 1 ? "item" : "items";
+    flashStatus(`Copied ${copied.length} ${label}`, "var(--success)", 3000);
+    return;
+  }
+
+  console.warn("[kaelio] drop copy failures", failures);
+  if (copied.length > 0) {
+    flashStatus(`Copied ${copied.length}; ${failures.length} failed`, "var(--warning)", 5000);
+  } else {
+    flashStatus(`Copy failed: ${failures[0]}`, "var(--error)", 6000);
+  }
+}
+
 async function initDragDrop() {
   const appWindow = getCurrentWindow();
   await appWindow.onDragDropEvent(async (event) => {
+    if (event.payload.type === "enter" || event.payload.type === "over") {
+      highlightSidebarCopyDestination(dragDropPointFromPayload(event.payload));
+      return;
+    }
+    if (event.payload.type === "leave") {
+      clearTreeDragOver();
+      clearSidebarDropExpandTimer();
+      return;
+    }
     if (event.payload.type === "drop") {
       const paths = event.payload.paths;
+      const point = dragDropPointFromPayload(event.payload);
+      const destination = point ? resolveSidebarCopyDestination(point) : null;
+      clearTreeDragOver();
+      clearSidebarDropExpandTimer();
+      if (destination && paths.length > 0) {
+        await copyDroppedPathsIntoFolder(paths, destination.destDir);
+        return;
+      }
+
       const first = paths[0];
       if (first) {
         try {
@@ -4306,7 +4562,7 @@ function switchToTab(tabId: string) {
   updateBreadcrumb();
   startFileWatch(newTab.filePath);
   checkCurrentFileForDiskChanges();
-  updatePreview(tabContent);
+  updatePreviewOrRevealPreviewOnly(tabContent);
   updateWordCount(tabContent);
   updateCursorPosition(editor);
   renderTabs();
@@ -4445,8 +4701,9 @@ async function closeTab(tabId: string) {
     updateBreadcrumb();
     startFileWatch(newTab.filePath);
     checkCurrentFileForDiskChanges();
-    updatePreview(editor.state.doc.toString());
-    updateWordCount(editor.state.doc.toString());
+    const content = editor.state.doc.toString();
+    updatePreviewOrRevealPreviewOnly(content);
+    updateWordCount(content);
     updateCursorPosition(editor);
   }
 

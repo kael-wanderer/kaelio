@@ -34,7 +34,8 @@ Plus the full mx toolkit: Mermaid & KaTeX, Git sync, callouts, command palette, 
 
 - **Editor** — live split preview, multiple tabs, code folding, formatting toolbar, search & replace (`Cmd+F`/`Cmd+H`), line numbers, soft wrap.
 - **Markdown** — Mermaid (click-to-zoom), KaTeX (`$…$`, `$$…$$`), YAML frontmatter, footnotes, wikilinks, anchor navigation, copy-heading-link.
-- **Files** — sidebar browser, context menu, file search (`Cmd+Shift+F`), content search (`Cmd+Opt+F`), command palette, breadcrumbs, drag & drop, recent files.
+- **Files** — sidebar browser, context menu, file search (`Cmd+Shift+F`), content search (`Cmd+Opt+F`), command palette, breadcrumbs, recent files. Drag files or folders from Finder onto a sidebar folder to copy them in; drag onto the editor to open.
+- **Image viewing** — open PNG, JPG, GIF, WEBP, BMP, ICO, and AVIF in the preview pane with zoom in/out.
 - **Git sync** — one-click setup, auto commit+push on save, auto-pull on open, conflict resolution, per-file history & snapshots, status dots.
 - **Obsidian-style** — callouts (`> [!tip]`), interactive checklists, tag pills, wikilinks.
 - **Writing** — auto-save, crash recovery, 60s version snapshots, external-change detection, zen mode, image paste & lightbox.

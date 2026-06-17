@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.4
+
+### New
+
+- **Drag to copy** — drag files or folders from Finder/Explorer onto a folder in the sidebar to copy them into it (names auto-deduplicated on collision). Dragging onto the editor still opens the file.
+- **Image viewer** — open PNG, JPG, GIF, WEBP, BMP, ICO, and AVIF images in the preview pane with zoom in/out.
+
 ## 0.9.3
 
 ### Export fixes

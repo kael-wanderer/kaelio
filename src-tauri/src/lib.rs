@@ -1,3 +1,7 @@
+use base64::{Engine as _, engine::general_purpose};
+use git2::{Cred, CredentialType, Repository, Signature, StatusOptions};
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs;
@@ -5,12 +9,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
-use base64::{engine::general_purpose, Engine as _};
-use serde::{Deserialize, Serialize};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
-use notify::{Watcher, RecommendedWatcher, RecursiveMode, Event, EventKind};
-use git2::{Repository, StatusOptions, Signature, Cred, CredentialType};
 
 static INITIAL_FILE: Mutex<Option<String>> = Mutex::new(None);
 static FILE_WATCHERS: Mutex<Option<HashMap<String, RecommendedWatcher>>> = Mutex::new(None);
@@ -144,7 +144,9 @@ fn fd_diagnostic() -> String {
 }
 
 #[cfg(not(unix))]
-fn fd_diagnostic() -> String { String::new() }
+fn fd_diagnostic() -> String {
+    String::new()
+}
 
 #[cfg(unix)]
 fn nofile_diagnostic() -> String {
@@ -154,7 +156,10 @@ fn nofile_diagnostic() -> String {
             rlim_max: 0,
         };
         if libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) == 0 {
-            format!("nofile_cur={} nofile_max={}", limit.rlim_cur, limit.rlim_max)
+            format!(
+                "nofile_cur={} nofile_max={}",
+                limit.rlim_cur, limit.rlim_max
+            )
         } else {
             "nofile=unknown".to_string()
         }
@@ -162,7 +167,9 @@ fn nofile_diagnostic() -> String {
 }
 
 #[cfg(not(unix))]
-fn nofile_diagnostic() -> String { String::new() }
+fn nofile_diagnostic() -> String {
+    String::new()
+}
 
 fn spawn_diagnostic() -> String {
     let parts = [fd_diagnostic(), nofile_diagnostic()];
@@ -198,6 +205,15 @@ struct FileInfo {
 #[derive(Serialize, Deserialize)]
 struct FileMetadata {
     path: String,
+    size: u64,
+    modified_ms: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+struct BinaryFileInfo {
+    path: String,
+    data_base64: String,
+    mime_type: String,
     size: u64,
     modified_ms: u64,
 }
@@ -251,10 +267,7 @@ fn natural_name_cmp(a: &str, b: &str) -> Ordering {
     let mut b_pos = 0;
 
     loop {
-        match (
-            next_natural_chunk(a, a_pos),
-            next_natural_chunk(b, b_pos),
-        ) {
+        match (next_natural_chunk(a, a_pos), next_natural_chunk(b, b_pos)) {
             (Some((a_chunk, next_a, true)), Some((b_chunk, next_b, true))) => {
                 let cmp = compare_number_chunks(a_chunk, b_chunk);
                 if cmp != Ordering::Equal {
@@ -345,6 +358,41 @@ fn read_file(path: String) -> Result<FileInfo, String> {
     })
 }
 
+fn image_mime_type(path: &Path) -> String {
+    match path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase()
+        .as_str()
+    {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "avif" => "image/avif",
+        "svg" => "image/svg+xml",
+        _ => "application/octet-stream",
+    }
+    .to_string()
+}
+
+#[tauri::command]
+fn read_binary_file(path: String) -> Result<BinaryFileInfo, String> {
+    let p = PathBuf::from(&path);
+    let bytes = fs::read(&p).map_err(|e| e.to_string())?;
+    let metadata = fs::metadata(&p).map_err(|e| e.to_string())?;
+    Ok(BinaryFileInfo {
+        path,
+        data_base64: general_purpose::STANDARD.encode(bytes),
+        mime_type: image_mime_type(&p),
+        size: metadata.len(),
+        modified_ms: metadata_modified_ms(&metadata),
+    })
+}
+
 fn metadata_modified_ms(metadata: &fs::Metadata) -> u64 {
     metadata
         .modified()
@@ -402,7 +450,10 @@ fn list_directory(path: String) -> Result<Vec<DirEntry>, String> {
             let extension = if is_dir {
                 None
             } else {
-                entry.path().extension().map(|e| e.to_string_lossy().to_string())
+                entry
+                    .path()
+                    .extension()
+                    .map(|e| e.to_string_lossy().to_string())
             };
             Some(DirEntry {
                 name,
@@ -456,15 +507,86 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
         let entry = entry.map_err(|e| e.to_string())?;
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
-        let metadata = entry.metadata().map_err(|e| format!("metadata '{}': {}", src_path.display(), e))?;
+        let metadata = entry
+            .metadata()
+            .map_err(|e| format!("metadata '{}': {}", src_path.display(), e))?;
         if metadata.is_dir() {
             copy_dir_recursive(&src_path, &dst_path)?;
         } else {
-            fs::copy(&src_path, &dst_path)
-                .map_err(|e| format!("copy '{}' to '{}': {}", src_path.display(), dst_path.display(), e))?;
+            fs::copy(&src_path, &dst_path).map_err(|e| {
+                format!(
+                    "copy '{}' to '{}': {}",
+                    src_path.display(),
+                    dst_path.display(),
+                    e
+                )
+            })?;
         }
     }
     Ok(())
+}
+
+fn unique_copy_path(dest_dir: &Path, source: &Path) -> Result<PathBuf, String> {
+    let stem = source
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| {
+            source
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "copy".to_string())
+        });
+    let ext = source
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_default();
+
+    let original = source.file_name().ok_or("Source path has no file name")?;
+    let mut dest = dest_dir.join(original);
+    if !dest.exists() {
+        return Ok(dest);
+    }
+
+    dest = dest_dir.join(format!("{}-copy{}", stem, ext));
+    let mut counter = 2u32;
+    while dest.exists() {
+        dest = dest_dir.join(format!("{}-copy-{}{}", stem, counter, ext));
+        counter += 1;
+    }
+    Ok(dest)
+}
+
+#[tauri::command]
+fn copy_into_folder(source: String, dest_dir: String) -> Result<String, String> {
+    let src = PathBuf::from(&source);
+    if !src.exists() {
+        return Err(format!("Source path does not exist: {}", src.display()));
+    }
+
+    let dest_dir = PathBuf::from(&dest_dir);
+    if !dest_dir.exists() || !dest_dir.is_dir() {
+        return Err(format!(
+            "Destination is not a folder: {}",
+            dest_dir.display()
+        ));
+    }
+
+    let src_canon = fs::canonicalize(&src).map_err(|e| format!("canonicalize source: {}", e))?;
+    let dest_dir_canon =
+        fs::canonicalize(&dest_dir).map_err(|e| format!("canonicalize destination: {}", e))?;
+    if src_canon.is_dir() && dest_dir_canon.starts_with(&src_canon) {
+        return Err("Cannot copy a folder into itself or one of its subfolders".to_string());
+    }
+
+    let dest = unique_copy_path(&dest_dir, &src)?;
+    if src.is_dir() {
+        copy_dir_recursive(&src, &dest)?;
+    } else {
+        fs::copy(&src, &dest)
+            .map_err(|e| format!("copy '{}' to '{}': {}", src.display(), dest.display(), e))?;
+    }
+
+    Ok(dest.to_string_lossy().to_string())
 }
 
 fn unique_kaelio_trash_path(path: &Path) -> Result<PathBuf, String> {
@@ -506,11 +628,19 @@ fn move_to_kaelio_trash(path: &Path) -> Result<DeleteResult, String> {
                 let metadata = fs::metadata(path).map_err(|e| e.to_string())?;
                 if metadata.is_dir() {
                     copy_dir_recursive(path, &destination)?;
-                    fs::remove_dir_all(path).map_err(|e| format!("remove original directory after copy: {}", e))?;
+                    fs::remove_dir_all(path)
+                        .map_err(|e| format!("remove original directory after copy: {}", e))?;
                 } else {
-                    fs::copy(path, &destination)
-                        .map_err(|e| format!("copy '{}' to '{}': {}", path.display(), destination.display(), e))?;
-                    fs::remove_file(path).map_err(|e| format!("remove original file after copy: {}", e))?;
+                    fs::copy(path, &destination).map_err(|e| {
+                        format!(
+                            "copy '{}' to '{}': {}",
+                            path.display(),
+                            destination.display(),
+                            e
+                        )
+                    })?;
+                    fs::remove_file(path)
+                        .map_err(|e| format!("remove original file after copy: {}", e))?;
                 }
                 Ok(DeleteResult {
                     destination: destination.to_string_lossy().to_string(),
@@ -561,14 +691,18 @@ fn list_files_recursive(path: String, max_depth: u32) -> Result<Vec<String>, Str
     let mut results = Vec::new();
     let ignore = ["node_modules", ".git", "target", ".DS_Store", "__pycache__"];
     fn walk(dir: &Path, depth: u32, max_depth: u32, results: &mut Vec<String>, ignore: &[&str]) {
-        if depth > max_depth { return; }
+        if depth > max_depth {
+            return;
+        }
         let entries = match fs::read_dir(dir) {
             Ok(e) => e,
             Err(_) => return,
         };
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with('.') || ignore.contains(&name.as_str()) { continue; }
+            if name.starts_with('.') || ignore.contains(&name.as_str()) {
+                continue;
+            }
             let path = entry.path();
             if let Ok(meta) = entry.metadata() {
                 if meta.is_dir() {
@@ -617,15 +751,30 @@ fn search_in_files(folder_path: String, query: String) -> Result<Vec<SearchResul
         extensions: &[&str],
         max_size: u64,
     ) {
-        if depth > 5 { return; }
-        let entries = match fs::read_dir(dir) { Ok(e) => e, Err(_) => return };
+        if depth > 5 {
+            return;
+        }
+        let entries = match fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with('.') || ignore.contains(&name.as_str()) { continue; }
+            if name.starts_with('.') || ignore.contains(&name.as_str()) {
+                continue;
+            }
             let path = entry.path();
             if let Ok(meta) = entry.metadata() {
                 if meta.is_dir() {
-                    walk(&path, depth + 1, all_files, content_files, ignore, extensions, max_size);
+                    walk(
+                        &path,
+                        depth + 1,
+                        all_files,
+                        content_files,
+                        ignore,
+                        extensions,
+                        max_size,
+                    );
                 } else {
                     all_files.push(path.clone());
                     if meta.len() <= max_size {
@@ -639,14 +788,24 @@ fn search_in_files(folder_path: String, query: String) -> Result<Vec<SearchResul
             }
         }
     }
-    walk(&root, 0, &mut all_files, &mut content_files, &ignore, &extensions, max_file_size);
+    walk(
+        &root,
+        0,
+        &mut all_files,
+        &mut content_files,
+        &ignore,
+        &extensions,
+        max_file_size,
+    );
     all_files.sort();
     content_files.sort();
 
     let mut results: Vec<SearchResult> = Vec::new();
 
     for file_path in &all_files {
-        if results.len() >= max_results { break; }
+        if results.len() >= max_results {
+            break;
+        }
         let file_name = match file_path.file_name().and_then(|name| name.to_str()) {
             Some(name) => name,
             None => continue,
@@ -667,11 +826,18 @@ fn search_in_files(folder_path: String, query: String) -> Result<Vec<SearchResul
     }
 
     for file_path in content_files {
-        if results.len() >= max_results { break; }
-        let content = match fs::read_to_string(&file_path) { Ok(c) => c, Err(_) => continue };
+        if results.len() >= max_results {
+            break;
+        }
+        let content = match fs::read_to_string(&file_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
         let path_str = file_path.to_string_lossy().to_string();
         for (i, line) in content.lines().enumerate() {
-            if results.len() >= max_results { break; }
+            if results.len() >= max_results {
+                break;
+            }
             let line_lower = line.to_lowercase();
             if let Some(byte_pos) = line_lower.find(&query_lower) {
                 // Convert byte offsets to char offsets for JavaScript compatibility
@@ -726,7 +892,9 @@ fn get_recovery_files() -> Result<Vec<RecoveryInfo>, String> {
             if let Some(rest) = content.strip_prefix("---mx-recovery---\n") {
                 if let Some(idx) = rest.find("\n---\n") {
                     let original = rest[..idx].to_string();
-                    let ts = entry.metadata().ok()
+                    let ts = entry
+                        .metadata()
+                        .ok()
                         .and_then(|m| m.modified().ok())
                         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                         .map(|d| d.as_secs())
@@ -783,7 +951,11 @@ fn base64url_encode(data: &[u8]) -> String {
 /// Locate a usable pandoc. Kaelio does NOT bundle pandoc — users install it via
 /// `brew install pandoc`. We check Homebrew (Apple Silicon + Intel) then PATH.
 fn find_pandoc() -> Option<PathBuf> {
-    let exe = if cfg!(target_os = "windows") { "pandoc.exe" } else { "pandoc" };
+    let exe = if cfg!(target_os = "windows") {
+        "pandoc.exe"
+    } else {
+        "pandoc"
+    };
     let mut candidates = vec![
         PathBuf::from("/opt/homebrew/bin/pandoc"),
         PathBuf::from("/usr/local/bin/pandoc"),
@@ -799,7 +971,11 @@ fn find_pandoc() -> Option<PathBuf> {
 /// Locate Typst for Markdown PDF export. Passing an absolute path to pandoc
 /// avoids Finder-launched app PATH quirks.
 fn find_typst() -> Option<PathBuf> {
-    let exe = if cfg!(target_os = "windows") { "typst.exe" } else { "typst" };
+    let exe = if cfg!(target_os = "windows") {
+        "typst.exe"
+    } else {
+        "typst"
+    };
     let mut candidates = vec![
         PathBuf::from("/opt/homebrew/bin/typst"),
         PathBuf::from("/usr/local/bin/typst"),
@@ -850,13 +1026,18 @@ const DOCX_TABLE_STYLE: &str = r#"<w:style w:default="1" w:styleId="Table" w:typ
   </w:style>"#;
 
 fn output_file_ready(path: &str) -> bool {
-    fs::metadata(path).map(|m| m.is_file() && m.len() > 0).unwrap_or(false)
+    fs::metadata(path)
+        .map(|m| m.is_file() && m.len() > 0)
+        .unwrap_or(false)
 }
 
 fn apply_kaelio_docx_table_style(styles_xml: &str) -> String {
     let Some(style_id) = styles_xml.find(r#"w:styleId="Table""#) else {
-        return styles_xml
-            .replacen("</w:styles>", &format!("{}\n</w:styles>", DOCX_TABLE_STYLE), 1);
+        return styles_xml.replacen(
+            "</w:styles>",
+            &format!("{}\n</w:styles>", DOCX_TABLE_STYLE),
+            1,
+        );
     };
     let Some(start) = styles_xml[..style_id].rfind("<w:style") else {
         return styles_xml.to_string();
@@ -879,48 +1060,54 @@ fn style_docx_tables(path: &Path) -> Result<(), String> {
 
     let source = fs::File::open(path)
         .map_err(|e| format!("Failed to open DOCX for table styling: {}", e))?;
-    let mut archive = ZipArchive::new(source)
-        .map_err(|e| format!("Failed to read DOCX package: {}", e))?;
+    let mut archive =
+        ZipArchive::new(source).map_err(|e| format!("Failed to read DOCX package: {}", e))?;
     let tmp_path = path.with_file_name(format!(
         "{}.kaelio-tables.tmp",
-        path.file_name().and_then(|n| n.to_str()).unwrap_or("export.docx")
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("export.docx")
     ));
-    let target = fs::File::create(&tmp_path)
-        .map_err(|e| format!("Failed to prepare styled DOCX: {}", e))?;
+    let target =
+        fs::File::create(&tmp_path).map_err(|e| format!("Failed to prepare styled DOCX: {}", e))?;
     let mut writer = ZipWriter::new(target);
     let mut updated_styles = false;
 
     for i in 0..archive.len() {
-        let mut entry = archive.by_index(i)
+        let mut entry = archive
+            .by_index(i)
             .map_err(|e| format!("Failed to read DOCX entry: {}", e))?;
         if entry.name() == "word/styles.xml" {
             let options = entry.options();
             let mut styles_xml = String::new();
-            entry.read_to_string(&mut styles_xml)
+            entry
+                .read_to_string(&mut styles_xml)
                 .map_err(|e| format!("Failed to read DOCX styles: {}", e))?;
             let styled_xml = apply_kaelio_docx_table_style(&styles_xml);
             updated_styles = styled_xml != styles_xml;
-            writer.start_file("word/styles.xml", options)
+            writer
+                .start_file("word/styles.xml", options)
                 .map_err(|e| format!("Failed to write DOCX styles: {}", e))?;
-            writer.write_all(styled_xml.as_bytes())
+            writer
+                .write_all(styled_xml.as_bytes())
                 .map_err(|e| format!("Failed to write DOCX table style: {}", e))?;
         } else {
-            writer.raw_copy_file(entry)
+            writer
+                .raw_copy_file(entry)
                 .map_err(|e| format!("Failed to copy DOCX entry: {}", e))?;
         }
     }
 
-    writer.finish()
+    writer
+        .finish()
         .map_err(|e| format!("Failed to finalize styled DOCX: {}", e))?;
     drop(archive);
 
     if updated_styles {
         if cfg!(target_os = "windows") {
-            fs::remove_file(path)
-                .map_err(|e| format!("Failed to replace original DOCX: {}", e))?;
+            fs::remove_file(path).map_err(|e| format!("Failed to replace original DOCX: {}", e))?;
         }
-        fs::rename(&tmp_path, path)
-            .map_err(|e| format!("Failed to install styled DOCX: {}", e))?;
+        fs::rename(&tmp_path, path).map_err(|e| format!("Failed to install styled DOCX: {}", e))?;
     } else {
         let _ = fs::remove_file(&tmp_path);
     }
@@ -929,19 +1116,34 @@ fn style_docx_tables(path: &Path) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn export_pdf(markdown_content: String, output_path: String, source_format: Option<String>, app: tauri::AppHandle) -> Result<String, String> {
+async fn export_pdf(
+    markdown_content: String,
+    output_path: String,
+    source_format: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
     // Run all blocking work on a separate thread to avoid blocking async runtime
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let result = export_pdf_blocking(markdown_content, output_path, source_format.unwrap_or_else(|| "markdown".to_string()), app);
+        let result = export_pdf_blocking(
+            markdown_content,
+            output_path,
+            source_format.unwrap_or_else(|| "markdown".to_string()),
+            app,
+        );
         let _ = tx.send(result);
     });
     rx.recv().map_err(|e| format!("Thread error: {}", e))?
 }
 
-fn export_pdf_blocking(markdown_content: String, output_path: String, source_format: String, app: tauri::AppHandle) -> Result<String, String> {
-    use std::process::Command;
+fn export_pdf_blocking(
+    markdown_content: String,
+    output_path: String,
+    source_format: String,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
     use std::io::Write;
+    use std::process::Command;
 
     let _ = app.emit("pdf-progress", "Preparing document…");
     let is_html = source_format == "html";
@@ -1004,7 +1206,8 @@ fn export_pdf_blocking(markdown_content: String, output_path: String, source_for
     let mut code_lang = String::new();
 
     // Count mermaid blocks for progress
-    let mermaid_total = markdown_content.lines()
+    let mermaid_total = markdown_content
+        .lines()
         .filter(|l| l.trim() == "```mermaid")
         .count();
 
@@ -1022,7 +1225,10 @@ fn export_pdf_blocking(markdown_content: String, output_path: String, source_for
         } else if line.starts_with("```") && in_code {
             in_code = false;
             if in_mermaid {
-                let _ = app.emit("pdf-progress", format!("Rendering diagram {}/{}…", mermaid_idx + 1, mermaid_total));
+                let _ = app.emit(
+                    "pdf-progress",
+                    format!("Rendering diagram {}/{}…", mermaid_idx + 1, mermaid_total),
+                );
 
                 let png_file = tmp_dir.join(format!("diagram_{}.jpg", mermaid_idx));
                 let encoded = base64url_encode(mermaid_buf.trim().as_bytes());
@@ -1031,16 +1237,26 @@ fn export_pdf_blocking(markdown_content: String, output_path: String, source_for
                 let mut curl_command = Command::new("curl");
                 force_fork_exec(&mut curl_command);
                 let download = curl_command
-                    .args(["-sL", "--max-time", "30", "-o", png_file.to_str().unwrap(), &url])
+                    .args([
+                        "-sL",
+                        "--max-time",
+                        "30",
+                        "-o",
+                        png_file.to_str().unwrap(),
+                        &url,
+                    ])
                     .env("PATH", &path_env)
                     .output();
 
                 if let Ok(r) = download {
-                    if r.status.success() && png_file.exists() && fs::metadata(&png_file).map(|m| m.len() > 100).unwrap_or(false) {
-                        processed.push_str(&format!(
-                            "![diagram]({})\n",
-                            png_file.to_string_lossy()
-                        ));
+                    if r.status.success()
+                        && png_file.exists()
+                        && fs::metadata(&png_file)
+                            .map(|m| m.len() > 100)
+                            .unwrap_or(false)
+                    {
+                        processed
+                            .push_str(&format!("![diagram]({})\n", png_file.to_string_lossy()));
                     } else {
                         processed.push_str("```\n");
                         processed.push_str(&mermaid_buf);
@@ -1070,10 +1286,13 @@ fn export_pdf_blocking(markdown_content: String, output_path: String, source_for
 
     // Step 2: Write processed input
     let mut f = fs::File::create(&tmp_input).map_err(|e| e.to_string())?;
-    f.write_all(processed.as_bytes()).map_err(|e| e.to_string())?;
+    f.write_all(processed.as_bytes())
+        .map_err(|e| e.to_string())?;
     let typst_header = tmp_dir.join("kaelio-tables.typ");
     let mut header = fs::File::create(&typst_header).map_err(|e| e.to_string())?;
-    header.write_all(TYPST_TABLE_HEADER.as_bytes()).map_err(|e| e.to_string())?;
+    header
+        .write_all(TYPST_TABLE_HEADER.as_bytes())
+        .map_err(|e| e.to_string())?;
 
     // Step 3: Run pandoc with Typst. Kaelio's supported lightweight PDF stack is
     // `brew install pandoc` + `brew install typst`; do not fall through to
@@ -1090,13 +1309,24 @@ fn export_pdf_blocking(markdown_content: String, output_path: String, source_for
 
     let args = vec![
         tmp_input.to_str().unwrap().to_string(),
-        "-o".to_string(), output_path.clone(),
-        "--from".to_string(), if is_html { "html".to_string() } else { PANDOC_MARKDOWN_INPUT_FORMAT.to_string() },
-        "--pdf-engine".to_string(), typst_path.to_string_lossy().to_string(),
-        "--include-in-header".to_string(), typst_header.to_string_lossy().to_string(),
-        "-V".to_string(), "geometry:margin=1in".to_string(),
-        "-V".to_string(), "fontsize=11pt".to_string(),
-        "-V".to_string(), "colorlinks=true".to_string(),
+        "-o".to_string(),
+        output_path.clone(),
+        "--from".to_string(),
+        if is_html {
+            "html".to_string()
+        } else {
+            PANDOC_MARKDOWN_INPUT_FORMAT.to_string()
+        },
+        "--pdf-engine".to_string(),
+        typst_path.to_string_lossy().to_string(),
+        "--include-in-header".to_string(),
+        typst_header.to_string_lossy().to_string(),
+        "-V".to_string(),
+        "geometry:margin=1in".to_string(),
+        "-V".to_string(),
+        "fontsize=11pt".to_string(),
+        "-V".to_string(),
+        "colorlinks=true".to_string(),
         "--syntax-highlighting=none".to_string(),
     ];
 
@@ -1121,16 +1351,32 @@ fn export_pdf_blocking(markdown_content: String, output_path: String, source_for
         )),
         Ok(out) => {
             let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            Err(format!("pandoc failed: {}", if err.is_empty() { format!("exited with {}", out.status) } else { err }))
+            Err(format!(
+                "pandoc failed: {}",
+                if err.is_empty() {
+                    format!("exited with {}", out.status)
+                } else {
+                    err
+                }
+            ))
         }
-        Err(e) => Err(format!("Failed to run pandoc at '{}'. ({}) [{}]", pandoc_program, e, spawn_diagnostic())),
+        Err(e) => Err(format!(
+            "Failed to run pandoc at '{}'. ({}) [{}]",
+            pandoc_program,
+            e,
+            spawn_diagnostic()
+        )),
     };
     let _ = fs::remove_dir_all(&tmp_dir);
     result
 }
 
 #[tauri::command]
-async fn export_docx(markdown_content: String, output_path: String, _app: tauri::AppHandle) -> Result<String, String> {
+async fn export_docx(
+    markdown_content: String,
+    output_path: String,
+    _app: tauri::AppHandle,
+) -> Result<String, String> {
     use std::io::Write;
 
     let (tx, rx) = std::sync::mpsc::channel();
@@ -1141,7 +1387,8 @@ async fn export_docx(markdown_content: String, output_path: String, _app: tauri:
             let tmp_md = tmp_dir.join("export.md");
 
             let mut f = fs::File::create(&tmp_md).map_err(|e| e.to_string())?;
-            f.write_all(markdown_content.as_bytes()).map_err(|e| e.to_string())?;
+            f.write_all(markdown_content.as_bytes())
+                .map_err(|e| e.to_string())?;
 
             let sys_path = std::env::var("PATH").unwrap_or_default();
             let path_env = if cfg!(target_os = "windows") {
@@ -1168,9 +1415,12 @@ async fn export_docx(markdown_content: String, output_path: String, _app: tauri:
             let output = pandoc_command
                 .args([
                     tmp_md.to_str().unwrap(),
-                    "-o", &output_path,
-                    "--from", PANDOC_MARKDOWN_INPUT_FORMAT,
-                    "--to", "docx",
+                    "-o",
+                    &output_path,
+                    "--from",
+                    PANDOC_MARKDOWN_INPUT_FORMAT,
+                    "--to",
+                    "docx",
                 ])
                 .current_dir(&tmp_dir)
                 .env("PATH", &path_env)
@@ -1182,16 +1432,28 @@ async fn export_docx(markdown_content: String, output_path: String, _app: tauri:
                 Ok(out) if out.status.success() && output_file_ready(&output_path) => {
                     style_docx_tables(Path::new(&output_path))?;
                     Ok(output_path.clone())
-                },
+                }
                 Ok(out) if out.status.success() => Err(format!(
                     "pandoc finished, but the output file was not created or is empty: {}",
                     output_path
                 )),
                 Ok(out) => {
                     let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-                    Err(format!("pandoc failed: {}", if err.is_empty() { format!("exited with {}", out.status) } else { err }))
+                    Err(format!(
+                        "pandoc failed: {}",
+                        if err.is_empty() {
+                            format!("exited with {}", out.status)
+                        } else {
+                            err
+                        }
+                    ))
                 }
-                Err(e) => Err(format!("Failed to run pandoc at '{}'. ({}) [{}]", pandoc_program, e, spawn_diagnostic())),
+                Err(e) => Err(format!(
+                    "Failed to run pandoc at '{}'. ({}) [{}]",
+                    pandoc_program,
+                    e,
+                    spawn_diagnostic()
+                )),
             };
             let _ = fs::remove_dir_all(&tmp_dir);
             result
@@ -1207,8 +1469,14 @@ fn duplicate_entry(path: String) -> Result<String, String> {
     if !src.exists() {
         return Err("Source path does not exist".to_string());
     }
-    let stem = src.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-    let ext = src.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let stem = src
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let ext = src
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_default();
     let parent = src.parent().ok_or("Cannot determine parent directory")?;
 
     // Find a unique name with -copy, -copy-2, -copy-3, etc.
@@ -1250,16 +1518,29 @@ fn reveal_in_finder(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "macos")]
     {
-        Command::new("open").arg("-R").arg(&path).spawn().map_err(|e| e.to_string())?;
+        Command::new("open")
+            .arg("-R")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "windows")]
     {
-        Command::new("explorer").arg(format!("/select,{}", &path)).spawn().map_err(|e| e.to_string())?;
+        Command::new("explorer")
+            .arg(format!("/select,{}", &path))
+            .spawn()
+            .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
-        let parent = p.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| path.clone());
-        Command::new("xdg-open").arg(&parent).spawn().map_err(|e| e.to_string())?;
+        let parent = p
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.clone());
+        Command::new("xdg-open")
+            .arg(&parent)
+            .spawn()
+            .map_err(|e| e.to_string())?;
     }
 
     Ok(())
@@ -1277,17 +1558,20 @@ fn load_custom_css() -> Result<String, String> {
 
 #[tauri::command]
 fn create_window(app: tauri::AppHandle, file_path: Option<String>) -> Result<(), String> {
-    let label = format!("kaelio-{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
+    let label = format!(
+        "kaelio-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    );
     let label_clone = label.clone();
 
-    tauri::WebviewWindowBuilder::new(
-        &app, &label, tauri::WebviewUrl::App("index.html".into())
-    )
-    .title("Kaelio")
-    .inner_size(1200.0, 800.0)
-    .build()
-    .map_err(|e| e.to_string())?;
+    tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
+        .title("Kaelio")
+        .inner_size(1200.0, 800.0)
+        .build()
+        .map_err(|e| e.to_string())?;
 
     // If a file path was provided, emit open-file to the new window after it initializes
     if let Some(path) = file_path {
@@ -1313,25 +1597,25 @@ fn watch_file(path: String, window: tauri::Window) -> Result<(), String> {
     let watched_path = PathBuf::from(&path);
     let watched_name = watched_path.file_name().map(|n| n.to_os_string());
     let watcher = RecommendedWatcher::new(
-        move |res: Result<Event, notify::Error>| {
-            match res {
-                Ok(event) => match event.kind {
-                    EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
-                        let dominated = event.paths.iter().any(|p| {
-                            p == &watched_path
-                                || p.file_name().map(|n| n.to_os_string()) == watched_name
-                        });
-                        if dominated {
-                            let _ = window.emit("file-changed", watched_path.to_string_lossy().to_string());
-                        }
+        move |res: Result<Event, notify::Error>| match res {
+            Ok(event) => match event.kind {
+                EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
+                    let dominated = event.paths.iter().any(|p| {
+                        p == &watched_path
+                            || p.file_name().map(|n| n.to_os_string()) == watched_name
+                    });
+                    if dominated {
+                        let _ =
+                            window.emit("file-changed", watched_path.to_string_lossy().to_string());
                     }
-                    _ => {}
-                },
-                Err(e) => eprintln!("[kaelio] file watcher error: {}", e),
-            }
+                }
+                _ => {}
+            },
+            Err(e) => eprintln!("[kaelio] file watcher error: {}", e),
         },
         notify::Config::default(),
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     // Drop old watcher for this window safely
     if let Some(old) = watchers.remove(&label) {
@@ -1341,7 +1625,9 @@ fn watch_file(path: String, window: tauri::Window) -> Result<(), String> {
 
     // Watch the file's parent directory (more reliable than watching the file directly)
     if let Some(parent) = Path::new(&path).parent() {
-        watchers.get_mut(&label).unwrap()
+        watchers
+            .get_mut(&label)
+            .unwrap()
             .watch(parent, RecursiveMode::NonRecursive)
             .map_err(|e| e.to_string())?;
     }
@@ -1371,26 +1657,32 @@ fn watch_folder(path: String, window: tauri::Window) -> Result<(), String> {
             match res {
                 Ok(event) => {
                     // Ignore changes inside .git directory
-                    let dominated_by_git = event.paths.iter().any(|p| {
-                        p.components().any(|c| c.as_os_str() == ".git")
-                    });
-                    if dominated_by_git { return; }
+                    let dominated_by_git = event
+                        .paths
+                        .iter()
+                        .any(|p| p.components().any(|c| c.as_os_str() == ".git"));
+                    if dominated_by_git {
+                        return;
+                    }
                     if !matches!(event.kind, EventKind::Access(_)) {
                         let _ = window.emit("folder-changed", ());
                     }
-                },
+                }
                 Err(e) => eprintln!("[kaelio] folder watcher error: {}", e),
             }
         },
         notify::Config::default(),
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     if let Some(old) = watchers.remove(&label) {
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || drop(old)));
     }
     watchers.insert(label.clone(), watcher);
 
-    watchers.get_mut(&label).unwrap()
+    watchers
+        .get_mut(&label)
+        .unwrap()
         .watch(Path::new(&path), RecursiveMode::Recursive)
         .map_err(|e| e.to_string())?;
 
@@ -1413,27 +1705,38 @@ fn unwatch_folder(window: tauri::Window) -> Result<(), String> {
 /// Try system git credential helpers (works with macOS Keychain, Windows Credential Manager,
 /// gh auth, Git Credential Manager, etc.) for HTTPS URLs.
 fn try_git_credential_fill(url: &str) -> Option<(String, String)> {
-    let input = format!("protocol=https\nhost={}\n\n",
+    let input = format!(
+        "protocol=https\nhost={}\n\n",
         url.trim_start_matches("https://")
-           .trim_start_matches("http://")
-           .split('/').next().unwrap_or("github.com"));
+            .trim_start_matches("http://")
+            .split('/')
+            .next()
+            .unwrap_or("github.com")
+    );
     let child = std::process::Command::new("git")
         .args(["credential", "fill"])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
-        .spawn().ok()?;
+        .spawn()
+        .ok()?;
     use std::io::Write;
     let mut child = child;
     child.stdin.take()?.write_all(input.as_bytes()).ok()?;
     let output = child.wait_with_output().ok()?;
-    if !output.status.success() { return None; }
+    if !output.status.success() {
+        return None;
+    }
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut user = None;
     let mut pass = None;
     for line in stdout.lines() {
-        if let Some(v) = line.strip_prefix("username=") { user = Some(v.to_string()); }
-        if let Some(v) = line.strip_prefix("password=") { pass = Some(v.to_string()); }
+        if let Some(v) = line.strip_prefix("username=") {
+            user = Some(v.to_string());
+        }
+        if let Some(v) = line.strip_prefix("password=") {
+            pass = Some(v.to_string());
+        }
     }
     match (user, pass) {
         (Some(u), Some(p)) => Some((u, p)),
@@ -1461,7 +1764,11 @@ fn git_cred_callback(
             let key_path = ssh_dir.join(key_name);
             if key_path.exists() {
                 let pub_path = ssh_dir.join(format!("{}.pub", key_name));
-                let pub_key = if pub_path.exists() { Some(pub_path.as_path()) } else { None };
+                let pub_key = if pub_path.exists() {
+                    Some(pub_path.as_path())
+                } else {
+                    None
+                };
                 if let Ok(cred) = Cred::ssh_key(user, pub_key, &key_path, None) {
                     return Ok(cred);
                 }
@@ -1480,39 +1787,55 @@ fn git_cred_callback(
     if allowed.contains(CredentialType::DEFAULT) {
         return Cred::default();
     }
-    Err(git2::Error::from_str("Could not connect. Make sure you're signed in to GitHub (try: gh auth login or add an SSH key)."))
+    Err(git2::Error::from_str(
+        "Could not connect. Make sure you're signed in to GitHub (try: gh auth login or add an SSH key).",
+    ))
 }
 
 #[tauri::command]
 fn git_repo_info(folder_path: String) -> Result<GitRepoInfo, String> {
     let repo = match Repository::discover(&folder_path) {
         Ok(r) => r,
-        Err(_) => return Ok(GitRepoInfo {
-            is_repo: false,
-            branch: String::new(),
-            remote_url: None,
-            ahead: 0,
-            behind: 0,
-        }),
+        Err(_) => {
+            return Ok(GitRepoInfo {
+                is_repo: false,
+                branch: String::new(),
+                remote_url: None,
+                ahead: 0,
+                behind: 0,
+            });
+        }
     };
-    let branch = repo.head()
+    let branch = repo
+        .head()
         .ok()
         .and_then(|h| h.shorthand().map(|s| s.to_string()))
         .unwrap_or_else(|| "HEAD".to_string());
 
-    let remote_url = repo.find_remote("origin")
+    let remote_url = repo
+        .find_remote("origin")
         .ok()
         .and_then(|r| r.url().map(|u| u.to_string()));
 
     let (ahead, behind) = (|| -> Result<(usize, usize), git2::Error> {
-        let head = repo.head()?.target().ok_or_else(|| git2::Error::from_str("no HEAD"))?;
+        let head = repo
+            .head()?
+            .target()
+            .ok_or_else(|| git2::Error::from_str("no HEAD"))?;
         let branch_name = repo.head()?.shorthand().unwrap_or("main").to_string();
         let upstream_name = format!("refs/remotes/origin/{}", branch_name);
         let upstream = repo.refname_to_id(&upstream_name)?;
         Ok(repo.graph_ahead_behind(head, upstream)?)
-    })().unwrap_or((0, 0));
+    })()
+    .unwrap_or((0, 0));
 
-    Ok(GitRepoInfo { is_repo: true, branch, remote_url, ahead, behind })
+    Ok(GitRepoInfo {
+        is_repo: true,
+        branch,
+        remote_url,
+        ahead,
+        behind,
+    })
 }
 
 #[tauri::command]
@@ -1529,8 +1852,15 @@ fn git_status(folder_path: String) -> Result<Vec<GitFileStatus>, String> {
         let s = entry.status();
         let status = if s.contains(git2::Status::CONFLICTED) {
             "conflict"
-        } else if s.contains(git2::Status::INDEX_NEW) || s.contains(git2::Status::INDEX_MODIFIED) || s.contains(git2::Status::INDEX_DELETED) {
-            if s.contains(git2::Status::WT_MODIFIED) { "staged_modified" } else { "staged" }
+        } else if s.contains(git2::Status::INDEX_NEW)
+            || s.contains(git2::Status::INDEX_MODIFIED)
+            || s.contains(git2::Status::INDEX_DELETED)
+        {
+            if s.contains(git2::Status::WT_MODIFIED) {
+                "staged_modified"
+            } else {
+                "staged"
+            }
         } else if s.contains(git2::Status::WT_NEW) {
             "new"
         } else if s.contains(git2::Status::WT_MODIFIED) {
@@ -1540,7 +1870,10 @@ fn git_status(folder_path: String) -> Result<Vec<GitFileStatus>, String> {
         } else {
             continue;
         };
-        result.push(GitFileStatus { path, status: status.to_string() });
+        result.push(GitFileStatus {
+            path,
+            status: status.to_string(),
+        });
     }
     Ok(result)
 }
@@ -1560,7 +1893,8 @@ fn git_diff_file(folder_path: String, file_path: String) -> Result<GitDiffResult
         let entry = head.get_path(&rel_path)?;
         let blob = repo.find_blob(entry.id())?;
         Ok(String::from_utf8_lossy(blob.content()).to_string())
-    })().unwrap_or_default();
+    })()
+    .unwrap_or_default();
 
     // Get new content from workdir
     let abs_path = workdir.join(&rel_path);
@@ -1570,10 +1904,9 @@ fn git_diff_file(folder_path: String, file_path: String) -> Result<GitDiffResult
     let mut diff_opts = git2::DiffOptions::new();
     diff_opts.pathspec(&rel_path);
     let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
-    let diff = repo.diff_tree_to_workdir_with_index(
-        head_tree.as_ref(),
-        Some(&mut diff_opts),
-    ).map_err(|e| e.to_string())?;
+    let diff = repo
+        .diff_tree_to_workdir_with_index(head_tree.as_ref(), Some(&mut diff_opts))
+        .map_err(|e| e.to_string())?;
     let mut patch = String::new();
     diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
         let origin = line.origin();
@@ -1582,29 +1915,43 @@ fn git_diff_file(folder_path: String, file_path: String) -> Result<GitDiffResult
         }
         patch.push_str(&String::from_utf8_lossy(line.content()));
         true
-    }).map_err(|e| e.to_string())?;
+    })
+    .map_err(|e| e.to_string())?;
 
-    Ok(GitDiffResult { old_content, new_content, patch })
+    Ok(GitDiffResult {
+        old_content,
+        new_content,
+        patch,
+    })
 }
 
 #[tauri::command]
-fn git_log(folder_path: String, file_path: Option<String>, limit: usize) -> Result<Vec<GitLogEntry>, String> {
+fn git_log(
+    folder_path: String,
+    file_path: Option<String>,
+    limit: usize,
+) -> Result<Vec<GitLogEntry>, String> {
     let repo = Repository::discover(&folder_path).map_err(|e| e.to_string())?;
     let workdir = repo.workdir().ok_or("No workdir")?.to_path_buf();
     let mut revwalk = repo.revwalk().map_err(|e| e.to_string())?;
     revwalk.push_head().map_err(|e| e.to_string())?;
-    revwalk.set_sorting(git2::Sort::TIME).map_err(|e| e.to_string())?;
+    revwalk
+        .set_sorting(git2::Sort::TIME)
+        .map_err(|e| e.to_string())?;
 
     let rel_path = file_path.as_ref().map(|fp| {
         let fp_path = PathBuf::from(fp);
-        fp_path.strip_prefix(&workdir)
+        fp_path
+            .strip_prefix(&workdir)
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|_| PathBuf::from(fp))
     });
 
     let mut entries = Vec::new();
     for oid in revwalk {
-        if entries.len() >= limit { break; }
+        if entries.len() >= limit {
+            break;
+        }
         let oid = oid.map_err(|e| e.to_string())?;
         let commit = repo.find_commit(oid).map_err(|e| e.to_string())?;
 
@@ -1615,17 +1962,26 @@ fn git_log(folder_path: String, file_path: Option<String>, limit: usize) -> Resu
                 let parent_tree = commit.parent(0).ok().and_then(|p| p.tree().ok());
                 let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None)?;
                 Ok(diff.deltas().any(|d| {
-                    d.new_file().path() == Some(rp.as_path()) || d.old_file().path() == Some(rp.as_path())
+                    d.new_file().path() == Some(rp.as_path())
+                        || d.old_file().path() == Some(rp.as_path())
                 }))
-            })().unwrap_or(false);
-            if !dominated { continue; }
+            })()
+            .unwrap_or(false);
+            if !dominated {
+                continue;
+            }
         }
 
         let id = format!("{}", &oid.to_string()[..7]);
         let message = commit.message().unwrap_or("").trim().to_string();
         let author = commit.author().name().unwrap_or("").to_string();
         let timestamp = commit.time().seconds();
-        entries.push(GitLogEntry { id, message, author, timestamp });
+        entries.push(GitLogEntry {
+            id,
+            message,
+            author,
+            timestamp,
+        });
     }
     Ok(entries)
 }
@@ -1638,7 +1994,8 @@ fn git_commit(folder_path: String, files: Vec<String>, message: String) -> Resul
 
     if files.is_empty() {
         // Stage all modified/new files
-        index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
+        index
+            .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
             .map_err(|e| e.to_string())?;
     } else {
         for file in &files {
@@ -1653,13 +2010,15 @@ fn git_commit(folder_path: String, files: Vec<String>, message: String) -> Resul
 
     let tree_oid = index.write_tree().map_err(|e| e.to_string())?;
     let tree = repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
-    let sig = repo.signature()
+    let sig = repo
+        .signature()
         .or_else(|_| Signature::now("Kaelio", "kaelio@localhost"))
         .map_err(|e| e.to_string())?;
     let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
     let parents: Vec<&git2::Commit> = parent.as_ref().map(|p| vec![p]).unwrap_or_default();
 
-    let oid = repo.commit(Some("HEAD"), &sig, &sig, &message, &tree, &parents)
+    let oid = repo
+        .commit(Some("HEAD"), &sig, &sig, &message, &tree, &parents)
         .map_err(|e| e.to_string())?;
     Ok(oid.to_string())
 }
@@ -1667,22 +2026,30 @@ fn git_commit(folder_path: String, files: Vec<String>, message: String) -> Resul
 #[tauri::command]
 fn git_push(folder_path: String) -> Result<String, String> {
     let repo = Repository::discover(&folder_path).map_err(|e| e.to_string())?;
-    let branch = repo.head().map_err(|e| e.to_string())?
-        .shorthand().unwrap_or("main").to_string();
+    let branch = repo
+        .head()
+        .map_err(|e| e.to_string())?
+        .shorthand()
+        .unwrap_or("main")
+        .to_string();
     let mut remote = repo.find_remote("origin").map_err(|e| e.to_string())?;
     let mut callbacks = git2::RemoteCallbacks::new();
     callbacks.credentials(|url, username, allowed| git_cred_callback(url, username, allowed));
     let mut push_opts = git2::PushOptions::new();
     push_opts.remote_callbacks(callbacks);
     let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
-    remote.push(&[&refspec], Some(&mut push_opts)).map_err(|e| e.to_string())?;
+    remote
+        .push(&[&refspec], Some(&mut push_opts))
+        .map_err(|e| e.to_string())?;
     Ok(format!("Pushed to origin/{}", branch))
 }
 
 #[tauri::command]
 fn git_pull(folder_path: String) -> Result<GitSyncResult, String> {
     let repo = Repository::discover(&folder_path).map_err(|e| e.to_string())?;
-    let branch_name = repo.head().ok()
+    let branch_name = repo
+        .head()
+        .ok()
         .and_then(|h| h.shorthand().map(|s| s.to_string()))
         .unwrap_or_else(|| "main".to_string());
 
@@ -1692,17 +2059,27 @@ fn git_pull(folder_path: String) -> Result<GitSyncResult, String> {
     callbacks.credentials(|url, username, allowed| git_cred_callback(url, username, allowed));
     let mut fetch_opts = git2::FetchOptions::new();
     fetch_opts.remote_callbacks(callbacks);
-    remote.fetch(&[&branch_name], Some(&mut fetch_opts), None).map_err(|e| e.to_string())?;
+    remote
+        .fetch(&[&branch_name], Some(&mut fetch_opts), None)
+        .map_err(|e| e.to_string())?;
     drop(remote);
 
     // Merge (fast-forward preferred)
-    let fetch_head = repo.find_reference("FETCH_HEAD").map_err(|e| e.to_string())?;
-    let fetch_commit = repo.reference_to_annotated_commit(&fetch_head).map_err(|e| e.to_string())?;
-    let (analysis, _) = repo.merge_analysis(&[&fetch_commit]).map_err(|e| e.to_string())?;
+    let fetch_head = repo
+        .find_reference("FETCH_HEAD")
+        .map_err(|e| e.to_string())?;
+    let fetch_commit = repo
+        .reference_to_annotated_commit(&fetch_head)
+        .map_err(|e| e.to_string())?;
+    let (analysis, _) = repo
+        .merge_analysis(&[&fetch_commit])
+        .map_err(|e| e.to_string())?;
 
     if analysis.is_up_to_date() {
         return Ok(GitSyncResult {
-            committed: false, pushed: false, pulled: true,
+            committed: false,
+            pushed: false,
+            pulled: true,
             message: "Already up to date".to_string(),
             conflicts: vec![],
         });
@@ -1711,27 +2088,36 @@ fn git_pull(folder_path: String) -> Result<GitSyncResult, String> {
     if analysis.is_fast_forward() {
         let refname = format!("refs/heads/{}", branch_name);
         let mut reference = repo.find_reference(&refname).map_err(|e| e.to_string())?;
-        reference.set_target(fetch_commit.id(), "fast-forward pull").map_err(|e| e.to_string())?;
+        reference
+            .set_target(fetch_commit.id(), "fast-forward pull")
+            .map_err(|e| e.to_string())?;
         repo.set_head(&refname).map_err(|e| e.to_string())?;
         repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
             .map_err(|e| e.to_string())?;
         return Ok(GitSyncResult {
-            committed: false, pushed: false, pulled: true,
+            committed: false,
+            pushed: false,
+            pulled: true,
             message: "Fast-forward pull".to_string(),
             conflicts: vec![],
         });
     }
 
     // Normal merge
-    repo.merge(&[&fetch_commit], None, None).map_err(|e| e.to_string())?;
+    repo.merge(&[&fetch_commit], None, None)
+        .map_err(|e| e.to_string())?;
     let index = repo.index().map_err(|e| e.to_string())?;
     if index.has_conflicts() {
-        let conflicts: Vec<String> = index.conflicts().map_err(|e| e.to_string())?
+        let conflicts: Vec<String> = index
+            .conflicts()
+            .map_err(|e| e.to_string())?
             .filter_map(|c| c.ok())
             .filter_map(|c| c.our.map(|e| String::from_utf8_lossy(&e.path).to_string()))
             .collect();
         return Ok(GitSyncResult {
-            committed: false, pushed: false, pulled: true,
+            committed: false,
+            pushed: false,
+            pulled: true,
             message: format!("Conflicts in {} files", conflicts.len()),
             conflicts,
         });
@@ -1741,18 +2127,33 @@ fn git_pull(folder_path: String) -> Result<GitSyncResult, String> {
     let mut index = repo.index().map_err(|e| e.to_string())?;
     let tree_oid = index.write_tree().map_err(|e| e.to_string())?;
     let tree = repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
-    let sig = repo.signature()
+    let sig = repo
+        .signature()
         .or_else(|_| Signature::now("Kaelio", "kaelio@localhost"))
         .map_err(|e| e.to_string())?;
-    let head_commit = repo.head().map_err(|e| e.to_string())?
-        .peel_to_commit().map_err(|e| e.to_string())?;
-    let fetch_commit_obj = repo.find_commit(fetch_commit.id()).map_err(|e| e.to_string())?;
-    repo.commit(Some("HEAD"), &sig, &sig, "Merge remote changes", &tree, &[&head_commit, &fetch_commit_obj])
+    let head_commit = repo
+        .head()
+        .map_err(|e| e.to_string())?
+        .peel_to_commit()
         .map_err(|e| e.to_string())?;
+    let fetch_commit_obj = repo
+        .find_commit(fetch_commit.id())
+        .map_err(|e| e.to_string())?;
+    repo.commit(
+        Some("HEAD"),
+        &sig,
+        &sig,
+        "Merge remote changes",
+        &tree,
+        &[&head_commit, &fetch_commit_obj],
+    )
+    .map_err(|e| e.to_string())?;
     repo.cleanup_state().map_err(|e| e.to_string())?;
 
     Ok(GitSyncResult {
-        committed: true, pushed: false, pulled: true,
+        committed: true,
+        pushed: false,
+        pulled: true,
         message: "Merged remote changes".to_string(),
         conflicts: vec![],
     })
@@ -1766,7 +2167,8 @@ fn git_auto_sync(folder_path: String, file_path: String) -> Result<GitSyncResult
         .strip_prefix(&workdir)
         .unwrap_or(Path::new(&file_path))
         .to_path_buf();
-    let filename = rel_path.file_name()
+    let filename = rel_path
+        .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "file".to_string());
 
@@ -1777,11 +2179,14 @@ fn git_auto_sync(folder_path: String, file_path: String) -> Result<GitSyncResult
 
     // Check if there are actually staged changes
     let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
-    let diff = repo.diff_tree_to_index(head_tree.as_ref(), Some(&index), None)
+    let diff = repo
+        .diff_tree_to_index(head_tree.as_ref(), Some(&index), None)
         .map_err(|e| e.to_string())?;
     if diff.deltas().count() == 0 {
         return Ok(GitSyncResult {
-            committed: false, pushed: false, pulled: false,
+            committed: false,
+            pushed: false,
+            pulled: false,
             message: "No changes to commit".to_string(),
             conflicts: vec![],
         });
@@ -1790,7 +2195,8 @@ fn git_auto_sync(folder_path: String, file_path: String) -> Result<GitSyncResult
     // Commit
     let tree_oid = index.write_tree().map_err(|e| e.to_string())?;
     let tree = repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
-    let sig = repo.signature()
+    let sig = repo
+        .signature()
         .or_else(|_| Signature::now("Kaelio", "kaelio@localhost"))
         .map_err(|e| e.to_string())?;
     let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
@@ -1801,17 +2207,24 @@ fn git_auto_sync(folder_path: String, file_path: String) -> Result<GitSyncResult
 
     // Try to push (non-fatal if fails)
     let pushed = (|| -> Result<bool, String> {
-        let branch = repo.head().map_err(|e| e.to_string())?
-            .shorthand().unwrap_or("main").to_string();
+        let branch = repo
+            .head()
+            .map_err(|e| e.to_string())?
+            .shorthand()
+            .unwrap_or("main")
+            .to_string();
         let mut remote = repo.find_remote("origin").map_err(|e| e.to_string())?;
         let mut callbacks = git2::RemoteCallbacks::new();
         callbacks.credentials(|url, username, allowed| git_cred_callback(url, username, allowed));
         let mut push_opts = git2::PushOptions::new();
         push_opts.remote_callbacks(callbacks);
         let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
-        remote.push(&[&refspec], Some(&mut push_opts)).map_err(|e| e.to_string())?;
+        remote
+            .push(&[&refspec], Some(&mut push_opts))
+            .map_err(|e| e.to_string())?;
         Ok(true)
-    })().unwrap_or(false);
+    })()
+    .unwrap_or(false);
 
     let msg = if pushed {
         format!("Synced: {}", message)
@@ -1820,7 +2233,9 @@ fn git_auto_sync(folder_path: String, file_path: String) -> Result<GitSyncResult
     };
 
     Ok(GitSyncResult {
-        committed: true, pushed, pulled: false,
+        committed: true,
+        pushed,
+        pulled: false,
         message: msg,
         conflicts: vec![],
     })
@@ -1845,8 +2260,11 @@ fn git_setup_sync(folder_path: String, remote_url: String) -> Result<GitRepoInfo
     // Create .gitignore if it doesn't exist
     let gitignore_path = workdir.join(".gitignore");
     if !gitignore_path.exists() {
-        fs::write(&gitignore_path, ".DS_Store\nThumbs.db\nnode_modules/\n.mx/\n")
-            .map_err(|e| e.to_string())?;
+        fs::write(
+            &gitignore_path,
+            ".DS_Store\nThumbs.db\nnode_modules/\n.mx/\n",
+        )
+        .map_err(|e| e.to_string())?;
     }
 
     // Set or update remote
@@ -1854,21 +2272,25 @@ fn git_setup_sync(folder_path: String, remote_url: String) -> Result<GitRepoInfo
         let current_url = remote.url().unwrap_or("").to_string();
         if current_url != remote_url {
             drop(remote);
-            repo.remote_set_url("origin", &remote_url).map_err(|e| e.to_string())?;
+            repo.remote_set_url("origin", &remote_url)
+                .map_err(|e| e.to_string())?;
         }
     } else {
-        repo.remote("origin", &remote_url).map_err(|e| e.to_string())?;
+        repo.remote("origin", &remote_url)
+            .map_err(|e| e.to_string())?;
     }
 
     // Initial commit if repo is empty (no HEAD)
     if repo.head().is_err() {
         let mut index = repo.index().map_err(|e| e.to_string())?;
-        index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
+        index
+            .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
             .map_err(|e| e.to_string())?;
         index.write().map_err(|e| e.to_string())?;
         let tree_oid = index.write_tree().map_err(|e| e.to_string())?;
         let tree = repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
-        let sig = repo.signature()
+        let sig = repo
+            .signature()
             .or_else(|_| Signature::now("Kaelio", "kaelio@localhost"))
             .map_err(|e| e.to_string())?;
         repo.commit(Some("HEAD"), &sig, &sig, "Initial sync", &tree, &[])
@@ -1877,15 +2299,21 @@ fn git_setup_sync(folder_path: String, remote_url: String) -> Result<GitRepoInfo
 
     // Try initial push to set up tracking
     let _ = (|| -> Result<(), String> {
-        let branch = repo.head().map_err(|e| e.to_string())?
-            .shorthand().unwrap_or("main").to_string();
+        let branch = repo
+            .head()
+            .map_err(|e| e.to_string())?
+            .shorthand()
+            .unwrap_or("main")
+            .to_string();
         let mut remote = repo.find_remote("origin").map_err(|e| e.to_string())?;
         let mut callbacks = git2::RemoteCallbacks::new();
         callbacks.credentials(|url, username, allowed| git_cred_callback(url, username, allowed));
         let mut push_opts = git2::PushOptions::new();
         push_opts.remote_callbacks(callbacks);
         let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
-        remote.push(&[&refspec], Some(&mut push_opts)).map_err(|e| e.to_string())?;
+        remote
+            .push(&[&refspec], Some(&mut push_opts))
+            .map_err(|e| e.to_string())?;
         Ok(())
     })();
 
@@ -1898,13 +2326,17 @@ fn git_setup_sync(folder_path: String, remote_url: String) -> Result<GitRepoInfo
 fn git_check_auth(remote_url: String) -> Result<bool, String> {
     // For SSH URLs, check if agent or key files exist
     if remote_url.starts_with("git@") || remote_url.contains("ssh://") {
-        if Cred::ssh_key_from_agent("git").is_ok() { return Ok(true); }
+        if Cred::ssh_key_from_agent("git").is_ok() {
+            return Ok(true);
+        }
         let home = std::env::var("HOME")
             .or_else(|_| std::env::var("USERPROFILE"))
             .unwrap_or_default();
         let ssh_dir = PathBuf::from(&home).join(".ssh");
         for key in &["id_ed25519", "id_rsa"] {
-            if ssh_dir.join(key).exists() { return Ok(true); }
+            if ssh_dir.join(key).exists() {
+                return Ok(true);
+            }
         }
         return Ok(false);
     }
@@ -1922,7 +2354,8 @@ fn git_discard_file(folder_path: String, file_path: String) -> Result<(), String
         .to_path_buf();
     let mut checkout = git2::build::CheckoutBuilder::new();
     checkout.path(&rel_path).force();
-    repo.checkout_head(Some(&mut checkout)).map_err(|e| e.to_string())?;
+    repo.checkout_head(Some(&mut checkout))
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1942,7 +2375,11 @@ fn git_stage_file(folder_path: String, file_path: String) -> Result<(), String> 
 
 /// Get content of a file at a specific commit
 #[tauri::command]
-fn git_file_at_commit(folder_path: String, file_path: String, commit_id: String) -> Result<String, String> {
+fn git_file_at_commit(
+    folder_path: String,
+    file_path: String,
+    commit_id: String,
+) -> Result<String, String> {
     let repo = Repository::discover(&folder_path).map_err(|e| e.to_string())?;
     let workdir = repo.workdir().ok_or("No workdir")?.to_path_buf();
     let rel_path = PathBuf::from(&file_path)
@@ -1952,14 +2389,20 @@ fn git_file_at_commit(folder_path: String, file_path: String, commit_id: String)
     let oid = git2::Oid::from_str(&commit_id).map_err(|e| e.to_string())?;
     let commit = repo.find_commit(oid).map_err(|e| e.to_string())?;
     let tree = commit.tree().map_err(|e| e.to_string())?;
-    let entry = tree.get_path(&rel_path).map_err(|_| "File not found in this version".to_string())?;
+    let entry = tree
+        .get_path(&rel_path)
+        .map_err(|_| "File not found in this version".to_string())?;
     let blob = repo.find_blob(entry.id()).map_err(|e| e.to_string())?;
     Ok(String::from_utf8_lossy(blob.content()).to_string())
 }
 
 /// Restore a file to its state at a specific commit
 #[tauri::command]
-fn git_restore_file(folder_path: String, file_path: String, commit_id: String) -> Result<(), String> {
+fn git_restore_file(
+    folder_path: String,
+    file_path: String,
+    commit_id: String,
+) -> Result<(), String> {
     let content = git_file_at_commit(folder_path, file_path.clone(), commit_id)?;
     fs::write(&file_path, &content).map_err(|e| e.to_string())?;
     Ok(())
@@ -1982,12 +2425,16 @@ fn git_conflict_info(folder_path: String, file_path: String) -> Result<GitConfli
 
     for conflict in index.conflicts().map_err(|e| e.to_string())? {
         let conflict = conflict.map_err(|e| e.to_string())?;
-        let conflict_path = conflict.our.as_ref()
+        let conflict_path = conflict
+            .our
+            .as_ref()
             .or(conflict.their.as_ref())
             .or(conflict.ancestor.as_ref())
             .map(|e| String::from_utf8_lossy(&e.path).to_string())
             .unwrap_or_default();
-        if conflict_path != rel_path_str { continue; }
+        if conflict_path != rel_path_str {
+            continue;
+        }
 
         if let Some(entry) = conflict.ancestor {
             if let Ok(blob) = repo.find_blob(entry.id) {
@@ -2014,12 +2461,21 @@ fn git_conflict_info(folder_path: String, file_path: String) -> Result<GitConfli
         remote = local.clone();
     }
 
-    Ok(GitConflictInfo { path: rel_path_str, local_content: local, remote_content: remote, base_content: base })
+    Ok(GitConflictInfo {
+        path: rel_path_str,
+        local_content: local,
+        remote_content: remote,
+        base_content: base,
+    })
 }
 
 /// Resolve a conflict by writing chosen content and staging the file
 #[tauri::command]
-fn git_resolve_conflict(folder_path: String, file_path: String, content: String) -> Result<(), String> {
+fn git_resolve_conflict(
+    folder_path: String,
+    file_path: String,
+    content: String,
+) -> Result<(), String> {
     fs::write(&file_path, &content).map_err(|e| e.to_string())?;
     git_stage_file(folder_path, file_path)
 }
@@ -2041,7 +2497,8 @@ fn save_snapshot(file_path: String, content: String) -> Result<(), String> {
 
     // Cleanup old snapshots for this file (keep last 50)
     let prefix = format!("{}_", hash);
-    let mut snaps: Vec<_> = fs::read_dir(&snap_dir).map_err(|e| e.to_string())?
+    let mut snaps: Vec<_> = fs::read_dir(&snap_dir)
+        .map_err(|e| e.to_string())?
         .filter_map(|e| e.ok())
         .filter(|e| e.file_name().to_string_lossy().starts_with(&prefix))
         .collect();
@@ -2073,10 +2530,13 @@ struct SnapshotInfo {
 #[tauri::command]
 fn list_snapshots(file_path: String) -> Result<Vec<SnapshotInfo>, String> {
     let snap_dir = kaelio_home()?.join("snapshots");
-    if !snap_dir.exists() { return Ok(vec![]); }
+    if !snap_dir.exists() {
+        return Ok(vec![]);
+    }
     let hash = format!("{:x}", md5_simple(&file_path));
     let prefix = format!("{}_", hash);
-    let mut results: Vec<SnapshotInfo> = fs::read_dir(&snap_dir).map_err(|e| e.to_string())?
+    let mut results: Vec<SnapshotInfo> = fs::read_dir(&snap_dir)
+        .map_err(|e| e.to_string())?
         .filter_map(|e| e.ok())
         .filter(|e| e.file_name().to_string_lossy().starts_with(&prefix))
         .filter_map(|e| {
@@ -2130,159 +2590,403 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .menu(|handle| {
-            let app_menu = Submenu::with_items(handle, "Kaelio", true, &[
-                &PredefinedMenuItem::about(handle, Some("About Kaelio"), None)?,
-                &PredefinedMenuItem::separator(handle)?,
-                &PredefinedMenuItem::hide(handle, Some("Hide Kaelio"))?,
-                &PredefinedMenuItem::hide_others(handle, Some("Hide Others"))?,
-                &PredefinedMenuItem::show_all(handle, Some("Show All"))?,
-                &PredefinedMenuItem::separator(handle)?,
-                &PredefinedMenuItem::quit(handle, Some("Quit Kaelio"))?,
-            ])?;
+            let app_menu = Submenu::with_items(
+                handle,
+                "Kaelio",
+                true,
+                &[
+                    &PredefinedMenuItem::about(handle, Some("About Kaelio"), None)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &PredefinedMenuItem::hide(handle, Some("Hide Kaelio"))?,
+                    &PredefinedMenuItem::hide_others(handle, Some("Hide Others"))?,
+                    &PredefinedMenuItem::show_all(handle, Some("Show All"))?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &PredefinedMenuItem::quit(handle, Some("Quit Kaelio"))?,
+                ],
+            )?;
 
-            let export_html_menu = Submenu::with_items(handle, "HTML", true, &[
-                &MenuItem::with_id(handle, "export.html.png", "PNG...", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "export.html.jpg", "JPG...", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "export.html.pdf", "PDF...", true, None::<&str>)?,
-            ])?;
+            let export_html_menu = Submenu::with_items(
+                handle,
+                "HTML",
+                true,
+                &[
+                    &MenuItem::with_id(handle, "export.html.png", "PNG...", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "export.html.jpg", "JPG...", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "export.html.pdf", "PDF...", true, None::<&str>)?,
+                ],
+            )?;
 
-            let export_markdown_menu = Submenu::with_items(handle, "Markdown", true, &[
-                &MenuItem::with_id(handle, "export.md.pdf", "PDF...", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "export.md.docx", "DOCX...", true, None::<&str>)?,
-            ])?;
+            let export_markdown_menu = Submenu::with_items(
+                handle,
+                "Markdown",
+                true,
+                &[
+                    &MenuItem::with_id(handle, "export.md.pdf", "PDF...", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "export.md.docx", "DOCX...", true, None::<&str>)?,
+                ],
+            )?;
 
-            let export_menu = Submenu::with_items(handle, "Export", true, &[
-                &export_html_menu,
-                &export_markdown_menu,
-            ])?;
+            let export_menu = Submenu::with_items(
+                handle,
+                "Export",
+                true,
+                &[&export_html_menu, &export_markdown_menu],
+            )?;
 
-            let file_menu = Submenu::with_items(handle, "File", true, &[
-                &MenuItem::with_id(handle, "file.new", "New File", true, Some("CmdOrCtrl+N"))?,
-                &MenuItem::with_id(handle, "file.open", "Open File...", true, Some("CmdOrCtrl+O"))?,
-                &MenuItem::with_id(handle, "file.open-folder", "Open Folder...", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "file.new-window", "New Window", true, Some("CmdOrCtrl+Shift+N"))?,
-                &PredefinedMenuItem::separator(handle)?,
-                &MenuItem::with_id(handle, "file.save", "Save", true, Some("CmdOrCtrl+S"))?,
-                &MenuItem::with_id(handle, "file.close-tab", "Close Tab", true, Some("CmdOrCtrl+W"))?,
-                &PredefinedMenuItem::separator(handle)?,
-                &export_menu,
-            ])?;
+            let file_menu = Submenu::with_items(
+                handle,
+                "File",
+                true,
+                &[
+                    &MenuItem::with_id(handle, "file.new", "New File", true, Some("CmdOrCtrl+N"))?,
+                    &MenuItem::with_id(
+                        handle,
+                        "file.open",
+                        "Open File...",
+                        true,
+                        Some("CmdOrCtrl+O"),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "file.open-folder",
+                        "Open Folder...",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "file.new-window",
+                        "New Window",
+                        true,
+                        Some("CmdOrCtrl+Shift+N"),
+                    )?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &MenuItem::with_id(handle, "file.save", "Save", true, Some("CmdOrCtrl+S"))?,
+                    &MenuItem::with_id(
+                        handle,
+                        "file.close-tab",
+                        "Close Tab",
+                        true,
+                        Some("CmdOrCtrl+W"),
+                    )?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &export_menu,
+                ],
+            )?;
 
-            let edit_menu = Submenu::with_items(handle, "Edit", true, &[
-                &PredefinedMenuItem::undo(handle, None)?,
-                &PredefinedMenuItem::redo(handle, None)?,
-                &PredefinedMenuItem::separator(handle)?,
-                &PredefinedMenuItem::cut(handle, None)?,
-                &PredefinedMenuItem::copy(handle, None)?,
-                &PredefinedMenuItem::paste(handle, None)?,
-                &PredefinedMenuItem::select_all(handle, None)?,
-                &PredefinedMenuItem::separator(handle)?,
-                &MenuItem::with_id(handle, "edit.copy-formatted", "Copy Formatted HTML", true, Some("CmdOrCtrl+Shift+C"))?,
-                &MenuItem::with_id(handle, "edit.copy-raw", "Copy Raw Markdown", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "edit.copy-plain", "Copy Plain Text", true, None::<&str>)?,
-            ])?;
+            let edit_menu = Submenu::with_items(
+                handle,
+                "Edit",
+                true,
+                &[
+                    &PredefinedMenuItem::undo(handle, None)?,
+                    &PredefinedMenuItem::redo(handle, None)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &PredefinedMenuItem::cut(handle, None)?,
+                    &PredefinedMenuItem::copy(handle, None)?,
+                    &PredefinedMenuItem::paste(handle, None)?,
+                    &PredefinedMenuItem::select_all(handle, None)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &MenuItem::with_id(
+                        handle,
+                        "edit.copy-formatted",
+                        "Copy Formatted HTML",
+                        true,
+                        Some("CmdOrCtrl+Shift+C"),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "edit.copy-raw",
+                        "Copy Raw Markdown",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "edit.copy-plain",
+                        "Copy Plain Text",
+                        true,
+                        None::<&str>,
+                    )?,
+                ],
+            )?;
 
-            let font_menu = Submenu::with_items(handle, "Font", true, &[
-                &MenuItem::with_id(handle, "font.system", "System", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "font.inter", "Inter", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "font.georgia", "Georgia", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "font.merriweather", "Merriweather", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "font.jetbrains-mono", "JetBrains Mono", true, None::<&str>)?,
-                &PredefinedMenuItem::separator(handle)?,
-                &MenuItem::with_id(handle, "font.custom", "Custom...", true, None::<&str>)?,
-            ])?;
+            let font_menu = Submenu::with_items(
+                handle,
+                "Font",
+                true,
+                &[
+                    &MenuItem::with_id(handle, "font.system", "System", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "font.inter", "Inter", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "font.georgia", "Georgia", true, None::<&str>)?,
+                    &MenuItem::with_id(
+                        handle,
+                        "font.merriweather",
+                        "Merriweather",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "font.jetbrains-mono",
+                        "JetBrains Mono",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &MenuItem::with_id(handle, "font.custom", "Custom...", true, None::<&str>)?,
+                ],
+            )?;
 
-            let text_size_menu = Submenu::with_items(handle, "Text Size", true, &[
-                &MenuItem::with_id(handle, "text-size.12", "12", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "text-size.14", "14", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "text-size.16", "16", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "text-size.18", "18", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "text-size.20", "20", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "text-size.24", "24", true, None::<&str>)?,
-                &PredefinedMenuItem::separator(handle)?,
-                &MenuItem::with_id(handle, "text-size.custom", "Custom...", true, None::<&str>)?,
-            ])?;
+            let text_size_menu = Submenu::with_items(
+                handle,
+                "Text Size",
+                true,
+                &[
+                    &MenuItem::with_id(handle, "text-size.12", "12", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "text-size.14", "14", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "text-size.16", "16", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "text-size.18", "18", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "text-size.20", "20", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "text-size.24", "24", true, None::<&str>)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &MenuItem::with_id(
+                        handle,
+                        "text-size.custom",
+                        "Custom...",
+                        true,
+                        None::<&str>,
+                    )?,
+                ],
+            )?;
 
-            let explorer_text_size_menu = Submenu::with_items(handle, "Explorer Text Size", true, &[
-                &MenuItem::with_id(handle, "explorer-size.12", "12", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "explorer-size.13", "13", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "explorer-size.14", "14", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "explorer-size.15", "15", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "explorer-size.16", "16", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "explorer-size.18", "18", true, None::<&str>)?,
-                &PredefinedMenuItem::separator(handle)?,
-                &MenuItem::with_id(handle, "explorer-size.custom", "Custom...", true, None::<&str>)?,
-            ])?;
+            let explorer_text_size_menu = Submenu::with_items(
+                handle,
+                "Explorer Text Size",
+                true,
+                &[
+                    &MenuItem::with_id(handle, "explorer-size.12", "12", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "explorer-size.13", "13", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "explorer-size.14", "14", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "explorer-size.15", "15", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "explorer-size.16", "16", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "explorer-size.18", "18", true, None::<&str>)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &MenuItem::with_id(
+                        handle,
+                        "explorer-size.custom",
+                        "Custom...",
+                        true,
+                        None::<&str>,
+                    )?,
+                ],
+            )?;
 
-            let theme_menu = Submenu::with_items(handle, "Theme", true, &[
-                &MenuItem::with_id(handle, "theme.auto", "System", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "theme.light", "Light", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "theme.dark", "Dark", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "theme.catppuccin-mocha", "Catppuccin Mocha", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "theme.everforest-dark", "Everforest Dark", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "theme.nord", "Nord", true, None::<&str>)?,
-                &PredefinedMenuItem::separator(handle)?,
-                &MenuItem::with_id(handle, "theme.custom", "Custom...", true, None::<&str>)?,
-            ])?;
+            let theme_menu = Submenu::with_items(
+                handle,
+                "Theme",
+                true,
+                &[
+                    &MenuItem::with_id(handle, "theme.auto", "System", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "theme.light", "Light", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "theme.dark", "Dark", true, None::<&str>)?,
+                    &MenuItem::with_id(
+                        handle,
+                        "theme.catppuccin-mocha",
+                        "Catppuccin Mocha",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "theme.everforest-dark",
+                        "Everforest Dark",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &MenuItem::with_id(handle, "theme.nord", "Nord", true, None::<&str>)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &MenuItem::with_id(handle, "theme.custom", "Custom...", true, None::<&str>)?,
+                ],
+            )?;
 
-            let soft_wrap_menu = Submenu::with_items(handle, "Soft Wrap", true, &[
-                &MenuItem::with_id(handle, "view.soft-wrap.off", "Off", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "view.soft-wrap.window", "Window Width", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "view.soft-wrap.column", "Page Guide", true, None::<&str>)?,
-            ])?;
+            let soft_wrap_menu = Submenu::with_items(
+                handle,
+                "Soft Wrap",
+                true,
+                &[
+                    &MenuItem::with_id(handle, "view.soft-wrap.off", "Off", true, None::<&str>)?,
+                    &MenuItem::with_id(
+                        handle,
+                        "view.soft-wrap.window",
+                        "Window Width",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "view.soft-wrap.column",
+                        "Page Guide",
+                        true,
+                        None::<&str>,
+                    )?,
+                ],
+            )?;
 
-            let view_menu = Submenu::with_items(handle, "View", true, &[
-                &MenuItem::with_id(handle, "view.explorer", "Show/Hide Explorer", true, Some("CmdOrCtrl+B"))?,
-                &MenuItem::with_id(handle, "view.preview", "Show/Hide Preview", true, Some("CmdOrCtrl+P"))?,
-                &MenuItem::with_id(handle, "view.reading", "Reading View", true, Some("CmdOrCtrl+E"))?,
-                &MenuItem::with_id(handle, "view.line-numbers", "Show/Hide Line Numbers", true, None::<&str>)?,
-                &soft_wrap_menu,
-                &PredefinedMenuItem::separator(handle)?,
-                &MenuItem::with_id(handle, "view.zoom-in", "Zoom In", true, Some("CmdOrCtrl+="))?,
-                &MenuItem::with_id(handle, "view.zoom-out", "Zoom Out", true, Some("CmdOrCtrl+-"))?,
-                &MenuItem::with_id(handle, "view.zoom-reset", "Reset Zoom", true, Some("CmdOrCtrl+0"))?,
-                &PredefinedMenuItem::separator(handle)?,
-                &font_menu,
-                &text_size_menu,
-                &explorer_text_size_menu,
-                &theme_menu,
-            ])?;
+            let view_menu = Submenu::with_items(
+                handle,
+                "View",
+                true,
+                &[
+                    &MenuItem::with_id(
+                        handle,
+                        "view.explorer",
+                        "Show/Hide Explorer",
+                        true,
+                        Some("CmdOrCtrl+B"),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "view.preview",
+                        "Show/Hide Preview",
+                        true,
+                        Some("CmdOrCtrl+P"),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "view.reading",
+                        "Reading View",
+                        true,
+                        Some("CmdOrCtrl+E"),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "view.line-numbers",
+                        "Show/Hide Line Numbers",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &soft_wrap_menu,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &MenuItem::with_id(
+                        handle,
+                        "view.zoom-in",
+                        "Zoom In",
+                        true,
+                        Some("CmdOrCtrl+="),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "view.zoom-out",
+                        "Zoom Out",
+                        true,
+                        Some("CmdOrCtrl+-"),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "view.zoom-reset",
+                        "Reset Zoom",
+                        true,
+                        Some("CmdOrCtrl+0"),
+                    )?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &font_menu,
+                    &text_size_menu,
+                    &explorer_text_size_menu,
+                    &theme_menu,
+                ],
+            )?;
 
-            let search_menu = Submenu::with_items(handle, "Search", true, &[
-                &MenuItem::with_id(handle, "search.command-palette", "Command Palette", true, Some("CmdOrCtrl+Shift+P"))?,
-                &MenuItem::with_id(handle, "search.file-search", "File Search", true, Some("CmdOrCtrl+Shift+F"))?,
-                &MenuItem::with_id(handle, "search.content-search", "Search in Files", true, Some("CmdOrCtrl+Alt+F"))?,
-            ])?;
+            let search_menu = Submenu::with_items(
+                handle,
+                "Search",
+                true,
+                &[
+                    &MenuItem::with_id(
+                        handle,
+                        "search.command-palette",
+                        "Command Palette",
+                        true,
+                        Some("CmdOrCtrl+Shift+P"),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "search.file-search",
+                        "File Search",
+                        true,
+                        Some("CmdOrCtrl+Shift+F"),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "search.content-search",
+                        "Search in Files",
+                        true,
+                        Some("CmdOrCtrl+Alt+F"),
+                    )?,
+                ],
+            )?;
 
-            let window_menu = Submenu::with_items(handle, "Window", true, &[
-                &PredefinedMenuItem::minimize(handle, None)?,
-                &PredefinedMenuItem::fullscreen(handle, Some("Enter Full Screen"))?,
-            ])?;
+            let window_menu = Submenu::with_items(
+                handle,
+                "Window",
+                true,
+                &[
+                    &PredefinedMenuItem::minimize(handle, None)?,
+                    &PredefinedMenuItem::fullscreen(handle, Some("Enter Full Screen"))?,
+                ],
+            )?;
 
-            let help_menu = Submenu::with_items(handle, "Help", true, &[
-                &MenuItem::with_id(handle, "help.shortcuts", "Keyboard Shortcuts", true, Some("CmdOrCtrl+/"))?,
-                &MenuItem::with_id(handle, "help.customize-shortcuts", "Customize Shortcuts", true, None::<&str>)?,
-                &PredefinedMenuItem::separator(handle)?,
-                &MenuItem::with_id(handle, "help.check-updates", "Check for Updates...", true, None::<&str>)?,
-                &MenuItem::with_id(handle, "help.about", "About Kaelio", true, None::<&str>)?,
-            ])?;
+            let help_menu = Submenu::with_items(
+                handle,
+                "Help",
+                true,
+                &[
+                    &MenuItem::with_id(
+                        handle,
+                        "help.shortcuts",
+                        "Keyboard Shortcuts",
+                        true,
+                        Some("CmdOrCtrl+/"),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "help.customize-shortcuts",
+                        "Customize Shortcuts",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &MenuItem::with_id(
+                        handle,
+                        "help.check-updates",
+                        "Check for Updates...",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &MenuItem::with_id(handle, "help.about", "About Kaelio", true, None::<&str>)?,
+                ],
+            )?;
 
-            Menu::with_items(handle, &[
-                &app_menu,
-                &file_menu,
-                &edit_menu,
-                &view_menu,
-                &search_menu,
-                &window_menu,
-                &help_menu,
-            ])
+            Menu::with_items(
+                handle,
+                &[
+                    &app_menu,
+                    &file_menu,
+                    &edit_menu,
+                    &view_menu,
+                    &search_menu,
+                    &window_menu,
+                    &help_menu,
+                ],
+            )
         })
         .on_menu_event(|app, event| {
             let _ = app.emit("native-menu-command", event.id().as_ref().to_string());
         })
         .setup(|app| {
             #[cfg(desktop)]
-            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
 
             // On Linux/Windows, file associations pass the path as a CLI arg
             #[cfg(not(any(target_os = "macos", target_os = "ios")))]
@@ -2298,7 +3002,60 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_file, file_metadata, save_binary_base64, save_file, word_count, list_directory, get_home_dir, get_initial_file, export_pdf, export_docx, create_file, create_directory, delete_entry, rename_entry, list_files_recursive, save_recovery, get_recovery_files, read_recovery_content, delete_recovery, duplicate_entry, reveal_in_finder, load_custom_css, watch_file, unwatch_file, watch_folder, unwatch_folder, search_in_files, create_window, git_repo_info, git_status, git_diff_file, git_log, git_commit, git_push, git_pull, git_auto_sync, git_init, git_setup_sync, git_check_auth, git_discard_file, git_stage_file, git_file_at_commit, git_restore_file, git_conflict_info, git_resolve_conflict, save_snapshot, list_snapshots, read_snapshot, save_session, load_session])
+        .invoke_handler(tauri::generate_handler![
+            read_file,
+            read_binary_file,
+            file_metadata,
+            save_binary_base64,
+            save_file,
+            word_count,
+            list_directory,
+            get_home_dir,
+            get_initial_file,
+            export_pdf,
+            export_docx,
+            create_file,
+            create_directory,
+            copy_into_folder,
+            delete_entry,
+            rename_entry,
+            list_files_recursive,
+            save_recovery,
+            get_recovery_files,
+            read_recovery_content,
+            delete_recovery,
+            duplicate_entry,
+            reveal_in_finder,
+            load_custom_css,
+            watch_file,
+            unwatch_file,
+            watch_folder,
+            unwatch_folder,
+            search_in_files,
+            create_window,
+            git_repo_info,
+            git_status,
+            git_diff_file,
+            git_log,
+            git_commit,
+            git_push,
+            git_pull,
+            git_auto_sync,
+            git_init,
+            git_setup_sync,
+            git_check_auth,
+            git_discard_file,
+            git_stage_file,
+            git_file_at_commit,
+            git_restore_file,
+            git_conflict_info,
+            git_resolve_conflict,
+            save_snapshot,
+            list_snapshots,
+            read_snapshot,
+            save_session,
+            load_session
+        ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, _event| {
@@ -2312,7 +3069,9 @@ pub fn run() {
                 if let Some(path) = files.first() {
                     *INITIAL_FILE.lock().unwrap() = Some(path.clone());
                     // Emit to focused window if available, otherwise broadcast
-                    let emitted = _app.webview_windows().values()
+                    let emitted = _app
+                        .webview_windows()
+                        .values()
                         .find(|w| w.is_focused().unwrap_or(false))
                         .map(|w| w.emit("open-file", path.clone()));
                     if emitted.is_none() {
