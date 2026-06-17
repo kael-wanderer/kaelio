@@ -1584,6 +1584,7 @@ body {
 .file-badge-yml,
 .file-badge-toml { --file-badge-color: #98c379; }
 .file-badge-svg { --file-badge-color: #56b6c2; }
+.file-badge-pdf { --file-badge-color: #f38ba8; }
 .file-badge-img { --file-badge-color: #56b6c2; }
 .file-badge-text { --file-badge-color: #8a847a; }
 
@@ -3071,15 +3072,16 @@ mark.preview-search-match.active {
 }
 
 .pdf-search-hit {
-  background: var(--yellow, #f9e2af);
+  background: rgba(249, 226, 175, 0.32);
   color: transparent;
   -webkit-text-fill-color: transparent;
 }
 
 .pdf-search-hit.active {
-  background: var(--accent);
+  background: rgba(137, 180, 250, 0.34);
   color: transparent;
   -webkit-text-fill-color: transparent;
+  outline: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
 /* ── Wikilinks ── */

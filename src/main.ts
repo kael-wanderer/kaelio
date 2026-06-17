@@ -3929,6 +3929,7 @@ function getFileIcon(entry: DirEntry): string {
   if (ext === "css" || ext === "scss") return "css";
   if (ext === "html" || ext === "htm") return "html";
   if (ext === "svg") return "svg";
+  if (ext === "pdf") return "pdf";
   if (ext === "png" || ext === "jpg" || ext === "jpeg") return "img";
   return "text";
 }
