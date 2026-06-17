@@ -1,6 +1,6 @@
 [package]
 name = "kaelio"
-version = "0.9.4"
+version = "0.9.5"
 description = "Lightweight project file viewer and markdown/document reader"
 authors = ["Kael"]
 edition = "2024"

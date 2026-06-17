@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.5
+
+### New
+
+- **In-app PDF viewer** — open `.pdf` files directly in Kaelio. Pages render via PDF.js (replacing the old native iframe) with continuous scroll, zoom in/out (remembered across opens), and a page indicator. Large PDFs render lazily so scrolling stays smooth; works fully offline.
+- **Text selection & search in PDFs** — select and copy text, and use Cmd+F to search with match highlighting and next/previous navigation.
+- **Extract PDF to Markdown** — pull a PDF's text into a new Markdown tab (best-effort; no tables or OCR).
+- **PDF highlight annotations** — highlight text in a PDF; annotations are saved to a `<file>.kaelio-annot.json` sidecar and restored on reopen. The original PDF is never modified.
+
 ## 0.9.4
 
 ### New
