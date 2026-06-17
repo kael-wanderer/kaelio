@@ -1100,6 +1100,7 @@ let pdfSearchMatches: HTMLElement[] = [];
 let pdfSearchIndex = -1;
 let pdfSearchToken = 0;
 let renderCurrentPdfPagesForSearch: (() => Promise<void>) | null = null;
+let currentPdfDoc: any = null;
 
 function clampImagePreviewZoom(zoom: number): number {
   return Math.min(IMAGE_PREVIEW_MAX_ZOOM, Math.max(IMAGE_PREVIEW_MIN_ZOOM, zoom));
@@ -1113,6 +1114,81 @@ function loadPdfZoom(): number {
 
 function savePdfZoom(zoom: number) {
   localStorage.setItem(PDF_ZOOM_KEY, String(zoom));
+}
+
+function openUntitledMarkdownTab(content: string, title = "Extracted PDF.md") {
+  saveActiveTabState();
+  const tab = createTab(null, content);
+  tab.title = title;
+  tab.isModified = true;
+  tabs.push(tab);
+  activeTabId = tab.id;
+  currentFilePath = null;
+  editor.setState(tab.editorState);
+  const filename = document.getElementById("filename");
+  if (filename) filename.textContent = title;
+  sessionData.lastFile = null;
+  renderTabs();
+  persistOpenTabs();
+  updateBreadcrumb();
+  startFileWatch(null);
+  setModified(true);
+  updatePreview(content);
+  updateWordCount(content);
+  updateCursorPosition(editor);
+}
+
+// Heuristic, lossy: paragraphs from line grouping, blank lines between blocks.
+// No tables, columns, or OCR.
+async function extractPdfToMarkdown(doc: any): Promise<string> {
+  const out: string[] = [];
+  for (let n = 1; n <= doc.numPages; n++) {
+    const page = await doc.getPage(n);
+    const content = await page.getTextContent();
+    let line = "";
+    let lastY: number | null = null;
+    const lines: string[] = [];
+
+    for (const item of content.items as any[]) {
+      if (!("str" in item)) continue;
+      const y = item.transform[5];
+      if (lastY !== null && Math.abs(y - lastY) > 2) {
+        if (line.trim()) lines.push(line.trim());
+        line = "";
+      }
+      line += item.str + (item.hasEOL ? "" : " ");
+      lastY = y;
+    }
+    if (line.trim()) lines.push(line.trim());
+    out.push(lines.join("\n"));
+    out.push("");
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+}
+
+async function extractCurrentPdfToMarkdown() {
+  if (!currentFilePath || !isPdfPath(currentFilePath)) {
+    flashStatus("Open a PDF first", "var(--error)", 3000);
+    return;
+  }
+  if (!currentPdfDoc) {
+    await updatePreview(editor.state.doc.toString());
+  }
+  if (!currentPdfDoc) {
+    flashStatus("Could not load PDF text for extraction", "var(--error)", 3000);
+    return;
+  }
+
+  const sourcePath = currentFilePath;
+  try {
+    flashStatus("Extracting PDF text...", "var(--accent)", 3000);
+    const markdown = await extractPdfToMarkdown(currentPdfDoc);
+    const sourceName = sourcePath.split("/").pop()?.replace(/\.pdf$/i, "") || "PDF";
+    openUntitledMarkdownTab(markdown, `${sourceName}.md`);
+    flashStatus(markdown.trim() ? "Extracted PDF text to Markdown" : "No selectable text found in PDF", "var(--success)", 4000);
+  } catch (err) {
+    flashStatus(`PDF extraction failed: ${err}`, "var(--error)", 5000);
+  }
 }
 
 function applyImagePreviewZoom(
@@ -1218,6 +1294,7 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
   pdfPageText.clear();
   clearPdfSearch();
   renderCurrentPdfPagesForSearch = null;
+  currentPdfDoc = null;
 
   const wrap = document.createElement("div");
   wrap.className = "asset-preview pdf-preview-wrap";
@@ -1261,6 +1338,7 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
     const bytes = Uint8Array.from(atob(file.data_base64), (c) => c.charCodeAt(0));
     const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
     if (currentFilePath !== path) return;
+    currentPdfDoc = doc;
 
     const pageCount = doc.numPages;
     pageLabel.textContent = `1 / ${pageCount}`;
@@ -1488,6 +1566,7 @@ async function updatePreview(content: string) {
     pdfPageText.clear();
     clearPdfSearch();
     renderCurrentPdfPagesForSearch = null;
+    currentPdfDoc = null;
   }
 
   if (currentFilePath && (isImagePath(currentFilePath) || isSvgPath(currentFilePath))) {
@@ -3952,9 +4031,12 @@ function showContextMenu(x: number, y: number, target: { path: string; isDir: bo
   contextMenuTarget = target;
 
   const isFile = !target.isDir;
+  const isPdfFile = isFile && isPdfPath(target.path);
   const hasCompare = !!compareSelected && compareSelected !== target.path;
   document.getElementById("ctx-split-divider")?.classList.toggle("hidden", !isFile);
   document.getElementById("ctx-open-split")?.classList.toggle("hidden", !isFile);
+  document.getElementById("ctx-pdf-divider")?.classList.toggle("hidden", !isPdfFile);
+  document.getElementById("ctx-extract-pdf-md")?.classList.toggle("hidden", !isPdfFile);
   document.getElementById("ctx-compare-divider")?.classList.toggle("hidden", !isFile);
   document.getElementById("ctx-select-compare")?.classList.toggle("hidden", !isFile);
   document.getElementById("ctx-compare-with")?.classList.toggle("hidden", !(isFile && hasCompare));
@@ -4035,6 +4117,21 @@ async function ctxDelete() {
   } catch (e) {
     console.error("[kaelio] delete_entry failed", { path: target.path, error: e });
     flashStatus(`Delete failed: ${e}`, "var(--error)", 10000);
+  }
+}
+
+async function ctxExtractPdfToMarkdown() {
+  if (!contextMenuTarget || contextMenuTarget.isDir || !isPdfPath(contextMenuTarget.path)) return;
+  const target = contextMenuTarget;
+  hideContextMenu();
+
+  try {
+    if (currentFilePath !== target.path) {
+      await openFile(target.path);
+    }
+    await extractCurrentPdfToMarkdown();
+  } catch (err) {
+    flashStatus(`PDF extraction failed: ${err}`, "var(--error)", 5000);
   }
 }
 
@@ -4162,7 +4259,7 @@ interface PaletteCommand {
 function getCommands(): PaletteCommand[] {
   // Helper to get display shortcut from registry
   const sk = (id: string) => cm6KeyToDisplay(getBinding(id)) || undefined;
-  return [
+  const commands: PaletteCommand[] = [
     { label: "New File", shortcut: sk("file.new"), action: newFile },
     { label: "Open File", shortcut: sk("file.open"), action: openFileDialog },
     { label: "Open Folder", action: () => openFolder() },
@@ -4197,6 +4294,13 @@ function getCommands(): PaletteCommand[] {
     { label: "Keyboard Shortcuts", shortcut: "⌘/", action: toggleHelp },
     { label: "About Kaelio", action: () => invoke("plugin:opener|open_url", { url: "https://github.com/kael-wanderer/kaelio" }) },
   ];
+  if (currentFilePath && isPdfPath(currentFilePath)) {
+    commands.splice(14, 0, {
+      label: "Extract PDF to Markdown",
+      action: () => { void extractCurrentPdfToMarkdown(); },
+    });
+  }
+  return commands;
 }
 
 let paletteSelectedIndex = 0;
@@ -7038,6 +7142,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // Context menu items
   document.getElementById("ctx-open-split")?.addEventListener("click", ctxOpenSplit);
+  document.getElementById("ctx-extract-pdf-md")?.addEventListener("click", ctxExtractPdfToMarkdown);
   document.getElementById("ctx-select-compare")?.addEventListener("click", ctxSelectCompare);
   document.getElementById("ctx-compare-with")?.addEventListener("click", ctxCompareWith);
   document.getElementById("ctx-new-file")?.addEventListener("click", ctxNewFile);
