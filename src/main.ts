@@ -4746,9 +4746,22 @@ async function ctxCompareWith() {
 }
 
 const EXPORT_CAPTURE_WIDTH = 1200;
+const EXPORT_MAX_CANVAS_DIMENSION = 16000;
+const EXPORT_MAX_CANVAS_AREA = 16_000_000;
 
 function getCaptureWidth(sourceWidth: number) {
   return Math.max(EXPORT_CAPTURE_WIDTH, Math.min(Math.max(sourceWidth, 1), 1800));
+}
+
+function getExportPixelRatio(width: number, height: number) {
+  const safeWidth = Math.max(width, 1);
+  const safeHeight = Math.max(height, 1);
+  return Math.max(0.2, Math.min(
+    2,
+    EXPORT_MAX_CANVAS_DIMENSION / safeWidth,
+    EXPORT_MAX_CANVAS_DIMENSION / safeHeight,
+    Math.sqrt(EXPORT_MAX_CANVAS_AREA / (safeWidth * safeHeight)),
+  ));
 }
 
 function renderMarkdownPreviewHtml(content: string): string {
@@ -5036,7 +5049,7 @@ async function capturePreviewPng(): Promise<{ dataUrl: string; width: number; he
       }
       const dataUrl = await toPng(node, {
         cacheBust: true,
-        pixelRatio: 2,
+        pixelRatio: getExportPixelRatio(width, height),
         width,
         height,
         backgroundColor: "#ffffff",
@@ -5125,7 +5138,7 @@ async function exportHtmlImage(format: "png" | "jpg") {
         const height = Math.max(node.scrollHeight, node.clientHeight, 1);
         const options = {
           cacheBust: true,
-          pixelRatio: 2,
+          pixelRatio: getExportPixelRatio(width, height),
           width,
           height,
           backgroundColor: "#ffffff",
