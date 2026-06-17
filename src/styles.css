@@ -1784,8 +1784,9 @@ body {
 }
 
 .pdf-text-layer ::selection {
-  background: var(--accent);
-  color: var(--bg);
+  background: rgba(137, 180, 250, 0.35);
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 
 .pdf-annot-layer {
