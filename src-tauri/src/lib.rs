@@ -567,29 +567,74 @@ fn sidecar_name(base: &str) -> String {
     format!("{}-{}", base, suffix)
 }
 
+fn push_binary_candidates(candidates: &mut Vec<PathBuf>, dir: PathBuf, base: &str, sidecar_name: &str) {
+    candidates.push(dir.join(sidecar_name));
+    candidates.push(dir.join(base));
+    candidates.push(dir.join("binaries").join(sidecar_name));
+    candidates.push(dir.join("binaries").join(base));
+}
+
+fn find_binary_recursive(root: &Path, base: &str, sidecar_name: &str, depth: usize) -> Option<PathBuf> {
+    if depth == 0 || !root.is_dir() {
+        return None;
+    }
+    let entries = fs::read_dir(root).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
+                if name == base || name == sidecar_name {
+                    return Some(path);
+                }
+            }
+        } else if path.is_dir() {
+            if let Some(found) = find_binary_recursive(&path, base, sidecar_name, depth - 1) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
 fn find_bundled_binary(app: &tauri::AppHandle, base: &str) -> Option<PathBuf> {
     let sidecar_name = sidecar_name(base);
     let mut candidates = Vec::new();
+    let mut search_roots = Vec::new();
 
     if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
-        let dir = PathBuf::from(manifest_dir).join("binaries");
-        candidates.push(dir.join(&sidecar_name));
-        candidates.push(dir.join(base));
+        let manifest_dir = PathBuf::from(manifest_dir);
+        push_binary_candidates(&mut candidates, manifest_dir.clone(), base, &sidecar_name);
+        push_binary_candidates(&mut candidates, manifest_dir.join("target").join("debug"), base, &sidecar_name);
+        push_binary_candidates(&mut candidates, manifest_dir.join("target").join("release"), base, &sidecar_name);
     }
 
     if let Ok(resource_dir) = app.path().resource_dir() {
-        candidates.push(resource_dir.join(&sidecar_name));
-        candidates.push(resource_dir.join(base));
+        push_binary_candidates(&mut candidates, resource_dir.clone(), base, &sidecar_name);
+        search_roots.push(resource_dir.clone());
+        if let Some(contents_dir) = resource_dir.parent() {
+            push_binary_candidates(&mut candidates, contents_dir.join("MacOS"), base, &sidecar_name);
+            search_roots.push(contents_dir.to_path_buf());
+        }
     }
 
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(exe_dir) = current_exe.parent() {
-            candidates.push(exe_dir.join(&sidecar_name));
-            candidates.push(exe_dir.join(base));
+            push_binary_candidates(&mut candidates, exe_dir.to_path_buf(), base, &sidecar_name);
+            search_roots.push(exe_dir.to_path_buf());
+            if let Some(contents_dir) = exe_dir.parent() {
+                push_binary_candidates(&mut candidates, contents_dir.join("Resources"), base, &sidecar_name);
+                search_roots.push(contents_dir.to_path_buf());
+            }
         }
     }
 
-    candidates.into_iter().find(|path| path.exists())
+    if let Some(path) = candidates.into_iter().find(|path| path.is_file()) {
+        return Some(path);
+    }
+
+    search_roots
+        .into_iter()
+        .find_map(|root| find_binary_recursive(&root, base, &sidecar_name, 4))
 }
 
 fn sidecar_path_env(app: &tauri::AppHandle, base_path: &str) -> String {

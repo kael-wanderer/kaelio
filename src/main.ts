@@ -4745,10 +4745,27 @@ async function ctxCompareWith() {
   compareSelected = null;
 }
 
-const EXPORT_CAPTURE_WIDTH = 920;
+const EXPORT_CAPTURE_WIDTH = 1200;
 
 function getCaptureWidth(sourceWidth: number) {
-  return Math.max(EXPORT_CAPTURE_WIDTH, Math.min(Math.max(sourceWidth, 1), 1200));
+  return Math.max(EXPORT_CAPTURE_WIDTH, Math.min(Math.max(sourceWidth, 1), 1800));
+}
+
+function renderMarkdownPreviewHtml(content: string): string {
+  const { frontmatter, body } = extractFrontmatter(content);
+  let html = "";
+  let lineOffset = 0;
+  if (frontmatter) {
+    html += renderFrontmatter(frontmatter);
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?/);
+    if (fmMatch) lineOffset = (fmMatch[0].match(/\n/g) || []).length;
+  }
+  html += md.render(body, { lineOffset });
+  html = renderCallouts(html);
+  html = renderChecklists(html);
+  html = renderKaTeX(html);
+  html = processMermaidBlocks(html);
+  return sanitizeHtmlString(html);
 }
 
 function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void } {
@@ -4795,8 +4812,8 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
     };
   }
 
-  // Markdown / structured / plain preview: clone into an off-flow host so the
-  // capture isn't clipped by `#preview-pane`'s `overflow:auto` + flex sizing.
+  // Markdown / structured / plain preview: render into an off-flow host so the
+  // capture isn't clipped by `#preview-pane`'s overflow, flex sizing, or split width.
   const fullWidth = getCaptureWidth(Math.max(previewPane.scrollWidth, previewPane.clientWidth, 1));
   const host = document.createElement("div");
   host.id = "preview-pane";
@@ -4805,10 +4822,15 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
   host.style.left = "-100000px";
   host.style.top = "0";
   host.style.width = `${fullWidth}px`;
+  host.style.maxWidth = "none";
   host.style.overflow = "visible";
   host.style.flex = "none";
   applyLightExportTheme(host);
-  appendSanitizedHtml(host, previewPane.innerHTML);
+  if (!currentFilePath || isMarkdownPath(currentFilePath)) {
+    appendSanitizedHtml(host, renderMarkdownPreviewHtml(editor.state.doc.toString()));
+  } else {
+    appendSanitizedHtml(host, previewPane.innerHTML);
+  }
   document.body.appendChild(host);
   const fullHeight = Math.max(host.scrollHeight, host.clientHeight, previewPane.scrollHeight, previewPane.clientHeight, 1);
   host.style.height = `${fullHeight}px`;
@@ -4968,6 +4990,12 @@ function nextPaint(): Promise<void> {
 }
 
 async function waitForPreviewAssets(node: HTMLElement) {
+  const mermaidNodes = node.querySelectorAll(".mermaid");
+  if (mermaidNodes.length > 0) {
+    try {
+      await mermaid.run({ nodes: mermaidNodes as unknown as ArrayLike<HTMLElement> });
+    } catch { /* mermaid render errors are non-fatal for export */ }
+  }
   await (document as globalThis.Document & { fonts?: FontFaceSet }).fonts?.ready.catch(() => undefined);
   const images = Array.from(node.querySelectorAll("img"));
   await Promise.all(images.map(img => {
@@ -4977,6 +5005,8 @@ async function waitForPreviewAssets(node: HTMLElement) {
       img.addEventListener("error", () => resolve(), { once: true });
     });
   }));
+  await nextPaint();
+  node.style.height = `${Math.max(node.scrollHeight, node.clientHeight, 1)}px`;
   await nextPaint();
 }
 
