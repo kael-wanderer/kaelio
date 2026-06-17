@@ -34,6 +34,10 @@ export default defineConfig(async () => ({
     },
   },
   build: {
+    // One generated @mermaid-js/parser core module is ~594 kB after minification
+    // and cannot be split further by manualChunks. Keep the warning threshold
+    // above that while still low enough to catch accidental multi-megabyte chunks.
+    chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -48,7 +52,8 @@ export default defineConfig(async () => ({
             if (first >= "i" && first <= "p") return "vendor-editor-legacy-i-p";
             return "vendor-editor-legacy-q-z";
           }
-          if (id.includes("/@codemirror/language-data/") || id.includes("/@codemirror/lang-")) return "vendor-editor-languages";
+          if (id.includes("/@codemirror/lang-")) return vendorChunkName(id);
+          if (id.includes("/@codemirror/language-data/")) return "vendor-editor-language-data";
           if (id.includes("/@codemirror/") || id.includes("/codemirror/")) return "vendor-editor";
           if (id.includes("/@lezer/")) return vendorChunkName(id);
 
