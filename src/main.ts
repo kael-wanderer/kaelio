@@ -1096,6 +1096,10 @@ const PDF_ZOOM_MAX = 4;
 const PDF_ZOOM_STEP = 0.2;
 const PDF_ZOOM_KEY = "kaelio-pdf-zoom";
 const pdfPageText = new Map<number, string>();
+let pdfSearchMatches: HTMLElement[] = [];
+let pdfSearchIndex = -1;
+let pdfSearchToken = 0;
+let renderCurrentPdfPagesForSearch: (() => Promise<void>) | null = null;
 
 function clampImagePreviewZoom(zoom: number): number {
   return Math.min(IMAGE_PREVIEW_MAX_ZOOM, Math.max(IMAGE_PREVIEW_MIN_ZOOM, zoom));
@@ -1212,6 +1216,8 @@ async function renderImagePreview(previewPane: HTMLElement, path: string) {
 async function renderPdfPreview(previewPane: HTMLElement, path: string) {
   previewPane.innerHTML = "";
   pdfPageText.clear();
+  clearPdfSearch();
+  renderCurrentPdfPagesForSearch = null;
 
   const wrap = document.createElement("div");
   wrap.className = "asset-preview pdf-preview-wrap";
@@ -1259,7 +1265,7 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
     const pageCount = doc.numPages;
     pageLabel.textContent = `1 / ${pageCount}`;
 
-    type PageSlot = { el: HTMLDivElement; rendered: boolean; rendering: boolean };
+    type PageSlot = { el: HTMLDivElement; rendered: boolean; rendering: boolean; renderPromise: Promise<void> | null };
     const slots: PageSlot[] = [];
     const container = document.createElement("div");
     container.className = "pdf-pages";
@@ -1270,7 +1276,7 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
       el.className = "pdf-page";
       el.dataset.page = String(n);
       container.appendChild(el);
-      slots.push({ el, rendered: false, rendering: false });
+      slots.push({ el, rendered: false, rendering: false, renderPromise: null });
     }
 
     async function sizePlaceholders() {
@@ -1287,10 +1293,14 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
     async function renderPage(n: number) {
       if (n < 1 || n > pageCount) return;
       const slot = slots[n - 1];
-      if (slot.rendered || slot.rendering) return;
+      if (slot.rendered) return;
+      if (slot.renderPromise) {
+        await slot.renderPromise;
+        return;
+      }
       slot.rendering = true;
 
-      try {
+      slot.renderPromise = (async () => {
         const page = await doc.getPage(n);
         if (currentFilePath !== path) return;
         const viewport = page.getViewport({ scale: zoom });
@@ -1327,10 +1337,20 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
         pageInner.append(canvas, textLayerDiv);
         slot.el.replaceChildren(pageInner);
         slot.rendered = true;
+      })();
+
+      try {
+        await slot.renderPromise;
       } finally {
         slot.rendering = false;
+        slot.renderPromise = null;
       }
     }
+
+    async function renderAllPagesForSearch() {
+      await Promise.all(slots.map((_slot, index) => renderPage(index + 1)));
+    }
+    renderCurrentPdfPagesForSearch = renderAllPagesForSearch;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -1359,6 +1379,7 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
       zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
       slots.forEach((slot) => {
         slot.rendered = false;
+        slot.renderPromise = null;
         slot.el.replaceChildren();
       });
       await sizePlaceholders();
@@ -1462,6 +1483,12 @@ async function updatePreview(content: string) {
   const previewPane = $("#preview-pane");
   const previewWrapper = $("#preview-pane-wrapper");
   if (!previewPane || (previewWrapper && previewWrapper.style.display === "none")) return;
+
+  if (!currentFilePath || !isPdfPath(currentFilePath)) {
+    pdfPageText.clear();
+    clearPdfSearch();
+    renderCurrentPdfPagesForSearch = null;
+  }
 
   if (currentFilePath && (isImagePath(currentFilePath) || isSvgPath(currentFilePath))) {
     await renderImagePreview(previewPane, currentFilePath);
@@ -4359,6 +4386,7 @@ function openPreviewSearch() {
   input.value = "";
   document.getElementById("preview-search-count")!.textContent = "";
   clearPreviewSearchHighlights();
+  clearPdfSearch();
   input.focus();
 }
 
@@ -4367,6 +4395,88 @@ function closePreviewSearch() {
   if (!bar) return;
   bar.classList.add("hidden");
   clearPreviewSearchHighlights();
+  clearPdfSearch();
+}
+
+function isCurrentPdfPreview(): boolean {
+  return Boolean(currentFilePath && isPdfPath(currentFilePath));
+}
+
+function clearPdfSearch() {
+  document.querySelectorAll("mark.pdf-search-hit").forEach((mark) => {
+    const parent = mark.parentNode;
+    mark.replaceWith(document.createTextNode(mark.textContent || ""));
+    parent?.normalize();
+  });
+  pdfSearchMatches = [];
+  pdfSearchIndex = -1;
+}
+
+function searchPdf(query: string) {
+  clearPdfSearch();
+  const countEl = document.getElementById("preview-search-count");
+  const trimmed = query.trim();
+  if (!trimmed) {
+    if (countEl) countEl.textContent = "";
+    return;
+  }
+
+  const lowerQuery = trimmed.toLowerCase();
+  const spans = Array.from(document.querySelectorAll(".pdf-text-layer span")) as HTMLElement[];
+  for (const span of spans) {
+    const text = span.textContent || "";
+    const lowerText = text.toLowerCase();
+    let index = lowerText.indexOf(lowerQuery);
+    if (index === -1) continue;
+
+    const fragment = document.createDocumentFragment();
+    let last = 0;
+    while (index !== -1) {
+      if (index > last) fragment.appendChild(document.createTextNode(text.slice(last, index)));
+      const hit = document.createElement("mark");
+      hit.className = "pdf-search-hit";
+      hit.textContent = text.slice(index, index + trimmed.length);
+      fragment.appendChild(hit);
+      pdfSearchMatches.push(hit);
+      last = index + trimmed.length;
+      index = lowerText.indexOf(lowerQuery, last);
+    }
+    if (last < text.length) fragment.appendChild(document.createTextNode(text.slice(last)));
+    span.replaceChildren(fragment);
+  }
+
+  if (pdfSearchMatches.length) {
+    gotoPdfMatch(0);
+  } else if (countEl) {
+    pdfSearchIndex = -1;
+    countEl.textContent = "No results";
+  }
+}
+
+async function performPdfSearch(query: string) {
+  const token = ++pdfSearchToken;
+  clearPdfSearch();
+  const countEl = document.getElementById("preview-search-count");
+  if (!query.trim()) {
+    if (countEl) countEl.textContent = "";
+    return;
+  }
+  if (countEl) countEl.textContent = "Searching...";
+
+  await renderCurrentPdfPagesForSearch?.();
+  if (token !== pdfSearchToken || !isCurrentPdfPreview()) return;
+  searchPdf(query);
+}
+
+function gotoPdfMatch(index: number) {
+  if (!pdfSearchMatches.length) return;
+  pdfSearchMatches[pdfSearchIndex]?.classList.remove("active");
+  pdfSearchIndex = (index + pdfSearchMatches.length) % pdfSearchMatches.length;
+  const active = pdfSearchMatches[pdfSearchIndex];
+  active.classList.add("active");
+  active.scrollIntoView({ block: "center" });
+  const countEl = document.getElementById("preview-search-count");
+  if (countEl) countEl.textContent = `${pdfSearchIndex + 1} / ${pdfSearchMatches.length}`;
 }
 
 function clearPreviewSearchHighlights() {
@@ -4382,6 +4492,11 @@ function clearPreviewSearchHighlights() {
 }
 
 function performPreviewSearch(query: string) {
+  if (isCurrentPdfPreview()) {
+    void performPdfSearch(query);
+    return;
+  }
+
   clearPreviewSearchHighlights();
   const countEl = document.getElementById("preview-search-count")!;
   if (!query) { countEl.textContent = ""; return; }
@@ -4433,6 +4548,11 @@ function performPreviewSearch(query: string) {
 }
 
 function navigatePreviewSearch(delta: number) {
+  if (isCurrentPdfPreview()) {
+    gotoPdfMatch(pdfSearchIndex + delta);
+    return;
+  }
+
   if (previewSearchMatches.length === 0) return;
   previewSearchMatches[previewSearchIndex]?.classList.remove("active");
   previewSearchIndex = (previewSearchIndex + delta + previewSearchMatches.length) % previewSearchMatches.length;
@@ -6630,6 +6750,12 @@ window.addEventListener("DOMContentLoaded", async () => {
     if ((e.metaKey || e.ctrlKey) && e.key === "f" && !e.shiftKey && !e.altKey) {
       const previewWrapper = document.getElementById("preview-pane-wrapper");
       if (!previewWrapper || previewWrapper.style.display === "none") return;
+      if (currentFilePath && isPdfPath(currentFilePath)) {
+        e.preventDefault();
+        e.stopPropagation();
+        openPreviewSearch();
+        return;
+      }
       if (currentViewMode === "preview") {
         e.preventDefault();
         e.stopPropagation();

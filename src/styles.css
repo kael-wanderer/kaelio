@@ -3034,6 +3034,16 @@ mark.preview-search-match.active {
   outline: 1px solid var(--accent);
 }
 
+.pdf-search-hit {
+  background: var(--yellow, #f9e2af);
+  color: #000;
+}
+
+.pdf-search-hit.active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
 /* ── Wikilinks ── */
 
 :is(#preview-pane, #sub-pane) .wikilink {
