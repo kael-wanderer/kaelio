@@ -1096,6 +1096,16 @@ const PDF_ZOOM_MAX = 4;
 const PDF_ZOOM_STEP = 0.2;
 const PDF_ZOOM_KEY = "kaelio-pdf-zoom";
 const pdfPageText = new Map<number, string>();
+interface PdfAnnotation {
+  page: number;
+  type: "highlight" | "note";
+  rectPct: { x: number; y: number; w: number; h: number };
+  color?: string;
+  text?: string;
+}
+let pdfAnnotations: PdfAnnotation[] = [];
+let pdfAnnotationsDirty = false;
+let pdfHighlightMode = false;
 let pdfSearchMatches: HTMLElement[] = [];
 let pdfSearchIndex = -1;
 let pdfSearchToken = 0;
@@ -1188,6 +1198,84 @@ async function extractCurrentPdfToMarkdown() {
     flashStatus(markdown.trim() ? "Extracted PDF text to Markdown" : "No selectable text found in PDF", "var(--success)", 4000);
   } catch (err) {
     flashStatus(`PDF extraction failed: ${err}`, "var(--error)", 5000);
+  }
+}
+
+function renderPdfAnnotationLayer(pageNumber: number, layer: HTMLElement) {
+  layer.replaceChildren();
+  const pageAnnotations = pdfAnnotations.filter((annotation) => annotation.page === pageNumber);
+  for (const annotation of pageAnnotations) {
+    const marker = document.createElement("div");
+    marker.className = annotation.type === "note" ? "pdf-annot-note" : "pdf-annot-highlight";
+    marker.style.left = `${annotation.rectPct.x}%`;
+    marker.style.top = `${annotation.rectPct.y}%`;
+    marker.style.width = `${annotation.rectPct.w}%`;
+    marker.style.height = `${annotation.rectPct.h}%`;
+    if (annotation.color && annotation.type === "highlight") marker.style.background = annotation.color;
+    if (annotation.text) marker.title = annotation.text;
+    layer.appendChild(marker);
+  }
+}
+
+async function savePdfAnnotations() {
+  if (!currentFilePath || !isPdfPath(currentFilePath) || !pdfAnnotationsDirty) return;
+  await invoke("write_annotations", {
+    pdfPath: currentFilePath,
+    json: JSON.stringify(pdfAnnotations, null, 2),
+  });
+  pdfAnnotationsDirty = false;
+  flashStatus("Annotations saved", "var(--success)", 2500);
+}
+
+function selectionIntersectsPage(rect: DOMRect, pageRect: DOMRect): boolean {
+  return rect.right > pageRect.left && rect.left < pageRect.right && rect.bottom > pageRect.top && rect.top < pageRect.bottom;
+}
+
+function addPdfHighlightFromSelection(container: HTMLElement) {
+  if (!pdfHighlightMode) return;
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || !selection.toString().trim() || selection.rangeCount === 0) return;
+
+  const range = selection.getRangeAt(0);
+  const selectionRects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+  if (!selectionRects.length) return;
+
+  const pageInners = Array.from(container.querySelectorAll(".pdf-page-inner")) as HTMLElement[];
+  let added = false;
+  for (const pageInner of pageInners) {
+    const page = Number(pageInner.closest<HTMLElement>(".pdf-page")?.dataset.page);
+    if (!page) continue;
+    const pageRect = pageInner.getBoundingClientRect();
+    const pageRects = selectionRects.filter((rect) => selectionIntersectsPage(rect, pageRect));
+    if (!pageRects.length) continue;
+
+    const left = Math.max(0, Math.min(...pageRects.map((rect) => rect.left)) - pageRect.left);
+    const top = Math.max(0, Math.min(...pageRects.map((rect) => rect.top)) - pageRect.top);
+    const right = Math.min(pageRect.width, Math.max(...pageRects.map((rect) => rect.right)) - pageRect.left);
+    const bottom = Math.min(pageRect.height, Math.max(...pageRects.map((rect) => rect.bottom)) - pageRect.top);
+    if (right <= left || bottom <= top) continue;
+
+    const annotation: PdfAnnotation = {
+      page,
+      type: "highlight",
+      rectPct: {
+        x: (left / pageRect.width) * 100,
+        y: (top / pageRect.height) * 100,
+        w: ((right - left) / pageRect.width) * 100,
+        h: ((bottom - top) / pageRect.height) * 100,
+      },
+      color: "rgba(249,226,175,0.4)",
+    };
+    pdfAnnotations.push(annotation);
+    const layer = pageInner.querySelector<HTMLElement>(".pdf-annot-layer");
+    if (layer) renderPdfAnnotationLayer(page, layer);
+    added = true;
+  }
+
+  if (added) {
+    pdfAnnotationsDirty = true;
+    selection.removeAllRanges();
+    flashStatus("Highlight added", "var(--accent)", 1800);
   }
 }
 
@@ -1295,6 +1383,9 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
   clearPdfSearch();
   renderCurrentPdfPagesForSearch = null;
   currentPdfDoc = null;
+  pdfAnnotations = [];
+  pdfAnnotationsDirty = false;
+  pdfHighlightMode = false;
 
   const wrap = document.createElement("div");
   wrap.className = "asset-preview pdf-preview-wrap";
@@ -1315,9 +1406,21 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
   zoomIn.textContent = "+";
   zoomIn.title = "Zoom in";
   zoomIn.setAttribute("aria-label", "Zoom in");
+  const highlightToggle = document.createElement("button");
+  highlightToggle.type = "button";
+  highlightToggle.className = "asset-preview-tool";
+  highlightToggle.textContent = "H";
+  highlightToggle.title = "Highlight selected PDF text";
+  highlightToggle.setAttribute("aria-label", "Highlight selected PDF text");
+  const saveAnnots = document.createElement("button");
+  saveAnnots.type = "button";
+  saveAnnots.className = "asset-preview-tool pdf-annotation-save";
+  saveAnnots.textContent = "Save";
+  saveAnnots.title = "Save annotations";
+  saveAnnots.setAttribute("aria-label", "Save annotations");
   const pageLabel = document.createElement("span");
   pageLabel.className = "pdf-page-label";
-  toolbar.append(zoomOut, zoomLabel, zoomIn, pageLabel);
+  toolbar.append(zoomOut, zoomLabel, zoomIn, highlightToggle, saveAnnots, pageLabel);
 
   const stage = document.createElement("div");
   stage.className = "asset-preview-stage pdf-stage";
@@ -1339,6 +1442,17 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
     const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
     if (currentFilePath !== path) return;
     currentPdfDoc = doc;
+    try {
+      const rawAnnotations = await invoke<string>("read_annotations", { pdfPath: path });
+      if (currentFilePath !== path) return;
+      const parsedAnnotations = JSON.parse(rawAnnotations);
+      pdfAnnotations = Array.isArray(parsedAnnotations) ? parsedAnnotations as PdfAnnotation[] : [];
+      pdfAnnotationsDirty = false;
+    } catch (err) {
+      console.warn("Could not load PDF annotations", err);
+      pdfAnnotations = [];
+      pdfAnnotationsDirty = false;
+    }
 
     const pageCount = doc.numPages;
     pageLabel.textContent = `1 / ${pageCount}`;
@@ -1412,7 +1526,12 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
 
         const pageInner = document.createElement("div");
         pageInner.className = "pdf-page-inner";
-        pageInner.append(canvas, textLayerDiv);
+        const annotLayer = document.createElement("div");
+        annotLayer.className = "pdf-annot-layer";
+        annotLayer.style.width = `${canvas.width}px`;
+        annotLayer.style.height = `${canvas.height}px`;
+        renderPdfAnnotationLayer(n, annotLayer);
+        pageInner.append(canvas, textLayerDiv, annotLayer);
         slot.el.replaceChildren(pageInner);
         slot.rendered = true;
       })();
@@ -1481,6 +1600,19 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
       event.stopPropagation();
       void applyZoom(zoom + PDF_ZOOM_STEP);
     });
+    highlightToggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      pdfHighlightMode = !pdfHighlightMode;
+      highlightToggle.classList.toggle("active", pdfHighlightMode);
+      flashStatus(pdfHighlightMode ? "PDF highlight mode on" : "PDF highlight mode off", "var(--accent)", 1800);
+    });
+    saveAnnots.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void savePdfAnnotations();
+    });
+    stage.addEventListener("mouseup", () => addPdfHighlightFromSelection(container));
 
     await sizePlaceholders();
     void renderPage(1);
@@ -1567,6 +1699,9 @@ async function updatePreview(content: string) {
     clearPdfSearch();
     renderCurrentPdfPagesForSearch = null;
     currentPdfDoc = null;
+    pdfAnnotations = [];
+    pdfAnnotationsDirty = false;
+    pdfHighlightMode = false;
   }
 
   if (currentFilePath && (isImagePath(currentFilePath) || isSvgPath(currentFilePath))) {
@@ -2387,6 +2522,13 @@ async function openFile(path: string, skipScrollRestore = false) {
     switchToTab(existingTab.id);
     return;
   }
+  if (currentFilePath && isPdfPath(currentFilePath) && pdfAnnotationsDirty) {
+    try {
+      await savePdfAnnotations();
+    } catch (err) {
+      flashStatus(`Annotation save failed: ${err}`, "var(--error)", 5000);
+    }
+  }
 
   if (isPreviewOnlyPath(path)) {
     saveScrollPosition();
@@ -2454,6 +2596,14 @@ async function openFile(path: string, skipScrollRestore = false) {
 // --- New file ---
 
 async function newFile() {
+  if (currentFilePath && isPdfPath(currentFilePath) && pdfAnnotationsDirty) {
+    try {
+      await savePdfAnnotations();
+    } catch (err) {
+      flashStatus(`Annotation save failed: ${err}`, "var(--error)", 5000);
+    }
+  }
+
   if (currentFolderPath) {
     // Create in current folder
     let name = "untitled.md";
@@ -4957,6 +5107,9 @@ function saveActiveTabState() {
 
 function switchToTab(tabId: string) {
   if (tabId === activeTabId) return;
+  if (currentFilePath && isPdfPath(currentFilePath) && pdfAnnotationsDirty) {
+    void savePdfAnnotations();
+  }
 
   // Save current tab state
   saveActiveTabState();
@@ -5075,6 +5228,14 @@ function updateTabBarVisibility() {
 async function closeTab(tabId: string) {
   const tab = tabs.find(t => t.id === tabId);
   if (!tab) return;
+
+  if (tab.filePath && tab.filePath === currentFilePath && isPdfPath(tab.filePath) && pdfAnnotationsDirty) {
+    try {
+      await savePdfAnnotations();
+    } catch (err) {
+      flashStatus(`Annotation save failed: ${err}`, "var(--error)", 5000);
+    }
+  }
 
   // Check for unsaved changes
   if (tab.isModified) {
