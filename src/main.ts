@@ -1090,9 +1090,23 @@ const IMAGE_PREVIEW_MIN_ZOOM = 0.25;
 const IMAGE_PREVIEW_MAX_ZOOM = 5;
 const IMAGE_PREVIEW_ZOOM_STEP = 0.25;
 const imagePreviewZooms = new Map<string, number>();
+const PDF_ZOOM_MIN = 0.25;
+const PDF_ZOOM_MAX = 4;
+const PDF_ZOOM_STEP = 0.2;
+const PDF_ZOOM_KEY = "kaelio-pdf-zoom";
 
 function clampImagePreviewZoom(zoom: number): number {
   return Math.min(IMAGE_PREVIEW_MAX_ZOOM, Math.max(IMAGE_PREVIEW_MIN_ZOOM, zoom));
+}
+
+function loadPdfZoom(): number {
+  const raw = Number(localStorage.getItem(PDF_ZOOM_KEY));
+  if (!Number.isFinite(raw) || raw <= 0) return 1;
+  return Math.min(PDF_ZOOM_MAX, Math.max(PDF_ZOOM_MIN, raw));
+}
+
+function savePdfZoom(zoom: number) {
+  localStorage.setItem(PDF_ZOOM_KEY, String(zoom));
 }
 
 function applyImagePreviewZoom(
@@ -1193,10 +1207,169 @@ async function renderImagePreview(previewPane: HTMLElement, path: string) {
   }
 }
 
-function renderPdfPreview(previewPane: HTMLElement, path: string) {
-  const src = convertFileSrc(path);
-  previewPane.innerHTML = `
-    <iframe class="document-preview-frame" src="${escapeHtml(src)}" title="${escapeHtml(path.split("/").pop() || "PDF")}"></iframe>`;
+async function renderPdfPreview(previewPane: HTMLElement, path: string) {
+  previewPane.innerHTML = "";
+
+  const wrap = document.createElement("div");
+  wrap.className = "asset-preview pdf-preview-wrap";
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "asset-preview-toolbar";
+  const zoomOut = document.createElement("button");
+  zoomOut.type = "button";
+  zoomOut.className = "asset-preview-tool";
+  zoomOut.textContent = "-";
+  zoomOut.title = "Zoom out";
+  zoomOut.setAttribute("aria-label", "Zoom out");
+  const zoomLabel = document.createElement("span");
+  zoomLabel.className = "asset-preview-zoom-label";
+  const zoomIn = document.createElement("button");
+  zoomIn.type = "button";
+  zoomIn.className = "asset-preview-tool";
+  zoomIn.textContent = "+";
+  zoomIn.title = "Zoom in";
+  zoomIn.setAttribute("aria-label", "Zoom in");
+  const pageLabel = document.createElement("span");
+  pageLabel.className = "pdf-page-label";
+  toolbar.append(zoomOut, zoomLabel, zoomIn, pageLabel);
+
+  const stage = document.createElement("div");
+  stage.className = "asset-preview-stage pdf-stage";
+  const loading = document.createElement("div");
+  loading.className = "asset-preview-message";
+  loading.textContent = "Loading PDF...";
+  stage.appendChild(loading);
+  wrap.append(toolbar, stage);
+  previewPane.appendChild(wrap);
+
+  let zoom = loadPdfZoom();
+  zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+
+  try {
+    const file = await invoke<BinaryFileInfo>("read_binary_file", { path });
+    if (currentFilePath !== path) return;
+
+    const bytes = Uint8Array.from(atob(file.data_base64), (c) => c.charCodeAt(0));
+    const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
+    if (currentFilePath !== path) return;
+
+    const pageCount = doc.numPages;
+    pageLabel.textContent = `1 / ${pageCount}`;
+
+    type PageSlot = { el: HTMLDivElement; rendered: boolean; rendering: boolean };
+    const slots: PageSlot[] = [];
+    const container = document.createElement("div");
+    container.className = "pdf-pages";
+    stage.replaceChildren(container);
+
+    for (let n = 1; n <= pageCount; n++) {
+      const el = document.createElement("div");
+      el.className = "pdf-page";
+      el.dataset.page = String(n);
+      container.appendChild(el);
+      slots.push({ el, rendered: false, rendering: false });
+    }
+
+    async function sizePlaceholders() {
+      for (let n = 1; n <= pageCount; n++) {
+        const page = await doc.getPage(n);
+        if (currentFilePath !== path) return;
+        const viewport = page.getViewport({ scale: zoom });
+        const slot = slots[n - 1];
+        slot.el.style.width = `${Math.floor(viewport.width)}px`;
+        slot.el.style.height = `${Math.floor(viewport.height)}px`;
+      }
+    }
+
+    async function renderPage(n: number) {
+      if (n < 1 || n > pageCount) return;
+      const slot = slots[n - 1];
+      if (slot.rendered || slot.rendering) return;
+      slot.rendering = true;
+
+      try {
+        const page = await doc.getPage(n);
+        if (currentFilePath !== path) return;
+        const viewport = page.getViewport({ scale: zoom });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        canvas.style.width = `${canvas.width}px`;
+        canvas.style.height = `${canvas.height}px`;
+        canvas.className = "pdf-canvas";
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Could not create PDF canvas context");
+        await page.render({ canvasContext: context, viewport }).promise;
+        if (currentFilePath !== path) return;
+        slot.el.replaceChildren(canvas);
+        slot.rendered = true;
+      } finally {
+        slot.rendering = false;
+      }
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const page = Number((entry.target as HTMLElement).dataset.page);
+          void renderPage(page);
+        }
+      },
+      { root: stage, rootMargin: "400px 0px" },
+    );
+    slots.forEach((slot) => observer.observe(slot.el));
+
+    stage.addEventListener("scroll", () => {
+      const mid = stage.scrollTop + stage.clientHeight / 2;
+      let current = 1;
+      for (let n = 1; n <= pageCount; n++) {
+        if (slots[n - 1].el.offsetTop <= mid) current = n;
+      }
+      pageLabel.textContent = `${current} / ${pageCount}`;
+    });
+
+    async function applyZoom(next: number) {
+      zoom = Math.min(PDF_ZOOM_MAX, Math.max(PDF_ZOOM_MIN, Number(next.toFixed(2))));
+      savePdfZoom(zoom);
+      zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+      slots.forEach((slot) => {
+        slot.rendered = false;
+        slot.el.replaceChildren();
+      });
+      await sizePlaceholders();
+
+      const stageRect = stage.getBoundingClientRect();
+      slots.forEach((slot) => {
+        const rect = slot.el.getBoundingClientRect();
+        if (rect.bottom >= stageRect.top - 400 && rect.top <= stageRect.bottom + 400) {
+          void renderPage(Number(slot.el.dataset.page));
+        }
+      });
+    }
+
+    zoomOut.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void applyZoom(zoom - PDF_ZOOM_STEP);
+    });
+    zoomIn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void applyZoom(zoom + PDF_ZOOM_STEP);
+    });
+
+    await sizePlaceholders();
+    void renderPage(1);
+    void renderPage(2);
+  } catch (err) {
+    if (currentFilePath !== path) return;
+    loading.classList.add("error");
+    const msg = String(err);
+    loading.textContent = /password|encrypt/i.test(msg)
+      ? "Password-protected PDFs are not supported yet."
+      : `Could not load PDF: ${msg}`;
+  }
 }
 
 function renderJsonPreview(previewPane: HTMLElement, content: string) {
@@ -1272,7 +1445,7 @@ async function updatePreview(content: string) {
   }
 
   if (currentFilePath && isPdfPath(currentFilePath)) {
-    renderPdfPreview(previewPane, currentFilePath);
+    await renderPdfPreview(previewPane, currentFilePath);
     return;
   }
 

@@ -1726,6 +1726,45 @@ body {
   margin: 0;
 }
 
+.pdf-preview-wrap {
+  height: 100%;
+}
+
+.pdf-stage {
+  overflow: auto;
+  flex: 1;
+  display: block;
+  background: var(--bg);
+}
+
+.pdf-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  min-height: 100%;
+  padding: 16px;
+}
+
+.pdf-page {
+  overflow: hidden;
+  background: var(--surface0);
+  box-shadow: 0 1px 6px color-mix(in srgb, black 40%, transparent);
+}
+
+.pdf-canvas {
+  display: block;
+}
+
+.pdf-page-label {
+  min-width: 52px;
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .structured-preview {
   margin: 0;
   white-space: pre;
