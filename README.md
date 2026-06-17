@@ -38,7 +38,7 @@ Plus the full mx toolkit: Mermaid & KaTeX, Git sync, callouts, command palette, 
 - **Git sync** — one-click setup, auto commit+push on save, auto-pull on open, conflict resolution, per-file history & snapshots, status dots.
 - **Obsidian-style** — callouts (`> [!tip]`), interactive checklists, tag pills, wikilinks.
 - **Writing** — auto-save, crash recovery, 60s version snapshots, external-change detection, zen mode, image paste & lightbox.
-- **Export** — formatted HTML / raw / plain copy; PDF, HTML, DOCX.
+- **Export** — copy as formatted HTML / raw / plain; image & PDF from the preview (PNG/JPG/PDF); Markdown to PDF/DOCX via Pandoc + Typst.
 - **Platform** — multiple windows, real-time word/char count, weekly auto-update, file associations, macOS / Windows / Linux.
 
 ## Download
@@ -74,7 +74,21 @@ npm run tauri dev      # dev server + hot reload
 npm run tauri build    # production bundle
 ```
 
-PDF/DOCX export uses bundled Pandoc/Typst sidecars; no extra install needed.
+### Markdown PDF / DOCX export — requirements
+
+The **Markdown → PDF / DOCX** export uses [Pandoc](https://pandoc.org). It is not
+bundled, so install it (and a PDF engine) once:
+
+```bash
+brew install pandoc   # required for PDF and DOCX
+brew install typst    # PDF engine (lightweight, ~25 MB) — recommended
+```
+
+Kaelio renders Markdown PDF with Typst, so `pandoc` + `typst` is all you need.
+A full TeX install (`brew install --cask mactex-no-gui`, ~6.9 GB) is not
+required.
+
+The **HTML → PNG / JPG / PDF** export captures the live preview and needs no extra install.
 
 ## License
 

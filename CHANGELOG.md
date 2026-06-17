@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.3
+
+### Export fixes
+
+- **Markdown → PDF/DOCX now works reliably.** Fixed a file-descriptor exhaustion that broke launching Pandoc: the folder watcher used the kqueue backend (one descriptor per watched file), which ran the process out of descriptors when a folder containing `node_modules` was open, causing "Bad file descriptor"/"too many open files" on export. Switched to the macOS FSEvents backend (a single descriptor for the whole tree).
+- **Pandoc is no longer bundled** — it's resolved from the system (Homebrew/PATH). Install once with `brew install pandoc` and `brew install typst` (Typst is the PDF engine; MacTeX is not required).
+- **PDF tables now render with borders** (Pandoc's Typst template defaults to borderless; Kaelio now injects a table-stroke override).
+- **Markdown PDF uses Typst explicitly** and no longer falls back to LaTeX; runs in a writable temp directory so export works from a packaged app.
+- **HTML/preview image export** captures the full content — detects the real artboard size (e.g. fixed-size HTML diagrams) and slices/stitches tall captures, then auto-crops blank margins.
+
+### File operations
+
+- **Delete no longer needs Full Disk Access.** Moves to the system Trash when possible and otherwise falls back to a recoverable `~/.kaelio/trash/` folder; the sidebar shows where the file went. Replaced the y/n prompt with a Confirm/Cancel dialog.
+
 ## 0.9.2
 
 ### Split View & Compare

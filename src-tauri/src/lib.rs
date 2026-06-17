@@ -4,13 +4,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
 use notify::{Watcher, RecommendedWatcher, RecursiveMode, Event, EventKind};
-use wait_timeout::ChildExt;
 use git2::{Repository, StatusOptions, Signature, Cred, CredentialType};
 
 static INITIAL_FILE: Mutex<Option<String>> = Mutex::new(None);
@@ -27,9 +26,19 @@ fn raise_file_descriptor_limit() {
         if libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) != 0 {
             return;
         }
-        if limit.rlim_max > limit.rlim_cur {
+        // Keep the soft limit finite and below Darwin's OPEN_MAX. macOS
+        // `posix_spawn` can fail with EBADF when stdio is redirected and
+        // RLIMIT_NOFILE is infinity or extremely high, even when fd 0/1/2 are
+        // valid. 10_240 is still ample for Kaelio and avoids the spawn bug.
+        const SAFE_NOFILE: libc::rlim_t = 10_240;
+        let target = if limit.rlim_max == libc::RLIM_INFINITY {
+            SAFE_NOFILE
+        } else {
+            limit.rlim_max.min(SAFE_NOFILE)
+        };
+        if target != limit.rlim_cur {
             let new_limit = libc::rlimit {
-                rlim_cur: limit.rlim_max,
+                rlim_cur: target,
                 rlim_max: limit.rlim_max,
             };
             let _ = libc::setrlimit(libc::RLIMIT_NOFILE, &new_limit);
@@ -39,6 +48,130 @@ fn raise_file_descriptor_limit() {
 
 #[cfg(not(unix))]
 fn raise_file_descriptor_limit() {}
+
+/// Apps launched from Finder/LaunchServices can start with stdin/stdout/stderr
+/// (fds 0/1/2) closed. Later file opens then take those low fd numbers, and when
+/// we spawn a child process (pandoc, typst, curl) the stdio redirection collides
+/// and `posix_spawn` fails with "Bad file descriptor (os error 9)". Guarantee
+/// 0/1/2 are valid by pointing any closed ones at /dev/null before anything else.
+#[cfg(unix)]
+fn ensure_std_fds() {
+    unsafe {
+        for fd in 0..3 {
+            if libc::fcntl(fd, libc::F_GETFD) != -1 {
+                continue;
+            }
+            let devnull = libc::open(c"/dev/null".as_ptr(), libc::O_RDWR);
+            if devnull < 0 {
+                break;
+            }
+            if devnull != fd {
+                libc::dup2(devnull, fd);
+                libc::close(devnull);
+            }
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn ensure_std_fds() {}
+
+/// When launched from a dev shell, the app can inherit thousands of open file
+/// descriptors (e.g. another project's node_modules held by a running dev
+/// server). That bloated descriptor table later breaks child-process spawning
+/// (pandoc/typst/curl) with "Bad file descriptor (os error 9)" or, under a finite
+/// limit, "too many open files (os error 24)". Close every inherited descriptor
+/// above stderr at startup, before Tauri opens anything of its own. Reading
+/// /dev/fd touches only descriptors that are actually open.
+#[cfg(all(unix, not(test)))]
+fn close_inherited_fds() {
+    let open_fds: Vec<i32> = match std::fs::read_dir("/dev/fd") {
+        Ok(rd) => rd
+            .flatten()
+            .filter_map(|e| e.file_name().to_str().and_then(|s| s.parse::<i32>().ok()))
+            .collect(),
+        Err(_) => return,
+    };
+    for fd in open_fds {
+        if fd <= 2 {
+            continue;
+        }
+        // Only close inherited regular files and directories (the node_modules
+        // junk). Leave pipes/sockets/kqueues/char devices alone — the runtime or
+        // Tauri may legitimately rely on them.
+        unsafe {
+            let mut st: libc::stat = std::mem::zeroed();
+            if libc::fstat(fd, &mut st) == 0 {
+                let kind = st.st_mode & libc::S_IFMT;
+                if kind == libc::S_IFREG || kind == libc::S_IFDIR {
+                    libc::close(fd);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(all(unix, not(test))))]
+fn close_inherited_fds() {}
+
+/// Rust may use macOS `posix_spawn` for simple `Command`s. Finder-launched apps
+/// can still hit EBADF inside that fast path even after fd 0/1/2 and RLIMIT are
+/// sane. A no-op `pre_exec` forces the older fork/exec path for fragile external
+/// tools such as pandoc and curl.
+#[cfg(unix)]
+fn force_fork_exec(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    unsafe {
+        command.pre_exec(|| Ok(()));
+    }
+}
+
+#[cfg(not(unix))]
+fn force_fork_exec(_command: &mut Command) {}
+
+/// Reports whether fds 0/1/2 are open — appended to spawn errors so we can tell
+/// a closed-fd failure apart from other posix_spawn errors.
+#[cfg(unix)]
+fn fd_diagnostic() -> String {
+    let mut parts = Vec::new();
+    unsafe {
+        for fd in 0..3 {
+            let ok = libc::fcntl(fd, libc::F_GETFD) != -1;
+            parts.push(format!("fd{}={}", fd, if ok { "ok" } else { "CLOSED" }));
+        }
+    }
+    parts.join(" ")
+}
+
+#[cfg(not(unix))]
+fn fd_diagnostic() -> String { String::new() }
+
+#[cfg(unix)]
+fn nofile_diagnostic() -> String {
+    unsafe {
+        let mut limit = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) == 0 {
+            format!("nofile_cur={} nofile_max={}", limit.rlim_cur, limit.rlim_max)
+        } else {
+            "nofile=unknown".to_string()
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn nofile_diagnostic() -> String { String::new() }
+
+fn spawn_diagnostic() -> String {
+    let parts = [fd_diagnostic(), nofile_diagnostic()];
+    parts
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
 
 /// Returns ~/.kaelio, migrating from the legacy ~/.mx folder on first access.
 fn kaelio_home() -> Result<PathBuf, String> {
@@ -75,6 +208,12 @@ struct DirEntry {
     path: String,
     is_dir: bool,
     extension: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct DeleteResult {
+    destination: String,
+    used_system_trash: bool,
 }
 
 fn next_natural_chunk(s: &str, start: usize) -> Option<(&str, usize, bool)> {
@@ -311,9 +450,100 @@ fn create_directory(path: String) -> Result<(), String> {
     fs::create_dir(&p).map_err(|e| e.to_string())
 }
 
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    fs::create_dir_all(dst).map_err(|e| format!("create '{}': {}", dst.display(), e))?;
+    for entry in fs::read_dir(src).map_err(|e| format!("read '{}': {}", src.display(), e))? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        let metadata = entry.metadata().map_err(|e| format!("metadata '{}': {}", src_path.display(), e))?;
+        if metadata.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)
+                .map_err(|e| format!("copy '{}' to '{}': {}", src_path.display(), dst_path.display(), e))?;
+        }
+    }
+    Ok(())
+}
+
+fn unique_kaelio_trash_path(path: &Path) -> Result<PathBuf, String> {
+    let trash_dir = kaelio_home()?.join("trash");
+    fs::create_dir_all(&trash_dir).map_err(|e| e.to_string())?;
+
+    let timestamp_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis();
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("deleted");
+
+    for suffix in 0..1000 {
+        let candidate_name = if suffix == 0 {
+            format!("{}-{}", timestamp_ms, file_name)
+        } else {
+            format!("{}-{}-{}", timestamp_ms, suffix, file_name)
+        };
+        let candidate = trash_dir.join(candidate_name);
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err("Could not create a unique Kaelio trash path".to_string())
+}
+
+fn move_to_kaelio_trash(path: &Path) -> Result<DeleteResult, String> {
+    let destination = unique_kaelio_trash_path(path)?;
+    match fs::rename(path, &destination) {
+        Ok(()) => Ok(DeleteResult {
+            destination: destination.to_string_lossy().to_string(),
+            used_system_trash: false,
+        }),
+        Err(rename_err) => {
+            let fallback = (|| -> Result<DeleteResult, String> {
+                let metadata = fs::metadata(path).map_err(|e| e.to_string())?;
+                if metadata.is_dir() {
+                    copy_dir_recursive(path, &destination)?;
+                    fs::remove_dir_all(path).map_err(|e| format!("remove original directory after copy: {}", e))?;
+                } else {
+                    fs::copy(path, &destination)
+                        .map_err(|e| format!("copy '{}' to '{}': {}", path.display(), destination.display(), e))?;
+                    fs::remove_file(path).map_err(|e| format!("remove original file after copy: {}", e))?;
+                }
+                Ok(DeleteResult {
+                    destination: destination.to_string_lossy().to_string(),
+                    used_system_trash: false,
+                })
+            })();
+            fallback.map_err(|e| format!("rename failed: {}; {}", rename_err, e))
+        }
+    }
+}
+
 #[tauri::command]
-fn delete_entry(path: String) -> Result<(), String> {
-    trash::delete(&path).map_err(|e| e.to_string())
+fn delete_entry(path: String) -> Result<DeleteResult, String> {
+    let original_path = PathBuf::from(&path);
+    let delete_path = fs::canonicalize(&original_path).unwrap_or(original_path);
+    if !delete_path.exists() {
+        return Err(format!("'{}' does not exist", delete_path.display()));
+    }
+
+    match trash::delete(&delete_path) {
+        Ok(()) => Ok(DeleteResult {
+            destination: "System Trash".to_string(),
+            used_system_trash: true,
+        }),
+        Err(native_err) => move_to_kaelio_trash(&delete_path).map_err(|fallback_err| {
+            format!(
+                "Could not move '{}' to system Trash ({}) or Kaelio trash ({}).",
+                delete_path.display(),
+                native_err,
+                fallback_err
+            )
+        }),
+    }
 }
 
 #[tauri::command]
@@ -550,162 +780,152 @@ fn base64url_encode(data: &[u8]) -> String {
     result
 }
 
-fn sidecar_name(base: &str) -> String {
-    let suffix = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        "aarch64-apple-darwin"
-    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
-        "x86_64-apple-darwin"
-    } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
-        "x86_64-pc-windows-msvc.exe"
-    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        "x86_64-unknown-linux-gnu"
-    } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
-        "aarch64-unknown-linux-gnu"
-    } else {
-        return base.to_string();
-    };
-    format!("{}-{}", base, suffix)
-}
-
-fn push_binary_candidates(candidates: &mut Vec<PathBuf>, dir: PathBuf, base: &str, sidecar_name: &str) {
-    candidates.push(dir.join(sidecar_name));
-    candidates.push(dir.join(base));
-    candidates.push(dir.join("binaries").join(sidecar_name));
-    candidates.push(dir.join("binaries").join(base));
-}
-
-fn find_binary_recursive(root: &Path, base: &str, sidecar_name: &str, depth: usize) -> Option<PathBuf> {
-    if depth == 0 || !root.is_dir() {
-        return None;
-    }
-    let entries = fs::read_dir(root).ok()?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_file() {
-            if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
-                if name == base || name == sidecar_name {
-                    return Some(path);
-                }
-            }
-        } else if path.is_dir() {
-            if let Some(found) = find_binary_recursive(&path, base, sidecar_name, depth - 1) {
-                return Some(found);
-            }
+/// Locate a usable pandoc. Kaelio does NOT bundle pandoc — users install it via
+/// `brew install pandoc`. We check Homebrew (Apple Silicon + Intel) then PATH.
+fn find_pandoc() -> Option<PathBuf> {
+    let exe = if cfg!(target_os = "windows") { "pandoc.exe" } else { "pandoc" };
+    let mut candidates = vec![
+        PathBuf::from("/opt/homebrew/bin/pandoc"),
+        PathBuf::from("/usr/local/bin/pandoc"),
+    ];
+    if let Ok(path) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path) {
+            candidates.push(dir.join(exe));
         }
     }
-    None
+    candidates.into_iter().find(|p| p.is_file())
 }
 
-fn find_bundled_binary(app: &tauri::AppHandle, base: &str) -> Option<PathBuf> {
-    let sidecar_name = sidecar_name(base);
-    let mut candidates = Vec::new();
-    let mut search_roots = Vec::new();
-
-    if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
-        let manifest_dir = PathBuf::from(manifest_dir);
-        push_binary_candidates(&mut candidates, manifest_dir.clone(), base, &sidecar_name);
-        push_binary_candidates(&mut candidates, manifest_dir.join("target").join("debug"), base, &sidecar_name);
-        push_binary_candidates(&mut candidates, manifest_dir.join("target").join("release"), base, &sidecar_name);
-    }
-
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        push_binary_candidates(&mut candidates, resource_dir.clone(), base, &sidecar_name);
-        search_roots.push(resource_dir.clone());
-        if let Some(contents_dir) = resource_dir.parent() {
-            push_binary_candidates(&mut candidates, contents_dir.join("MacOS"), base, &sidecar_name);
-            search_roots.push(contents_dir.to_path_buf());
+/// Locate Typst for Markdown PDF export. Passing an absolute path to pandoc
+/// avoids Finder-launched app PATH quirks.
+fn find_typst() -> Option<PathBuf> {
+    let exe = if cfg!(target_os = "windows") { "typst.exe" } else { "typst" };
+    let mut candidates = vec![
+        PathBuf::from("/opt/homebrew/bin/typst"),
+        PathBuf::from("/usr/local/bin/typst"),
+    ];
+    if let Ok(path) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path) {
+            candidates.push(dir.join(exe));
         }
     }
-
-    if let Ok(current_exe) = std::env::current_exe() {
-        if let Some(exe_dir) = current_exe.parent() {
-            push_binary_candidates(&mut candidates, exe_dir.to_path_buf(), base, &sidecar_name);
-            search_roots.push(exe_dir.to_path_buf());
-            if let Some(contents_dir) = exe_dir.parent() {
-                push_binary_candidates(&mut candidates, contents_dir.join("Resources"), base, &sidecar_name);
-                search_roots.push(contents_dir.to_path_buf());
-            }
-        }
-    }
-
-    if let Some(path) = candidates.into_iter().find(|path| path.is_file()) {
-        return Some(path);
-    }
-
-    search_roots
-        .into_iter()
-        .find_map(|root| find_binary_recursive(&root, base, &sidecar_name, 4))
+    candidates.into_iter().find(|p| p.is_file())
 }
 
-fn executable_name(base: &str) -> String {
-    if cfg!(target_os = "windows") && !base.ends_with(".exe") {
-        format!("{}.exe", base)
-    } else {
-        base.to_string()
-    }
-}
+const PANDOC_MISSING_MSG: &str = "Pandoc is required for PDF/DOCX export but was not found. Install it with: brew install pandoc";
+const TYPST_MISSING_MSG: &str = "Typst is required for Markdown PDF export but was not found. Install it with: brew install typst";
+const PANDOC_MARKDOWN_INPUT_FORMAT: &str = "markdown+task_lists+pipe_tables+grid_tables+multiline_tables+simple_tables+table_captions+strikeout";
+const TYPST_TABLE_HEADER: &str = "#set table(stroke: 0.5pt + luma(210), inset: 6pt)\n";
 
-#[cfg(unix)]
-fn ensure_executable(path: &Path) -> Result<(), String> {
-    use std::os::unix::fs::PermissionsExt;
-    let mut perms = fs::metadata(path).map_err(|e| e.to_string())?.permissions();
-    perms.set_mode(perms.mode() | 0o755);
-    fs::set_permissions(path, perms).map_err(|e| e.to_string())
-}
-
-#[cfg(not(unix))]
-fn ensure_executable(_path: &Path) -> Result<(), String> {
-    Ok(())
-}
-
-fn cached_bundled_binary(app: &tauri::AppHandle, base: &str) -> Option<PathBuf> {
-    let source = find_bundled_binary(app, base)?;
-    let cache_dir = kaelio_home().ok()?.join("bin");
-    let _ = fs::create_dir_all(&cache_dir);
-    let target = cache_dir.join(executable_name(base));
-
-    let should_copy = match (fs::metadata(&source), fs::metadata(&target)) {
-        (Ok(src), Ok(dst)) => src.len() != dst.len(),
-        (Ok(_), Err(_)) => true,
-        _ => false,
-    };
-    if should_copy {
-        if fs::copy(&source, &target).is_err() {
-            let _ = ensure_executable(&source);
-            return Some(source);
-        }
-    }
-    if ensure_executable(&target).is_ok() {
-        Some(target)
-    } else {
-        let _ = ensure_executable(&source);
-        Some(source)
-    }
-}
-
-fn sidecar_path_env(app: &tauri::AppHandle, base_path: &str) -> String {
-    let separator = if cfg!(target_os = "windows") { ";" } else { ":" };
-    let mut entries = vec![base_path.to_string()];
-    for base in ["pandoc", "typst"] {
-        if let Some(path) = cached_bundled_binary(app, base).or_else(|| find_bundled_binary(app, base)) {
-            if let Some(parent) = path.parent() {
-                entries.push(parent.to_string_lossy().to_string());
-            }
-        }
-    }
-    entries.join(separator)
-}
-
-fn pandoc_command(app: &tauri::AppHandle) -> Command {
-    if let Some(path) = cached_bundled_binary(app, "pandoc").or_else(|| find_bundled_binary(app, "pandoc")) {
-        Command::new(path)
-    } else {
-        Command::new("pandoc")
-    }
-}
+const DOCX_TABLE_STYLE: &str = r#"<w:style w:default="1" w:styleId="Table" w:type="table">
+    <w:name w:val="Table" />
+    <w:basedOn w:val="TableNormal" />
+    <w:qFormat />
+    <w:tblPr>
+      <w:tblInd w:type="dxa" w:w="0" />
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="4" w:space="0" w:color="D0D7DE" />
+        <w:left w:val="single" w:sz="4" w:space="0" w:color="D0D7DE" />
+        <w:bottom w:val="single" w:sz="4" w:space="0" w:color="D0D7DE" />
+        <w:right w:val="single" w:sz="4" w:space="0" w:color="D0D7DE" />
+        <w:insideH w:val="single" w:sz="4" w:space="0" w:color="D0D7DE" />
+        <w:insideV w:val="single" w:sz="4" w:space="0" w:color="D0D7DE" />
+      </w:tblBorders>
+      <w:tblCellMar>
+        <w:top w:type="dxa" w:w="96" />
+        <w:left w:type="dxa" w:w="120" />
+        <w:bottom w:type="dxa" w:w="96" />
+        <w:right w:type="dxa" w:w="120" />
+      </w:tblCellMar>
+    </w:tblPr>
+    <w:tblStylePr w:type="firstRow">
+      <w:tcPr>
+        <w:shd w:fill="F3F6FA" w:val="clear" />
+        <w:vAlign w:val="center" />
+      </w:tcPr>
+      <w:rPr>
+        <w:b />
+      </w:rPr>
+    </w:tblStylePr>
+  </w:style>"#;
 
 fn output_file_ready(path: &str) -> bool {
     fs::metadata(path).map(|m| m.is_file() && m.len() > 0).unwrap_or(false)
+}
+
+fn apply_kaelio_docx_table_style(styles_xml: &str) -> String {
+    let Some(style_id) = styles_xml.find(r#"w:styleId="Table""#) else {
+        return styles_xml
+            .replacen("</w:styles>", &format!("{}\n</w:styles>", DOCX_TABLE_STYLE), 1);
+    };
+    let Some(start) = styles_xml[..style_id].rfind("<w:style") else {
+        return styles_xml.to_string();
+    };
+    let Some(end_rel) = styles_xml[style_id..].find("</w:style>") else {
+        return styles_xml.to_string();
+    };
+    let end = style_id + end_rel + "</w:style>".len();
+
+    let mut styled = String::with_capacity(styles_xml.len() + DOCX_TABLE_STYLE.len());
+    styled.push_str(&styles_xml[..start]);
+    styled.push_str(DOCX_TABLE_STYLE);
+    styled.push_str(&styles_xml[end..]);
+    styled
+}
+
+fn style_docx_tables(path: &Path) -> Result<(), String> {
+    use std::io::{Read, Write};
+    use zip::{ZipArchive, ZipWriter};
+
+    let source = fs::File::open(path)
+        .map_err(|e| format!("Failed to open DOCX for table styling: {}", e))?;
+    let mut archive = ZipArchive::new(source)
+        .map_err(|e| format!("Failed to read DOCX package: {}", e))?;
+    let tmp_path = path.with_file_name(format!(
+        "{}.kaelio-tables.tmp",
+        path.file_name().and_then(|n| n.to_str()).unwrap_or("export.docx")
+    ));
+    let target = fs::File::create(&tmp_path)
+        .map_err(|e| format!("Failed to prepare styled DOCX: {}", e))?;
+    let mut writer = ZipWriter::new(target);
+    let mut updated_styles = false;
+
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i)
+            .map_err(|e| format!("Failed to read DOCX entry: {}", e))?;
+        if entry.name() == "word/styles.xml" {
+            let options = entry.options();
+            let mut styles_xml = String::new();
+            entry.read_to_string(&mut styles_xml)
+                .map_err(|e| format!("Failed to read DOCX styles: {}", e))?;
+            let styled_xml = apply_kaelio_docx_table_style(&styles_xml);
+            updated_styles = styled_xml != styles_xml;
+            writer.start_file("word/styles.xml", options)
+                .map_err(|e| format!("Failed to write DOCX styles: {}", e))?;
+            writer.write_all(styled_xml.as_bytes())
+                .map_err(|e| format!("Failed to write DOCX table style: {}", e))?;
+        } else {
+            writer.raw_copy_file(entry)
+                .map_err(|e| format!("Failed to copy DOCX entry: {}", e))?;
+        }
+    }
+
+    writer.finish()
+        .map_err(|e| format!("Failed to finalize styled DOCX: {}", e))?;
+    drop(archive);
+
+    if updated_styles {
+        if cfg!(target_os = "windows") {
+            fs::remove_file(path)
+                .map_err(|e| format!("Failed to replace original DOCX: {}", e))?;
+        }
+        fs::rename(&tmp_path, path)
+            .map_err(|e| format!("Failed to install styled DOCX: {}", e))?;
+    } else {
+        let _ = fs::remove_file(&tmp_path);
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -745,23 +965,20 @@ fn export_pdf_blocking(markdown_content: String, output_path: String, source_for
     let _ = fs::create_dir_all(&tmp_dir);
     let tmp_input = tmp_dir.join(if is_html { "export.html" } else { "export.md" });
 
-    // Build PATH: inherit system PATH and append known Pandoc + TeX locations
+    // Build PATH: inherit system PATH and append known Pandoc/Typst locations.
     let sys_path = std::env::var("PATH").unwrap_or_default();
     let path_env = if cfg!(target_os = "windows") {
-        // Windows: append common Pandoc, MiKTeX, and TeX Live paths
-        let mut extra = format!(
-            "{};C:\\Program Files\\Pandoc;C:\\Program Files\\MiKTeX\\miktex\\bin\\x64;C:\\texlive\\2024\\bin\\windows;C:\\texlive\\2025\\bin\\windows",
-            sys_path
-        );
+        // Windows: append common Pandoc install location.
+        let mut extra = format!("{};C:\\Program Files\\Pandoc", sys_path);
         // Also check %LOCALAPPDATA%\Pandoc (user-level MSI install)
         if let Ok(local_app) = std::env::var("LOCALAPPDATA") {
             extra = format!("{};{}\\Pandoc", extra, local_app);
         }
         extra
     } else {
-        // macOS/Linux: add Homebrew (Apple Silicon + Intel), TeX, and common bin paths
+        // macOS/Linux: add Homebrew (Apple Silicon + Intel) and common bin paths.
         let mut extra = format!(
-            "{}:/opt/homebrew/bin:/Library/TeX/texbin:/opt/anaconda3/bin:/usr/local/bin:/usr/bin:/bin",
+            "{}:/opt/homebrew/bin:/opt/anaconda3/bin:/usr/local/bin:/usr/bin:/bin",
             sys_path
         );
         // Also check ~/.local/bin (pip/pipx installs on Linux)
@@ -770,7 +987,13 @@ fn export_pdf_blocking(markdown_content: String, output_path: String, source_for
         }
         extra
     };
-    let path_env = sidecar_path_env(&app, &path_env);
+    let pandoc_path = match find_pandoc() {
+        Some(p) => p,
+        None => {
+            let _ = fs::remove_dir_all(&tmp_dir);
+            return Err(PANDOC_MISSING_MSG.to_string());
+        }
+    };
 
     // Step 1: Extract mermaid blocks, render to PNG via mermaid.ink API
     let mut processed = String::new();
@@ -805,7 +1028,9 @@ fn export_pdf_blocking(markdown_content: String, output_path: String, source_for
                 let encoded = base64url_encode(mermaid_buf.trim().as_bytes());
                 let url = format!("https://mermaid.ink/img/{}", encoded);
 
-                let download = Command::new("curl")
+                let mut curl_command = Command::new("curl");
+                force_fork_exec(&mut curl_command);
+                let download = curl_command
                     .args(["-sL", "--max-time", "30", "-o", png_file.to_str().unwrap(), &url])
                     .env("PATH", &path_env)
                     .output();
@@ -846,125 +1071,66 @@ fn export_pdf_blocking(markdown_content: String, output_path: String, source_for
     // Step 2: Write processed input
     let mut f = fs::File::create(&tmp_input).map_err(|e| e.to_string())?;
     f.write_all(processed.as_bytes()).map_err(|e| e.to_string())?;
+    let typst_header = tmp_dir.join("kaelio-tables.typ");
+    let mut header = fs::File::create(&typst_header).map_err(|e| e.to_string())?;
+    header.write_all(TYPST_TABLE_HEADER.as_bytes()).map_err(|e| e.to_string())?;
 
-    // Step 3: Write LaTeX header for Latin Modern fonts (science paper look)
-    // Latin Modern = OpenType version of Computer Modern (default LaTeX font)
-    // Falls back to Times New Roman if Latin Modern is not installed
-    let lm_header = tmp_dir.join("fonts.tex");
-    let lm_font_dirs: &[&str] = if cfg!(target_os = "windows") {
-        &[
-            "C:/texlive/2025/texmf-dist/fonts/opentype/public/lm/",
-            "C:/texlive/2024/texmf-dist/fonts/opentype/public/lm/",
-        ]
-    } else {
-        &[
-            "/usr/local/texlive/2025basic/texmf-dist/fonts/opentype/public/lm/",
-            "/usr/local/texlive/2025/texmf-dist/fonts/opentype/public/lm/",
-            "/usr/local/texlive/2024/texmf-dist/fonts/opentype/public/lm/",
-        ]
+    // Step 3: Run pandoc with Typst. Kaelio's supported lightweight PDF stack is
+    // `brew install pandoc` + `brew install typst`; do not fall through to
+    // pdflatex/xelatex because that turns a Typst/PATH issue into a misleading
+    // MacTeX error.
+    let typst_path = match find_typst() {
+        Some(p) => p,
+        None => {
+            let _ = fs::remove_dir_all(&tmp_dir);
+            return Err(TYPST_MISSING_MSG.to_string());
+        }
     };
-    let lm_font_dir = lm_font_dirs.iter()
-        .find(|d| Path::new(d).join("lmroman10-regular.otf").exists())
-        .copied();
-    let use_latin_modern = lm_font_dir.is_some();
-    if let Some(dir) = lm_font_dir {
-        let header = format!(
-            "\\setmainfont[Path={dir},BoldFont=lmroman10-bold.otf,ItalicFont=lmroman10-italic.otf,BoldItalicFont=lmroman10-bolditalic.otf]{{lmroman10-regular.otf}}\n\\setmonofont[Path={dir}]{{lmmono10-regular.otf}}\n",
-            dir = dir
-        );
-        let _ = fs::write(&lm_header, header);
-    }
+    let _ = app.emit("pdf-progress", "Running pandoc (typst)…");
 
-    // Step 4: Run pandoc. Prefer bundled Typst because it avoids requiring a TeX install.
-    let engines = ["typst".to_string(), "xelatex".to_string(), "pdflatex".to_string()];
-    let mut last_err = String::new();
+    let args = vec![
+        tmp_input.to_str().unwrap().to_string(),
+        "-o".to_string(), output_path.clone(),
+        "--from".to_string(), if is_html { "html".to_string() } else { PANDOC_MARKDOWN_INPUT_FORMAT.to_string() },
+        "--pdf-engine".to_string(), typst_path.to_string_lossy().to_string(),
+        "--include-in-header".to_string(), typst_header.to_string_lossy().to_string(),
+        "-V".to_string(), "geometry:margin=1in".to_string(),
+        "-V".to_string(), "fontsize=11pt".to_string(),
+        "-V".to_string(), "colorlinks=true".to_string(),
+        "--syntax-highlighting=none".to_string(),
+    ];
 
-    for engine in engines {
-        let is_typst = engine.contains("typst");
-        let _ = app.emit("pdf-progress", format!("Running pandoc ({})…", engine));
-
-        let mut args = vec![
-            tmp_input.to_str().unwrap().to_string(),
-            "-o".to_string(), output_path.clone(),
-            "--from".to_string(), if is_html { "html".to_string() } else { "markdown+task_lists+pipe_tables+strikeout".to_string() },
-            "--pdf-engine".to_string(), engine.clone(),
-            "-V".to_string(), "geometry:margin=1in".to_string(),
-            "-V".to_string(), "fontsize=11pt".to_string(),
-            "-V".to_string(), "colorlinks=true".to_string(),
-            "--no-highlight".to_string(),
-        ];
-        if !is_typst {
-            args.push("--pdf-engine-opt=-interaction=nonstopmode".to_string());
+    let pandoc_program = pandoc_path.to_string_lossy().to_string();
+    let mut pandoc_command = Command::new(&pandoc_path);
+    force_fork_exec(&mut pandoc_command);
+    let output = pandoc_command
+        .args(&args)
+        // Pandoc 3.10 writes the temporary Typst source to `.`; packaged apps
+        // launched by Finder can start in `/`, which is read-only on macOS.
+        .current_dir(&tmp_dir)
+        .env("PATH", &path_env)
+        .env("PWD", &tmp_dir)
+        .env("TMPDIR", &tmp_dir)
+        .stdin(std::process::Stdio::null())
+        .output();
+    let result = match output {
+        Ok(out) if out.status.success() && output_file_ready(&output_path) => Ok(output_path),
+        Ok(out) if out.status.success() => Err(format!(
+            "pandoc finished, but the output file was not created or is empty: {}",
+            output_path
+        )),
+        Ok(out) => {
+            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            Err(format!("pandoc failed: {}", if err.is_empty() { format!("exited with {}", out.status) } else { err }))
         }
-        if engine == "xelatex" {
-            if use_latin_modern {
-                // Use Latin Modern via header include (Computer Modern look)
-                args.push("-H".to_string());
-                args.push(lm_header.to_str().unwrap().to_string());
-            } else {
-                // Fallback: Times New Roman + platform-appropriate mono font
-                args.extend_from_slice(&[
-                    "-V".to_string(), "mainfont:Times New Roman".to_string(),
-                ]);
-                if cfg!(target_os = "macos") {
-                    args.extend_from_slice(&[
-                        "-V".to_string(), "monofont:.SF NS Mono".to_string(),
-                    ]);
-                } else {
-                    args.extend_from_slice(&[
-                        "-V".to_string(), "monofont:Consolas".to_string(),
-                    ]);
-                }
-            }
-        }
-
-        let stderr_file = tmp_dir.join("pandoc_stderr.log");
-        let stderr_out = fs::File::create(&stderr_file).map_err(|e| e.to_string())?;
-
-        let mut command = pandoc_command(&app);
-        let pandoc_program = command.get_program().to_string_lossy().to_string();
-        let mut child = command
-            .args(&args)
-            .current_dir(&tmp_dir)
-            .env("PATH", &path_env)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::from(stderr_out))
-            .spawn()
-            .map_err(|e| format!("Failed to run pandoc at '{}'. ({})", pandoc_program, e))?;
-
-        let timeout = std::time::Duration::from_secs(120);
-        match child.wait_timeout(timeout) {
-            Ok(Some(status)) if status.success() => {
-                if output_file_ready(&output_path) {
-                    let _ = fs::remove_dir_all(&tmp_dir);
-                    return Ok(output_path);
-                }
-                last_err = format!(
-                    "pandoc finished, but the output file was not created or is empty: {}",
-                    output_path
-                );
-            }
-            Ok(Some(_)) => {
-                last_err = fs::read_to_string(&stderr_file).unwrap_or_default();
-            }
-            Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                last_err = format!("pandoc timed out after {}s with engine {}", timeout.as_secs(), engine);
-            }
-            Err(e) => {
-                last_err = format!("pandoc error: {}", e);
-            }
-        }
-    }
-
+        Err(e) => Err(format!("Failed to run pandoc at '{}'. ({}) [{}]", pandoc_program, e, spawn_diagnostic())),
+    };
     let _ = fs::remove_dir_all(&tmp_dir);
-    Err(format!("pandoc failed: {}", last_err))
+    result
 }
 
 #[tauri::command]
-async fn export_docx(markdown_content: String, output_path: String, app: tauri::AppHandle) -> Result<String, String> {
+async fn export_docx(markdown_content: String, output_path: String, _app: tauri::AppHandle) -> Result<String, String> {
     use std::io::Write;
 
     let (tx, rx) = std::sync::mpsc::channel();
@@ -979,17 +1145,14 @@ async fn export_docx(markdown_content: String, output_path: String, app: tauri::
 
             let sys_path = std::env::var("PATH").unwrap_or_default();
             let path_env = if cfg!(target_os = "windows") {
-                let mut extra = format!(
-                    "{};C:\\Program Files\\Pandoc;C:\\Program Files\\MiKTeX\\miktex\\bin\\x64;C:\\texlive\\2024\\bin\\windows;C:\\texlive\\2025\\bin\\windows",
-                    sys_path
-                );
+                let mut extra = format!("{};C:\\Program Files\\Pandoc", sys_path);
                 if let Ok(local_app) = std::env::var("LOCALAPPDATA") {
                     extra = format!("{};{}\\Pandoc", extra, local_app);
                 }
                 extra
             } else {
                 let mut extra = format!(
-                    "{}:/opt/homebrew/bin:/Library/TeX/texbin:/usr/local/bin:/usr/bin:/bin",
+                    "{}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
                     sys_path
                 );
                 if let Ok(home) = std::env::var("HOME") {
@@ -997,58 +1160,41 @@ async fn export_docx(markdown_content: String, output_path: String, app: tauri::
                 }
                 extra
             };
-            let path_env = sidecar_path_env(&app, &path_env);
+            let pandoc_path = find_pandoc().ok_or_else(|| PANDOC_MISSING_MSG.to_string())?;
 
-            let stderr_file = tmp_dir.join("pandoc_stderr.log");
-            let stderr_out = fs::File::create(&stderr_file).map_err(|e| e.to_string())?;
-
-            let mut command = pandoc_command(&app);
-            let pandoc_program = command.get_program().to_string_lossy().to_string();
-            let mut child = command
+            let pandoc_program = pandoc_path.to_string_lossy().to_string();
+            let mut pandoc_command = Command::new(&pandoc_path);
+            force_fork_exec(&mut pandoc_command);
+            let output = pandoc_command
                 .args([
                     tmp_md.to_str().unwrap(),
                     "-o", &output_path,
-                    "--from", "markdown",
+                    "--from", PANDOC_MARKDOWN_INPUT_FORMAT,
                     "--to", "docx",
                 ])
                 .current_dir(&tmp_dir)
                 .env("PATH", &path_env)
+                .env("PWD", &tmp_dir)
+                .env("TMPDIR", &tmp_dir)
                 .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::from(stderr_out))
-                .spawn()
-                .map_err(|e| format!("Failed to run pandoc at '{}'. ({})", pandoc_program, e))?;
-
-            let timeout = std::time::Duration::from_secs(60);
-            match child.wait_timeout(timeout) {
-                Ok(Some(status)) if status.success() => {
-                    if output_file_ready(&output_path) {
-                        let _ = fs::remove_dir_all(&tmp_dir);
-                        Ok(output_path)
-                    } else {
-                        let _ = fs::remove_dir_all(&tmp_dir);
-                        Err(format!(
-                            "pandoc finished, but the output file was not created or is empty: {}",
-                            output_path
-                        ))
-                    }
+                .output();
+            let result = match output {
+                Ok(out) if out.status.success() && output_file_ready(&output_path) => {
+                    style_docx_tables(Path::new(&output_path))?;
+                    Ok(output_path.clone())
+                },
+                Ok(out) if out.status.success() => Err(format!(
+                    "pandoc finished, but the output file was not created or is empty: {}",
+                    output_path
+                )),
+                Ok(out) => {
+                    let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                    Err(format!("pandoc failed: {}", if err.is_empty() { format!("exited with {}", out.status) } else { err }))
                 }
-                Ok(Some(_)) => {
-                    let err = fs::read_to_string(&stderr_file).unwrap_or_default();
-                    let _ = fs::remove_dir_all(&tmp_dir);
-                    Err(format!("pandoc failed: {}", err))
-                }
-                Ok(None) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    let _ = fs::remove_dir_all(&tmp_dir);
-                    Err("pandoc timed out".to_string())
-                }
-                Err(e) => {
-                    let _ = fs::remove_dir_all(&tmp_dir);
-                    Err(format!("pandoc error: {}", e))
-                }
-            }
+                Err(e) => Err(format!("Failed to run pandoc at '{}'. ({}) [{}]", pandoc_program, e, spawn_diagnostic())),
+            };
+            let _ = fs::remove_dir_all(&tmp_dir);
+            result
         })();
         let _ = tx.send(result);
     });
@@ -1975,6 +2121,8 @@ fn load_session() -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    ensure_std_fds();
+    close_inherited_fds();
     raise_file_descriptor_limit();
 
     tauri::Builder::default()

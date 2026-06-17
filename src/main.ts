@@ -12,7 +12,7 @@ import footnote from "markdown-it-footnote";
 import mermaid from "mermaid";
 import panzoom from "panzoom";
 import katex from "katex";
-import { toJpeg, toPng } from "html-to-image";
+import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
 import "katex/dist/katex.min.css";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -1450,7 +1450,7 @@ async function closeSubTab(id: string) {
   if (!tab) return;
   if (tab.isModified) {
     if (id !== subActiveTabId) { subActiveTabId = id; renderActiveSubTab(); }
-    const shouldSave = await showConfirmDialog(`Save changes to ${tab.title}? (Y/N)`);
+    const shouldSave = await showConfirmDialog(`Save changes to ${tab.title}?`);
     if (shouldSave) await saveSubFile();
   }
   const idx = subTabs.findIndex(t => t.id === id);
@@ -1556,7 +1556,7 @@ async function toggleSplit() {
   // Turning split OFF — guard unsaved sub tabs
   const dirty = subTabs.filter(t => t.isModified);
   if (dirty.length > 0) {
-    const shouldSave = await showConfirmDialog(`Save ${dirty.length} unsaved sub-pane file(s)? (Y/N)`);
+    const shouldSave = await showConfirmDialog(`Save ${dirty.length} unsaved sub-pane file(s)?`);
     if (shouldSave) {
       for (const t of dirty) { subActiveTabId = t.id; if (subMode === "edit") saveActiveSubTabState(); await saveSubFile(); }
     }
@@ -2819,32 +2819,63 @@ function showInputDialog(message: string, defaultValue = ""): Promise<string | n
   });
 }
 
-function showConfirmDialog(message: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const palette = document.getElementById("command-palette");
-    const input = document.getElementById("palette-input") as HTMLInputElement;
-    const results = document.getElementById("palette-results");
-    if (!palette || !input || !results) { resolve(false); return; }
+interface ConfirmOptions {
+  confirmLabel?: string;
+  cancelLabel?: string;
+  defaultButton?: "confirm" | "cancel";
+}
 
-    palette.classList.remove("hidden");
-    input.value = "";
-    input.placeholder = "y / n";
-    input.focus();
-    results.innerHTML = `<div class="palette-item" style="pointer-events:none">${escapeHtml(message)}</div><div class="palette-item" style="color:var(--muted);pointer-events:none">Press Y to confirm, N or Esc to cancel</div>`;
+interface DeleteResult {
+  destination: string;
+  used_system_trash: boolean;
+}
+
+function showConfirmDialog(message: string, options: ConfirmOptions = {}): Promise<boolean> {
+  const { confirmLabel = "Confirm", cancelLabel = "Cancel", defaultButton = "confirm" } = options;
+  return new Promise((resolve) => {
+    const backdrop = document.createElement("div");
+    backdrop.className = "confirm-modal-backdrop";
+
+    const box = document.createElement("div");
+    box.className = "confirm-modal";
+
+    const msg = document.createElement("div");
+    msg.className = "confirm-modal-message";
+    msg.textContent = message;
+
+    const actions = document.createElement("div");
+    actions.className = "confirm-modal-actions";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "confirm-modal-btn confirm-modal-cancel";
+    cancelBtn.textContent = cancelLabel;
+
+    const okBtn = document.createElement("button");
+    okBtn.className = "confirm-modal-btn confirm-modal-confirm";
+    okBtn.textContent = confirmLabel;
+
+    actions.append(okBtn, cancelBtn);
+    box.append(msg, actions);
+    backdrop.appendChild(box);
+    document.body.appendChild(backdrop);
+
+    const primary = defaultButton === "cancel" ? cancelBtn : okBtn;
+    primary.classList.add("confirm-modal-default");
+    primary.focus();
 
     const cleanup = () => {
-      palette.classList.add("hidden");
-      input.placeholder = "Type a command…";
-      input.removeEventListener("keydown", handler);
-      document.getElementById("palette-backdrop")?.removeEventListener("click", cancel);
+      backdrop.remove();
+      document.removeEventListener("keydown", onKey, true);
     };
-    const cancel = () => { cleanup(); resolve(false); };
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "y" || e.key === "Y" || e.key === "Enter") { e.preventDefault(); cleanup(); resolve(true); }
-      if (e.key === "n" || e.key === "N" || e.key === "Escape") { e.preventDefault(); cancel(); }
+    const done = (v: boolean) => { cleanup(); resolve(v); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); done(false); }
+      else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); done(defaultButton === "confirm"); }
     };
-    input.addEventListener("keydown", handler);
-    document.getElementById("palette-backdrop")?.addEventListener("click", cancel, { once: true });
+    document.addEventListener("keydown", onKey, true);
+    cancelBtn.addEventListener("click", () => done(false));
+    okBtn.addEventListener("click", () => done(true));
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) done(false); });
   });
 }
 
@@ -3500,18 +3531,23 @@ async function ctxDelete() {
   hideContextMenu();
 
   const name = target.path.split("/").pop()!;
-  if (!(await showConfirmDialog(`Move "${name}" to trash?`))) return;
+  if (!(await showConfirmDialog(`Are you sure to delete "${name}"?`, { confirmLabel: "Confirm", defaultButton: "cancel" }))) return;
 
   try {
-    await invoke("delete_entry", { path: target.path });
+    console.info("[kaelio] delete_entry invoked", { path: target.path, isDir: target.isDir });
+    const result = await invoke<DeleteResult>("delete_entry", { path: target.path });
+    console.info("[kaelio] delete_entry moved", result);
     if (target.path === currentFilePath) {
       editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: "" } });
       setFilename(null);
       setModified(false);
     }
     refreshSidebar();
+    const destination = result.used_system_trash ? "System Trash" : result.destination;
+    flashStatus(`Moved "${name}" to ${destination}`, "var(--success)", 5000);
   } catch (e) {
-    flashStatus(`Delete failed: ${e}`, "var(--error)", 3000);
+    console.error("[kaelio] delete_entry failed", { path: target.path, error: e });
+    flashStatus(`Delete failed: ${e}`, "var(--error)", 10000);
   }
 }
 
@@ -4360,7 +4396,7 @@ async function closeTab(tabId: string) {
   if (tab.isModified) {
     // If not active, switch to it first so user can see the content
     if (tabId !== activeTabId) switchToTab(tabId);
-    const shouldSave = await showConfirmDialog(`Save changes to ${tab.title}? (Y/N)`);
+    const shouldSave = await showConfirmDialog(`Save changes to ${tab.title}?`);
     if (shouldSave) {
       await saveFile();
     }
@@ -4748,6 +4784,7 @@ async function ctxCompareWith() {
 const EXPORT_CAPTURE_WIDTH = 1200;
 const EXPORT_MAX_CANVAS_DIMENSION = 16000;
 const EXPORT_MAX_CANVAS_AREA = 16_000_000;
+const EXPORT_SOURCE_SLICE_HEIGHT = 4096;
 
 function getCaptureWidth(sourceWidth: number) {
   return Math.max(EXPORT_CAPTURE_WIDTH, Math.min(Math.max(sourceWidth, 1), 1800));
@@ -4762,6 +4799,81 @@ function getExportPixelRatio(width: number, height: number) {
     EXPORT_MAX_CANVAS_DIMENSION / safeHeight,
     Math.sqrt(EXPORT_MAX_CANVAS_AREA / (safeWidth * safeHeight)),
   ));
+}
+
+// html-to-image sizes its canvas to the node's CSS width, so content wider than
+// that width (tables, code blocks, Mermaid) gets clipped on the right. Widen the
+// node to its full content width before capture so nothing overflows.
+async function fitNodeToContentWidth(node: HTMLElement): Promise<void> {
+  const contentWidth = Math.max(node.scrollWidth, node.clientWidth, 1);
+  if (contentWidth > node.clientWidth) {
+    node.style.width = `${contentWidth}px`;
+    node.style.maxWidth = "none";
+    await nextPaint();
+  }
+}
+
+function captureRect(rect: DOMRect) {
+  return {
+    left: Math.round(rect.left),
+    top: Math.round(rect.top),
+    right: Math.round(rect.right),
+    bottom: Math.round(rect.bottom),
+    width: Math.round(rect.width),
+    height: Math.round(rect.height),
+  };
+}
+
+function logCaptureDiagnostics(label: string, node: HTMLElement, width: number, height: number, pixelRatio: number) {
+  const nodeRect = node.getBoundingClientRect();
+  let widestChild: {
+    tag: string;
+    id: string;
+    className: string;
+    text: string;
+    rect: ReturnType<typeof captureRect>;
+    rightFromNode: number;
+  } | null = null;
+
+  Array.from(node.querySelectorAll("*")).forEach(child => {
+    const rect = child.getBoundingClientRect();
+    if (!Number.isFinite(rect.width) || rect.width <= 0) return;
+    if (!widestChild || rect.width > widestChild.rect.width) {
+      const className = typeof (child as HTMLElement).className === "string"
+        ? (child as HTMLElement).className
+        : "";
+      widestChild = {
+        tag: child.tagName.toLowerCase(),
+        id: child.id || "",
+        className,
+        text: (child.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80),
+        rect: captureRect(rect),
+        rightFromNode: Math.round(rect.right - nodeRect.left),
+      };
+    }
+  });
+
+  const style = getComputedStyle(node);
+  console.info("[kaelio] export capture diagnostics", {
+    label,
+    nodeRect: captureRect(nodeRect),
+    scrollWidth: node.scrollWidth,
+    scrollHeight: node.scrollHeight,
+    clientWidth: node.clientWidth,
+    clientHeight: node.clientHeight,
+    offsetWidth: node.offsetWidth,
+    offsetHeight: node.offsetHeight,
+    toImage: { width, height, pixelRatio },
+    style: {
+      position: style.position,
+      left: style.left,
+      top: style.top,
+      margin: style.margin,
+      transform: style.transform,
+      boxSizing: style.boxSizing,
+    },
+    widestChild,
+  });
 }
 
 function renderMarkdownPreviewHtml(content: string): string {
@@ -4781,6 +4893,41 @@ function renderMarkdownPreviewHtml(content: string): string {
   return sanitizeHtmlString(html);
 }
 
+function numericAttribute(el: Element, name: string): number {
+  const value = el.getAttribute(name);
+  if (!value) return 0;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function svgViewBoxSize(svg: SVGSVGElement): { width: number; height: number } {
+  const viewBox = svg.getAttribute("viewBox")?.trim().split(/\s+/).map(Number);
+  if (viewBox && viewBox.length === 4 && viewBox.every(Number.isFinite)) {
+    return { width: viewBox[2], height: viewBox[3] };
+  }
+  return {
+    width: numericAttribute(svg, "width"),
+    height: numericAttribute(svg, "height"),
+  };
+}
+
+function detectHtmlArtboard(doc: Document): { width: number; height: number } | null {
+  const explicitFrame = doc.getElementById("frame") as HTMLElement | null;
+  if (explicitFrame) {
+    const width = Math.max(explicitFrame.offsetWidth, numericAttribute(explicitFrame, "width"));
+    const height = Math.max(explicitFrame.offsetHeight, numericAttribute(explicitFrame, "height"));
+    if (width > 0 && height > 0) return { width, height };
+  }
+
+  let best: { width: number; height: number } | null = null;
+  doc.querySelectorAll("svg").forEach(svg => {
+    const size = svgViewBoxSize(svg as SVGSVGElement);
+    if (size.width <= 0 || size.height <= 0) return;
+    if (!best || size.width * size.height > best.width * best.height) best = size;
+  });
+  return best;
+}
+
 function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void } {
   const previewPane = document.getElementById("preview-pane");
   if (!previewPane) throw new Error("Preview pane is not available");
@@ -4788,10 +4935,12 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
   const frame = previewPane.querySelector(".html-preview-frame") as HTMLIFrameElement | null;
   const doc = frame?.contentDocument;
   if (frame && doc?.body) {
-    const width = getCaptureWidth(Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth, frame?.clientWidth || 1));
+    const artboard = detectHtmlArtboard(doc);
+    const width = artboard?.width ?? getCaptureWidth(Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth, frame?.clientWidth || 1));
     const host = document.createElement("div");
     host.className = "export-capture-host export-print-theme";
     host.style.width = `${width}px`;
+    if (artboard) host.style.height = `${artboard.height}px`;
     applyLightExportTheme(host);
 
     const base = doc.createElement("base");
@@ -4813,11 +4962,32 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
       host.appendChild(clone);
     });
     const style = document.createElement("style");
-    style.textContent = `${styles}\n${EXPORT_LIGHT_THEME_CSS}`;
+    const artboardCss = artboard ? `
+      .export-capture-host #stage {
+        position: relative !important;
+        inset: auto !important;
+        display: block !important;
+        width: ${artboard.width}px !important;
+        height: ${artboard.height}px !important;
+        overflow: visible !important;
+        place-items: initial !important;
+      }
+      .export-capture-host #frame {
+        position: relative !important;
+        width: ${artboard.width}px !important;
+        height: ${artboard.height}px !important;
+        transform: none !important;
+        transform-origin: top left !important;
+      }
+      .export-capture-host svg {
+        max-width: none !important;
+      }
+    ` : "";
+    style.textContent = `${styles}\n${artboardCss}\n${EXPORT_LIGHT_THEME_CSS}`;
     host.appendChild(style);
     appendSanitizedHtml(host, doc.body.innerHTML);
     document.body.appendChild(host);
-    const height = Math.max(host.scrollHeight, host.clientHeight, doc.documentElement.scrollHeight, doc.body.scrollHeight, 1);
+    const height = artboard?.height ?? Math.max(host.scrollHeight, host.clientHeight, doc.documentElement.scrollHeight, doc.body.scrollHeight, 1);
     host.style.height = `${height}px`;
     return {
       node: host,
@@ -4830,9 +5000,9 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
   const fullWidth = getCaptureWidth(Math.max(previewPane.scrollWidth, previewPane.clientWidth, 1));
   const host = document.createElement("div");
   host.id = "preview-pane";
-  host.className = `${previewPane.className} export-print-theme`.trim();
+  host.className = `${previewPane.className} export-capture-host export-print-theme`.trim();
   host.style.position = "fixed";
-  host.style.left = "-100000px";
+  host.style.left = "0";
   host.style.top = "0";
   host.style.width = `${fullWidth}px`;
   host.style.maxWidth = "none";
@@ -4854,6 +5024,13 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
 }
 
 const EXPORT_LIGHT_THEME_CSS = `
+  .export-print-theme {
+    margin: 0 !important;
+    transform: none !important;
+    box-sizing: border-box !important;
+  }
+  .export-print-theme > *:first-child { margin-top: 0 !important; }
+  .export-print-theme > *:last-child { margin-bottom: 0 !important; }
   .export-print-theme,
   #preview-pane.export-print-theme {
     --bg: #ffffff;
@@ -5023,6 +5200,19 @@ async function waitForPreviewAssets(node: HTMLElement) {
   await nextPaint();
 }
 
+async function waitForCaptureSliceAssets(node: HTMLElement) {
+  await (document as globalThis.Document & { fonts?: FontFaceSet }).fonts?.ready.catch(() => undefined);
+  const images = Array.from(node.querySelectorAll("img"));
+  await Promise.all(images.map(img => {
+    if (img.complete) return Promise.resolve();
+    return new Promise<void>(resolve => {
+      img.addEventListener("load", () => resolve(), { once: true });
+      img.addEventListener("error", () => resolve(), { once: true });
+    });
+  }));
+  await nextPaint();
+}
+
 async function withPreviewAvailable<T>(work: () => Promise<T>): Promise<T> {
   const previousViewMode = currentViewMode;
   if (previousViewMode !== "preview") {
@@ -5036,26 +5226,145 @@ async function withPreviewAvailable<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
+function prepareCaptureSliceFrame(
+  node: HTMLElement,
+  width: number,
+  sourceHeight: number,
+  sourceY: number,
+  sliceHeight: number,
+) {
+  const frame = document.createElement("div");
+  frame.className = "export-capture-host export-print-theme";
+  frame.style.width = `${width}px`;
+  frame.style.height = `${sliceHeight}px`;
+  frame.style.maxWidth = "none";
+  frame.style.overflow = "hidden";
+  frame.style.background = "#ffffff";
+  frame.style.color = "#111827";
+  applyLightExportTheme(frame);
+
+  const clone = node.cloneNode(true) as HTMLElement;
+  clone.classList.remove("export-capture-host");
+  clone.classList.add("export-print-theme");
+  clone.style.position = "relative";
+  clone.style.left = "0";
+  clone.style.top = `-${sourceY}px`;
+  clone.style.width = `${width}px`;
+  clone.style.height = `${sourceHeight}px`;
+  clone.style.minHeight = `${sourceHeight}px`;
+  clone.style.maxWidth = "none";
+  clone.style.margin = "0";
+  clone.style.overflow = "visible";
+  clone.style.transform = "none";
+  applyLightExportTheme(clone);
+
+  frame.appendChild(clone);
+  document.body.appendChild(frame);
+  return {
+    frame,
+    cleanup: () => frame.remove(),
+  };
+}
+
+async function stitchImageDataUrls(
+  slices: { dataUrl: string; width: number; height: number }[],
+  mime: string,
+  quality: number,
+): Promise<{ dataUrl: string; width: number; height: number }> {
+  if (slices.length === 0) throw new Error("No image slices were captured");
+  const width = Math.max(...slices.map(slice => slice.width));
+  const height = slices.reduce((sum, slice) => sum + slice.height, 0);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not prepare stitched export canvas");
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  let y = 0;
+  for (const slice of slices) {
+    const image = await loadImageDataUrl(slice.dataUrl);
+    ctx.drawImage(image, 0, y);
+    y += slice.height;
+  }
+  return { dataUrl: canvas.toDataURL(mime, quality), width, height };
+}
+
+async function captureNodeImage(
+  node: HTMLElement,
+  label: string,
+  mime = "image/png",
+  quality = 0.95,
+): Promise<{ dataUrl: string; width: number; height: number }> {
+  const width = Math.max(node.scrollWidth, node.clientWidth, 1);
+  const height = Math.max(node.scrollHeight, node.clientHeight, 1);
+  if (width < 10 || height < 10) {
+    throw new Error(`Preview is empty or not laid out (size ${width}x${height}). Try switching to preview mode first.`);
+  }
+  const pixelRatio = getExportPixelRatio(width, height);
+  logCaptureDiagnostics(label, node, width, height, pixelRatio);
+
+  let raw: { dataUrl: string; width: number; height: number };
+  if (height <= EXPORT_SOURCE_SLICE_HEIGHT) {
+    const dataUrl = await toPng(node, {
+      cacheBust: true,
+      pixelRatio,
+      width,
+      height,
+      backgroundColor: "#ffffff",
+    });
+    const image = await loadImageDataUrl(dataUrl);
+    raw = { dataUrl, width: image.naturalWidth, height: image.naturalHeight };
+  } else {
+    const slices: { dataUrl: string; width: number; height: number }[] = [];
+    for (let sourceY = 0; sourceY < height; sourceY += EXPORT_SOURCE_SLICE_HEIGHT) {
+      const sliceHeight = Math.min(EXPORT_SOURCE_SLICE_HEIGHT, height - sourceY);
+      const prepared = prepareCaptureSliceFrame(node, width, height, sourceY, sliceHeight);
+      try {
+        await waitForCaptureSliceAssets(prepared.frame);
+        const dataUrl = await toPng(prepared.frame, {
+          cacheBust: true,
+          pixelRatio,
+          width,
+          height: sliceHeight,
+          backgroundColor: "#ffffff",
+        });
+        const image = await loadImageDataUrl(dataUrl);
+        console.info("[kaelio] export capture slice", {
+          label,
+          sourceY,
+          sliceHeight,
+          naturalWidth: image.naturalWidth,
+          naturalHeight: image.naturalHeight,
+        });
+        slices.push({ dataUrl, width: image.naturalWidth, height: image.naturalHeight });
+      } finally {
+        prepared.cleanup();
+      }
+    }
+    raw = await stitchImageDataUrls(slices, mime, quality);
+  }
+
+  console.info("[kaelio] export capture output", {
+    label,
+    sourceWidth: width,
+    sourceHeight: height,
+    naturalWidth: raw.width,
+    naturalHeight: raw.height,
+    sliced: height > EXPORT_SOURCE_SLICE_HEIGHT,
+  });
+  return autoCropImageDataUrl(raw.dataUrl, { mime, quality });
+}
+
 async function capturePreviewPng(): Promise<{ dataUrl: string; width: number; height: number }> {
   return withPreviewAvailable(async () => {
     const prepared = preparePreviewCaptureNode();
     const node = prepared.node;
     try {
       await waitForPreviewAssets(node);
-      const width = Math.max(node.scrollWidth, node.clientWidth, 1);
-      const height = Math.max(node.scrollHeight, node.clientHeight, 1);
-      if (width < 10 || height < 10) {
-        throw new Error(`Preview is empty or not laid out (size ${width}x${height}). Try switching to preview mode first.`);
-      }
-      const dataUrl = await toPng(node, {
-        cacheBust: true,
-        pixelRatio: getExportPixelRatio(width, height),
-        width,
-        height,
-        backgroundColor: "#ffffff",
-      });
-      const image = await loadImageDataUrl(dataUrl);
-      return { dataUrl, width: image.naturalWidth, height: image.naturalHeight };
+      await fitNodeToContentWidth(node);
+      return await captureNodeImage(node, "capturePreviewPng", "image/png");
     } finally {
       prepared.cleanup();
     }
@@ -5069,6 +5378,55 @@ function loadImageDataUrl(dataUrl: string): Promise<HTMLImageElement> {
     image.onerror = () => reject(new Error("Could not read captured preview image"));
     image.src = dataUrl;
   });
+}
+
+// WKWebView's html-to-image capture can leave large blank margins / position the
+// content with an offset. Trim the surrounding white so the export is tight,
+// regardless of where WebKit placed the content. Keeps a small uniform margin.
+async function autoCropImageDataUrl(
+  dataUrl: string,
+  opts: { mime?: string; quality?: number; pad?: number } = {},
+): Promise<{ dataUrl: string; width: number; height: number }> {
+  const { mime = "image/png", quality = 0.95, pad = 16 } = opts;
+  const image = await loadImageDataUrl(dataUrl);
+  const w = image.naturalWidth, h = image.naturalHeight;
+  const src = document.createElement("canvas");
+  src.width = w; src.height = h;
+  const sctx = src.getContext("2d");
+  if (!sctx || w < 2 || h < 2) return { dataUrl, width: w, height: h };
+  sctx.drawImage(image, 0, 0);
+  const data = sctx.getImageData(0, 0, w, h).data;
+
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      // "content" = visibly non-white, non-transparent pixel
+      if (data[i + 3] > 8 && (data[i] < 248 || data[i + 1] < 248 || data[i + 2] < 248)) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < minX || maxY < minY) return { dataUrl, width: w, height: h }; // all blank
+
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(w - 1, maxX + pad);
+  maxY = Math.min(h - 1, maxY + pad);
+  const cw = maxX - minX + 1, ch = maxY - minY + 1;
+  if (cw >= w && ch >= h) return { dataUrl, width: w, height: h };
+
+  const out = document.createElement("canvas");
+  out.width = cw; out.height = ch;
+  const octx = out.getContext("2d");
+  if (!octx) return { dataUrl, width: w, height: h };
+  octx.fillStyle = "#ffffff";
+  octx.fillRect(0, 0, cw, ch);
+  octx.drawImage(src, minX, minY, cw, ch, 0, 0, cw, ch);
+  return { dataUrl: out.toDataURL(mime, quality), width: cw, height: ch };
 }
 
 async function sliceImageDataUrl(dataUrl: string, maxSliceHeight: number): Promise<{ dataUrl: string; width: number; height: number }[]> {
@@ -5134,21 +5492,16 @@ async function exportHtmlImage(format: "png" | "jpg") {
       try {
         flashStatus(`Exporting ${format.toUpperCase()}...`, "var(--accent)");
         await waitForPreviewAssets(node);
-        const width = Math.max(node.scrollWidth, node.clientWidth, 1);
-        const height = Math.max(node.scrollHeight, node.clientHeight, 1);
-        const options = {
-          cacheBust: true,
-          pixelRatio: getExportPixelRatio(width, height),
-          width,
-          height,
-          backgroundColor: "#ffffff",
-        };
-        const dataUrl = format === "png"
-          ? await toPng(node, options)
-          : await toJpeg(node, { ...options, quality: 0.95, backgroundColor: "#ffffff" });
+        await fitNodeToContentWidth(node);
+        const cropped = await captureNodeImage(
+          node,
+          `exportHtmlImage:${format}`,
+          format === "png" ? "image/png" : "image/jpeg",
+          0.95,
+        );
         await invoke("save_binary_base64", {
           path: outputPath,
-          dataBase64: dataUrlBase64(dataUrl),
+          dataBase64: dataUrlBase64(cropped.dataUrl),
         });
       } finally {
         prepared.cleanup();

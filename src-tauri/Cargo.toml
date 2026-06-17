@@ -1,6 +1,6 @@
 [package]
 name = "kaelio"
-version = "0.9.2"
+version = "0.9.3"
 description = "Lightweight project file viewer and markdown/document reader"
 authors = ["Kael"]
 edition = "2024"
@@ -19,10 +19,15 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
 libc = "0.2"
+zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 tauri-plugin-dialog = "2.6.0"
 tauri-plugin-process = "2"
 trash = "5"
-notify = { version = "7", features = ["macos_kqueue"] }
+# Default backend = FSEvents on macOS (one fd for the whole recursive tree).
+# The macos_kqueue feature opens one fd PER watched file, which exhausts the
+# process descriptor table when a folder with node_modules is opened and then
+# breaks child-process spawning (pandoc) with EBADF / "too many open files".
+notify = "7"
 wait-timeout = "0.2"
 git2 = { version = "0.20", features = ["vendored-openssl"] }
 

@@ -1,8 +1,8 @@
 # 04-pdf-export
 
-> **Export menu (0.9.2+) has two families.** **HTML group** (PNG / JPG / PDF) captures the rendered preview as an image via `html-to-image` (+ `jsPDF` for PDF) — visual output, full-width/full-height capture (forces preview mode so split panes don't clip it). **Markdown group** (PDF / DOCX) converts the markdown source via the Rust Pandoc commands below — real, editable documents. The Pandoc/LaTeX flow described here is the **Markdown → PDF** path.
+> **Export menu (0.9.2+) has two families.** **HTML group** (PNG / JPG / PDF) captures the rendered preview as an image via `html-to-image` (+ `jsPDF` for PDF) — visual output, full-width/full-height capture (forces preview mode so split panes don't clip it). Long HTML captures are sliced and stitched before final crop so WebKit does not drop content from oversized rasterizations. **Markdown group** (PDF / DOCX) converts the markdown source via the Rust Pandoc commands below — real, editable documents. The Pandoc/Typst flow described here is the **Markdown → PDF** path.
 
-PDF export converts markdown to PDF via Pandoc with LaTeX. Mermaid diagrams are pre-rendered to PNG via the mermaid.ink API before Pandoc processing.
+PDF export converts markdown to PDF via Pandoc with Typst. Mermaid diagrams are pre-rendered to PNG via the mermaid.ink API before Pandoc processing. Markdown tables are exported with explicit grid styling because Pandoc's default Typst table style is borderless.
 
 ## System Diagram
 
@@ -34,21 +34,30 @@ Mermaid code blocks are extracted from markdown, base64-encoded (custom encoder 
 
 | Setting | Value |
 |---------|-------|
-| Engine priority | xelatex → pdflatex (fallback) |
+| PDF engine | typst |
 | Margins | 1 inch |
 | Font size | 11pt |
-| xelatex fonts | Helvetica (main), Menlo (mono) |
 | Color links | true |
-| PATH | `/Library/TeX/texbin:/opt/anaconda3/bin:/usr/local/bin:/usr/bin:/bin` |
+| Tables | 0.5pt light grid via temporary Typst header |
+| PATH | Inherits system PATH and appends Homebrew and common bin paths |
 
 ## 3. External Dependencies
 
 | Tool | Required | Purpose |
 |------|----------|---------|
-| pandoc | Yes | Markdown → PDF conversion |
-| xelatex or pdflatex | Yes | LaTeX PDF engine |
+| pandoc | Yes | Markdown → PDF/DOCX conversion |
+| typst | Yes for Markdown PDF | PDF engine used by Pandoc (`brew install typst`) |
 | curl | Yes | Download mermaid diagrams |
 | Internet | Optional | mermaid.ink API for diagrams |
+
+macOS setup:
+
+```bash
+brew install pandoc
+brew install typst
+```
+
+MacTeX is not required for Markdown PDF export.
 
 ## 4. UI Feedback
 

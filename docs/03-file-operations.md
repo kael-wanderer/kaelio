@@ -29,6 +29,7 @@ flowchart TB
 | `list_directory` | `path: String` | `Vec<DirEntry>` | List directory entries |
 | `get_home_dir` | none | `String` | Return `$HOME` |
 | `search_in_files` | `folder_path: String, query: String` | `Vec<SearchResult>` | Case-insensitive filename matches first, then content search across `.md`/`.markdown`/`.txt` files |
+| `delete_entry` | `path: String` | `DeleteResult { destination, used_system_trash }` | Move an entry to system Trash, falling back to recoverable Kaelio trash |
 
 ## 2. Sidebar Search
 
@@ -57,6 +58,9 @@ Skips: `node_modules`, `.git`, `target`, `.DS_Store`, `__pycache__`. Ignores fil
 | Save file | `Cmd+S` or toolbar | Save-as dialog if no current path |
 | Drop file | Drag `.md` onto window | None (Tauri drag-drop event) |
 | Browse folder | Toolbar "Folder" button | None (loads sidebar) |
+| Delete entry | Sidebar context menu | Confirmation modal, then system Trash or `~/.kaelio/trash/` fallback |
+
+Deletes first try the platform Trash. If macOS denies that path for an unsigned local build, Kaelio moves the file or folder into `~/.kaelio/trash/` with a timestamp-prefixed name so it disappears from the sidebar but remains recoverable. Cross-filesystem moves are copied into Kaelio trash and then removed from the original location only after the copy succeeds.
 
 ## 5. State Tracking
 

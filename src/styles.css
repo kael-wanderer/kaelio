@@ -869,7 +869,7 @@ body {
 
 .export-capture-host {
   position: fixed;
-  left: -100000px;
+  left: 0;
   top: 0;
   z-index: -1;
   pointer-events: none;
@@ -2984,3 +2984,53 @@ mark.preview-search-match.active {
 }
 #sub-editor-pane.hidden { display: none; }
 #sub-editor-pane .cm-editor { height: 100%; }
+
+/* ── Confirm modal (replaces Y/N palette prompt) ── */
+.confirm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+.confirm-modal {
+  min-width: 320px;
+  max-width: 440px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  padding: 20px;
+}
+.confirm-modal-message {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 18px;
+  white-space: pre-line;
+}
+.confirm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.confirm-modal-btn {
+  padding: 7px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text);
+}
+.confirm-modal-btn:hover { background: var(--bg); }
+/* The default/highlighted button (focus target) gets the accent fill. */
+.confirm-modal-default {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1e1e2e;
+  font-weight: 600;
+}
+.confirm-modal-default:hover { background: var(--accent); filter: brightness(1.08); }
