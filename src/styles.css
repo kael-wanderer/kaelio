@@ -1756,6 +1756,24 @@ body {
   display: block;
 }
 
+.pdf-page-inner {
+  position: relative;
+}
+
+.pdf-text-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1;
+}
+
+.pdf-text-layer ::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
 .pdf-page-label {
   min-width: 52px;
   margin-left: 8px;

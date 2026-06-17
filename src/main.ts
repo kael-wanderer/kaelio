@@ -19,6 +19,7 @@ import { jsPDF } from "jspdf";
 import * as pdfjsLib from "pdfjs-dist";
 // Vite bundles the worker as a local asset so PDF viewing works offline.
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
+import "pdfjs-dist/web/pdf_viewer.css";
 import "katex/dist/katex.min.css";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -1094,6 +1095,7 @@ const PDF_ZOOM_MIN = 0.25;
 const PDF_ZOOM_MAX = 4;
 const PDF_ZOOM_STEP = 0.2;
 const PDF_ZOOM_KEY = "kaelio-pdf-zoom";
+const pdfPageText = new Map<number, string>();
 
 function clampImagePreviewZoom(zoom: number): number {
   return Math.min(IMAGE_PREVIEW_MAX_ZOOM, Math.max(IMAGE_PREVIEW_MIN_ZOOM, zoom));
@@ -1209,6 +1211,7 @@ async function renderImagePreview(previewPane: HTMLElement, path: string) {
 
 async function renderPdfPreview(previewPane: HTMLElement, path: string) {
   previewPane.innerHTML = "";
+  pdfPageText.clear();
 
   const wrap = document.createElement("div");
   wrap.className = "asset-preview pdf-preview-wrap";
@@ -1301,7 +1304,28 @@ async function renderPdfPreview(previewPane: HTMLElement, path: string) {
         if (!context) throw new Error("Could not create PDF canvas context");
         await page.render({ canvasContext: context, viewport }).promise;
         if (currentFilePath !== path) return;
-        slot.el.replaceChildren(canvas);
+
+        const textLayerDiv = document.createElement("div");
+        textLayerDiv.className = "textLayer pdf-text-layer";
+        textLayerDiv.style.width = `${canvas.width}px`;
+        textLayerDiv.style.height = `${canvas.height}px`;
+
+        const textContent = await page.getTextContent();
+        if (currentFilePath !== path) return;
+        const textLayer = new pdfjsLib.TextLayer({
+          textContentSource: textContent,
+          container: textLayerDiv,
+          viewport,
+        });
+        await textLayer.render();
+        if (currentFilePath !== path) return;
+
+        pdfPageText.set(n, textContent.items.map((item: any) => ("str" in item ? item.str : "")).join(" "));
+
+        const pageInner = document.createElement("div");
+        pageInner.className = "pdf-page-inner";
+        pageInner.append(canvas, textLayerDiv);
+        slot.el.replaceChildren(pageInner);
         slot.rendered = true;
       } finally {
         slot.rendering = false;
