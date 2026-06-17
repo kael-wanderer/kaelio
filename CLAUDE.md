@@ -27,6 +27,7 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 - **Monolithic**: entire app in `src/main.ts` (~5000 lines) + `src/styles.css` + `index.html`
 - Vanilla TypeScript, no framework (CodeMirror 6 for editor, markdown-it for preview)
 - Rendering pipeline: markdown-it → callouts → checklists → KaTeX (math) → Mermaid (diagrams) → YAML frontmatter extraction
+- PDF viewing: `.pdf` files render via `pdfjs-dist` (canvas + lazy IntersectionObserver, persisted zoom under `kaelio-pdf-zoom`) in `renderPdfPreview`; replaced the old native `<iframe>`.
 - Git integration: state management (gitStatusMap, gitRepoInfo, autoSyncEnabled), non-blocking sync via fire-and-forget promises
 - 300ms debounce on content change before re-rendering preview
 - State: `currentFilePath`, `editor` (CM6 instance), `zoomLevel` — persisted in localStorage; session data (tabs, scroll, cursor) persisted to `~/.kaelio/session.json` via Rust with localStorage as sync backup
@@ -38,7 +39,7 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 
 ### Backend (`src-tauri/`)
 - `src/lib.rs` (~2150 lines): all Tauri commands
-- File commands: `read_file`, `save_file`, `word_count`, `list_directory`, `get_home_dir`, `get_initial_file`, `delete_entry` (Trash → `~/.kaelio/trash` fallback), `copy_into_folder` (drag-to-copy into a sidebar folder), `read_binary_file` (raw bytes + MIME for the in-app image viewer: PNG/JPG/GIF/WEBP/BMP/ICO/AVIF, with zoom)
+- File commands: `read_file`, `save_file`, `word_count`, `list_directory`, `get_home_dir`, `get_initial_file`, `delete_entry` (Trash → `~/.kaelio/trash` fallback), `copy_into_folder` (drag-to-copy into a sidebar folder), `read_binary_file` (raw bytes + MIME for the in-app image viewer: PNG/JPG/GIF/WEBP/BMP/ICO/AVIF, with zoom, and the PDF.js viewer)
 - Export (two families): **HTML group** (PNG/JPG/PDF) via frontend preview capture (`html-to-image` + `jsPDF`, full-width capture); **Markdown group** (PDF/DOCX) via Rust `export_pdf`/`export_docx`. Pandoc is **NOT bundled** — it's resolved from the system (`find_pandoc()`: Homebrew `/opt/homebrew/bin`, `/usr/local/bin`, then PATH). Markdown PDF/DOCX export requires `brew install pandoc`; Markdown PDF also requires `brew install typst`. MacTeX is not required. (Bundling pandoc as a Tauri sidecar was removed — exec'ing the build-machine path failed on end-user installs; `export_html` also removed.)
 - Git commands (git2 crate): `git_repo_info`, `git_status`, `git_diff_file`, `git_log`, `git_commit`, `git_push`, `git_pull`, `git_auto_sync`, `git_setup_sync`, `git_check_auth`, `git_init`, `git_discard_file`, `git_stage_file`, `git_file_at_commit`, `git_restore_file`, `git_conflict_info`, `git_resolve_conflict`
 - Snapshot commands: `save_snapshot`, `list_snapshots`, `read_snapshot`
