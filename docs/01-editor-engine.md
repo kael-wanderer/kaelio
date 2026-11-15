@@ -65,9 +65,9 @@ State persists in localStorage as `kaelio-wrap-mode` (default `window`). `setWra
 
 | File | Purpose |
 |------|---------|
-| `src/main.ts:550-583` | EditorView creation with all extensions |
-| `src/main.ts:179-188` | `onContentChange()` debounce handler |
-| `src/main.ts:286-289` | `editorFillTheme` custom theme |
+| `src/main.ts` | EditorView creation with all extensions |
+| `src/main.ts` | `onContentChange()` debounce handler |
+| `src/main.ts` | `editorFillTheme` custom theme |
 
 ## Cross-References
 

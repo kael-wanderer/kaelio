@@ -180,6 +180,16 @@ fn spawn_diagnostic() -> String {
         .join(" ")
 }
 
+/// A per-export scratch directory. Unique per call so two windows exporting at
+/// the same time cannot overwrite or delete each other's files.
+fn unique_export_dir(prefix: &str) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    std::env::temp_dir().join(format!("{}_{}_{}", prefix, std::process::id(), nanos))
+}
+
 /// Returns ~/.kaelio, migrating from the legacy ~/.mx folder on first access.
 fn kaelio_home() -> Result<PathBuf, String> {
     let home = std::env::var("HOME")
@@ -439,15 +449,58 @@ fn save_binary_base64(path: String, data_base64: String) -> Result<(), String> {
     fs::write(path, bytes).map_err(|e| e.to_string())
 }
 
+/// Writes `bytes` to `path` without ever leaving a truncated file behind: the
+/// data goes to a temporary file in the same directory, is flushed to disk, and
+/// is then renamed over the target. A symlink is followed so the link survives.
+/// If the directory does not allow creating the temporary file, falls back to
+/// a direct write (the previous behaviour).
+fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let target = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let (Some(dir), Some(name)) = (target.parent(), target.file_name()) else {
+        return Err("Invalid file path".to_string());
+    };
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    let tmp = dir.join(format!(
+        ".{}.kaelio-tmp-{}-{}",
+        name.to_string_lossy(),
+        std::process::id(),
+        nanos
+    ));
+    let mut file = match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp)
+    {
+        Ok(f) => f,
+        Err(_) => return fs::write(&target, bytes).map_err(|e| e.to_string()),
+    };
+    let result = (|| -> std::io::Result<()> {
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        if let Ok(meta) = fs::metadata(&target) {
+            let _ = fs::set_permissions(&tmp, meta.permissions());
+        }
+        fs::rename(&tmp, &target)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    result.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn save_file(path: String, content: String) -> Result<(), String> {
-    fs::write(&path, &content).map_err(|e| e.to_string())
+    write_atomic(Path::new(&path), content.as_bytes())
 }
 
 #[tauri::command]
 fn word_count(text: String) -> WordCount {
     WordCount {
-        chars: text.len(),
+        chars: text.chars().count(),
         words: text.split_whitespace().count(),
         lines: text.lines().count(),
     }
@@ -504,11 +557,18 @@ fn get_initial_file() -> Option<String> {
 
 #[tauri::command]
 fn create_file(path: String) -> Result<(), String> {
-    let p = PathBuf::from(&path);
-    if p.exists() {
-        return Err("File already exists".to_string());
+    // create_new fails if the path exists, with no gap between check and create.
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+    {
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            Err("File already exists".to_string())
+        }
+        Err(e) => Err(e.to_string()),
     }
-    fs::write(&p, "").map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1182,7 +1242,7 @@ fn export_pdf_blocking(
             .replace('↓', "v")
     };
 
-    let tmp_dir = std::env::temp_dir().join("mx_export");
+    let tmp_dir = unique_export_dir("kaelio_export");
     let _ = fs::create_dir_all(&tmp_dir);
     let tmp_input = tmp_dir.join(if is_html { "export.html" } else { "export.md" });
 
@@ -1401,7 +1461,7 @@ async fn export_docx(
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let result = (|| -> Result<String, String> {
-            let tmp_dir = std::env::temp_dir().join("mx_export_docx");
+            let tmp_dir = unique_export_dir("kaelio_export_docx");
             let _ = fs::create_dir_all(&tmp_dir);
             let tmp_md = tmp_dir.join("export.md");
 
@@ -1734,6 +1794,7 @@ fn try_git_credential_fill(url: &str) -> Option<(String, String)> {
     );
     let child = std::process::Command::new("git")
         .args(["credential", "fill"])
+        .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
@@ -1763,40 +1824,61 @@ fn try_git_credential_fill(url: &str) -> Option<(String, String)> {
     }
 }
 
+/// libgit2 calls the credential callback again every time the server rejects
+/// what it was given. `attempt` (1-based, counted by the caller) makes each call
+/// offer the next option and then give up, instead of offering the same
+/// rejected credential forever.
+const GIT_CRED_MAX_ATTEMPTS: u32 = 4;
+
 fn git_cred_callback(
     url: &str,
     username: Option<&str>,
     allowed: CredentialType,
+    attempt: u32,
 ) -> Result<Cred, git2::Error> {
+    let auth_failed = || {
+        git2::Error::from_str(
+            "Authentication failed. Make sure you're signed in to GitHub (try: gh auth login or add an SSH key).",
+        )
+    };
+    if attempt > GIT_CRED_MAX_ATTEMPTS {
+        return Err(auth_failed());
+    }
     let user = username.unwrap_or("git");
 
-    // 1. SSH credentials
+    // 1. SSH credentials: the agent first, then one key file per later attempt.
     if allowed.contains(CredentialType::SSH_KEY) {
-        if let Ok(cred) = Cred::ssh_key_from_agent(user) {
-            return Ok(cred);
+        if attempt == 1 {
+            if let Ok(cred) = Cred::ssh_key_from_agent(user) {
+                return Ok(cred);
+            }
         }
         let home = std::env::var("HOME")
             .or_else(|_| std::env::var("USERPROFILE"))
             .unwrap_or_default();
         let ssh_dir = PathBuf::from(&home).join(".ssh");
-        for key_name in &["id_ed25519", "id_rsa"] {
-            let key_path = ssh_dir.join(key_name);
-            if key_path.exists() {
-                let pub_path = ssh_dir.join(format!("{}.pub", key_name));
-                let pub_key = if pub_path.exists() {
-                    Some(pub_path.as_path())
-                } else {
-                    None
-                };
-                if let Ok(cred) = Cred::ssh_key(user, pub_key, &key_path, None) {
-                    return Ok(cred);
-                }
+        let key_paths: Vec<PathBuf> = ["id_ed25519", "id_rsa"]
+            .iter()
+            .map(|name| ssh_dir.join(name))
+            .filter(|path| path.exists())
+            .collect();
+        let key_index = attempt.saturating_sub(2) as usize;
+        for key_path in key_paths.iter().skip(key_index) {
+            let pub_path = PathBuf::from(format!("{}.pub", key_path.to_string_lossy()));
+            let pub_key = pub_path.exists().then_some(pub_path.as_path());
+            if let Ok(cred) = Cred::ssh_key(user, pub_key, key_path, None) {
+                return Ok(cred);
             }
         }
+        return Err(auth_failed());
     }
 
-    // 2. HTTPS credentials via system git credential helpers
+    // 2. HTTPS credentials via system git credential helpers. The helper returns
+    // the same answer every time, so a second request means it was rejected.
     if allowed.contains(CredentialType::USER_PASS_PLAINTEXT) {
+        if attempt > 1 {
+            return Err(auth_failed());
+        }
         if let Some((u, p)) = try_git_credential_fill(url) {
             return Cred::userpass_plaintext(&u, &p);
         }
@@ -2053,7 +2135,11 @@ fn git_push(folder_path: String) -> Result<String, String> {
         .to_string();
     let mut remote = repo.find_remote("origin").map_err(|e| e.to_string())?;
     let mut callbacks = git2::RemoteCallbacks::new();
-    callbacks.credentials(|url, username, allowed| git_cred_callback(url, username, allowed));
+    let mut cred_attempts = 0u32;
+    callbacks.credentials(move |url, username, allowed| {
+        cred_attempts += 1;
+        git_cred_callback(url, username, allowed, cred_attempts)
+    });
     let mut push_opts = git2::PushOptions::new();
     push_opts.remote_callbacks(callbacks);
     let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
@@ -2075,7 +2161,11 @@ fn git_pull(folder_path: String) -> Result<GitSyncResult, String> {
     // Fetch
     let mut remote = repo.find_remote("origin").map_err(|e| e.to_string())?;
     let mut callbacks = git2::RemoteCallbacks::new();
-    callbacks.credentials(|url, username, allowed| git_cred_callback(url, username, allowed));
+    let mut cred_attempts = 0u32;
+    callbacks.credentials(move |url, username, allowed| {
+        cred_attempts += 1;
+        git_cred_callback(url, username, allowed, cred_attempts)
+    });
     let mut fetch_opts = git2::FetchOptions::new();
     fetch_opts.remote_callbacks(callbacks);
     remote
@@ -2106,13 +2196,24 @@ fn git_pull(folder_path: String) -> Result<GitSyncResult, String> {
 
     if analysis.is_fast_forward() {
         let refname = format!("refs/heads/{}", branch_name);
+        // Update the working tree first, in safe mode: files with local changes
+        // that the incoming commit also touches make this fail, and nothing has
+        // been moved yet. A forced checkout here silently discarded those edits.
+        let target = repo
+            .find_object(fetch_commit.id(), None)
+            .map_err(|e| e.to_string())?;
+        repo.checkout_tree(&target, Some(git2::build::CheckoutBuilder::new().safe()))
+            .map_err(|e| {
+                format!(
+                    "Pull stopped: local changes would be overwritten. Commit or discard them, then pull again. ({})",
+                    e.message()
+                )
+            })?;
         let mut reference = repo.find_reference(&refname).map_err(|e| e.to_string())?;
         reference
             .set_target(fetch_commit.id(), "fast-forward pull")
             .map_err(|e| e.to_string())?;
         repo.set_head(&refname).map_err(|e| e.to_string())?;
-        repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
-            .map_err(|e| e.to_string())?;
         return Ok(GitSyncResult {
             committed: false,
             pushed: false,
@@ -2234,7 +2335,11 @@ fn git_auto_sync(folder_path: String, file_path: String) -> Result<GitSyncResult
             .to_string();
         let mut remote = repo.find_remote("origin").map_err(|e| e.to_string())?;
         let mut callbacks = git2::RemoteCallbacks::new();
-        callbacks.credentials(|url, username, allowed| git_cred_callback(url, username, allowed));
+        let mut cred_attempts = 0u32;
+        callbacks.credentials(move |url, username, allowed| {
+            cred_attempts += 1;
+            git_cred_callback(url, username, allowed, cred_attempts)
+        });
         let mut push_opts = git2::PushOptions::new();
         push_opts.remote_callbacks(callbacks);
         let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
@@ -2275,15 +2380,24 @@ fn git_setup_sync(folder_path: String, remote_url: String) -> Result<GitRepoInfo
         Err(_) => Repository::init(&folder_path).map_err(|e| e.to_string())?,
     };
     let workdir = repo.workdir().ok_or("No workdir")?.to_path_buf();
+    // discover() walks upward. Setting up sync from a subfolder would rewrite the
+    // parent repository's remote and commit and push everything in it.
+    let same_dir = match (fs::canonicalize(&workdir), fs::canonicalize(&folder_path)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    };
+    if !same_dir {
+        return Err(format!(
+            "This folder is inside an existing Git repository ({}). Open that folder to set up sync.",
+            workdir.display()
+        ));
+    }
 
     // Create .gitignore if it doesn't exist
     let gitignore_path = workdir.join(".gitignore");
     if !gitignore_path.exists() {
-        fs::write(
-            &gitignore_path,
-            ".DS_Store\nThumbs.db\nnode_modules/\n.mx/\n",
-        )
-        .map_err(|e| e.to_string())?;
+        fs::write(&gitignore_path, ".DS_Store\nThumbs.db\nnode_modules/\n")
+            .map_err(|e| e.to_string())?;
     }
 
     // Set or update remote
@@ -2326,7 +2440,11 @@ fn git_setup_sync(folder_path: String, remote_url: String) -> Result<GitRepoInfo
             .to_string();
         let mut remote = repo.find_remote("origin").map_err(|e| e.to_string())?;
         let mut callbacks = git2::RemoteCallbacks::new();
-        callbacks.credentials(|url, username, allowed| git_cred_callback(url, username, allowed));
+        let mut cred_attempts = 0u32;
+        callbacks.credentials(move |url, username, allowed| {
+            cred_attempts += 1;
+            git_cred_callback(url, username, allowed, cred_attempts)
+        });
         let mut push_opts = git2::PushOptions::new();
         push_opts.remote_callbacks(callbacks);
         let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
@@ -2405,8 +2523,15 @@ fn git_file_at_commit(
         .strip_prefix(&workdir)
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|_| PathBuf::from(&file_path));
-    let oid = git2::Oid::from_str(&commit_id).map_err(|e| e.to_string())?;
-    let commit = repo.find_commit(oid).map_err(|e| e.to_string())?;
+    // commit_id is hex from git_log, possibly abbreviated; reject anything else
+    // so it cannot be read as a revision expression.
+    if commit_id.len() < 4 || !commit_id.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err("Invalid commit id".to_string());
+    }
+    let commit = repo
+        .revparse_single(&commit_id)
+        .and_then(|obj| obj.peel_to_commit())
+        .map_err(|e| e.to_string())?;
     let tree = commit.tree().map_err(|e| e.to_string())?;
     let entry = tree
         .get_path(&rel_path)
@@ -2423,8 +2548,7 @@ fn git_restore_file(
     commit_id: String,
 ) -> Result<(), String> {
     let content = git_file_at_commit(folder_path, file_path.clone(), commit_id)?;
-    fs::write(&file_path, &content).map_err(|e| e.to_string())?;
-    Ok(())
+    write_atomic(Path::new(&file_path), content.as_bytes())
 }
 
 /// Get conflict details for a file (local, remote, base content)
@@ -3131,5 +3255,106 @@ mod tests {
                 "11.sisense",
             ]
         );
+    }
+}
+
+#[cfg(test)]
+mod audit_tests {
+    use super::*;
+
+    fn scratch_dir(name: &str) -> PathBuf {
+        let dir = unique_export_dir(&format!("kaelio_test_{}", name));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn word_count_counts_characters_not_bytes() {
+        let count = word_count("héllo wörld\nxin chào".to_string());
+        assert_eq!(count.chars, 20);
+        assert_eq!(count.words, 4);
+        assert_eq!(count.lines, 2);
+    }
+
+    #[test]
+    fn write_atomic_replaces_content_and_leaves_no_temp_file() {
+        let dir = scratch_dir("atomic");
+        let file = dir.join("note.md");
+        fs::write(&file, "old").unwrap();
+        write_atomic(&file, b"new content").unwrap();
+        assert_eq!(fs::read_to_string(&file).unwrap(), "new content");
+        let names: Vec<String> = fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(names, vec!["note.md".to_string()]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_atomic_fails_without_touching_anything_when_directory_is_missing() {
+        let dir = scratch_dir("atomic_missing");
+        let file = dir.join("no-such-dir").join("note.md");
+        assert!(write_atomic(&file, b"x").is_err());
+        assert!(!file.exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_atomic_keeps_a_symlink_and_updates_its_target() {
+        let dir = scratch_dir("atomic_link");
+        let real = dir.join("real.md");
+        let link = dir.join("link.md");
+        fs::write(&real, "old").unwrap();
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        write_atomic(&link, b"new").unwrap();
+        assert!(
+            fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(fs::read_to_string(&real).unwrap(), "new");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn create_file_refuses_to_overwrite_an_existing_file() {
+        let dir = scratch_dir("create");
+        let file = dir.join("a.md");
+        fs::write(&file, "keep me").unwrap();
+        let err = create_file(file.to_string_lossy().to_string()).unwrap_err();
+        assert!(err.contains("already exists"));
+        assert_eq!(fs::read_to_string(&file).unwrap(), "keep me");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn git_file_at_commit_rejects_non_hex_revision_expressions() {
+        let dir = scratch_dir("revspec");
+        Repository::init(&dir).unwrap();
+        let folder = dir.to_string_lossy().to_string();
+        for bad in ["HEAD", "HEAD~1", "main", "abc", "-1", ""] {
+            let result = git_file_at_commit(folder.clone(), "a.md".to_string(), bad.to_string());
+            assert_eq!(result.unwrap_err(), "Invalid commit id", "input: {bad:?}");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn credential_callback_gives_up_after_the_attempt_limit() {
+        let result = git_cred_callback(
+            "https://example.invalid/repo.git",
+            None,
+            CredentialType::USER_PASS_PLAINTEXT,
+            GIT_CRED_MAX_ATTEMPTS + 1,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn export_scratch_directories_are_unique_per_call() {
+        assert_ne!(unique_export_dir("x"), unique_export_dir("x"));
     }
 }

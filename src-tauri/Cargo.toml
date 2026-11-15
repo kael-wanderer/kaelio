@@ -28,7 +28,6 @@ trash = "5"
 # process descriptor table when a folder with node_modules is opened and then
 # breaks child-process spawning (pandoc) with EBADF / "too many open files".
 notify = "7"
-wait-timeout = "0.2"
 git2 = { version = "0.20", features = ["vendored-openssl"] }
 
 [target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]

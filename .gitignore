@@ -26,11 +26,5 @@ dist-ssr
 # Rust
 src-tauri/target/
 
-# Local Rust sidecar staging (unused: pandoc/typst resolve from system PATH)
-src-tauri/binaries/
-
-# Local tool caches
-.understand-anything/
-
 # Personal wiki (synced separately; excluded from the public repo)
 wiki/

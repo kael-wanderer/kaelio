@@ -10,7 +10,7 @@ A fast, lightweight Markdown editor built with Tauri 2 + Rust. Open any `.md` fi
 ## Why Kaelio
 
 - ⚡ **Renders everything inline** — Mermaid diagrams, KaTeX math, callouts, and tables in a live split preview.
-- 📖 **Built for reading** — soft-wrap modes, zen mode, themes, custom fonts/sizes, and zoom keep long docs comfortable.
+- 📖 **Built for reading** — soft-wrap modes, themes, custom fonts/sizes, and zoom keep long docs comfortable.
 - 🪟 **Two docs at once** — split view with a second editable pane, plus file comparison side by side.
 
 Kaelio is a fork of [mx](https://github.com/vibery-studio/mx) (GPL-3.0), continuing it with a split editor, file compare, soft wrap, and reading polish.
@@ -32,13 +32,13 @@ Plus the full mx toolkit: Mermaid & KaTeX, Git sync, callouts, command palette, 
 
 ## Features
 
-- **Editor** — live split preview, multiple tabs, code folding, formatting toolbar, search & replace (`Cmd+F`/`Cmd+H`), line numbers, soft wrap.
+- **Editor** — live split preview, multiple tabs, code folding, formatting toolbar, search & replace (`Cmd+F`), line numbers, soft wrap.
 - **Markdown** — Mermaid (click-to-zoom), KaTeX (`$…$`, `$$…$$`), YAML frontmatter, footnotes, wikilinks, anchor navigation, copy-heading-link.
 - **Files** — sidebar browser, context menu, file search (`Cmd+Shift+F`), content search (`Cmd+Opt+F`), command palette, breadcrumbs, recent files. Drag files or folders from Finder onto a sidebar folder to copy them in; drag onto the editor to open.
 - **Image viewing** — open PNG, JPG, GIF, WEBP, BMP, ICO, and AVIF in the preview pane with zoom in/out.
 - **Git sync** — one-click setup, auto commit+push on save, auto-pull on open, conflict resolution, per-file history & snapshots, status dots.
 - **Obsidian-style** — callouts (`> [!tip]`), interactive checklists, tag pills, wikilinks.
-- **Writing** — auto-save, crash recovery, 60s version snapshots, external-change detection, zen mode, image paste & lightbox.
+- **Writing** — auto-save, crash recovery, 60s version snapshots, external-change detection, image paste & lightbox.
 - **Export** — copy as formatted HTML / raw / plain; image & PDF from the preview (PNG/JPG/PDF); Markdown to PDF/DOCX via Pandoc + Typst.
 - **Platform** — multiple windows, real-time word/char count, weekly auto-update, file associations, macOS / Windows / Linux.
 
@@ -58,10 +58,9 @@ Grab the latest build from the [Releases page](https://github.com/kael-wanderer/
 | `Cmd+O` / `Cmd+S` / `Cmd+N` | Open / Save / New file |
 | `Cmd+P` / `Cmd+E` | Toggle preview / Reading view |
 | `Cmd+B` | Toggle sidebar |
-| `Cmd+F` / `Cmd+H` | Search / Search & replace |
+| `Cmd+F` | Search (with replace) |
 | `Cmd+Shift+P` | Command palette |
 | `Cmd+Shift+F` / `Cmd+Opt+F` | File search / Content search |
-| `Cmd+Shift+Z` | Zen mode |
 | `Cmd+Shift+N` / `Cmd+W` | New window / Close tab |
 | `Cmd+=` / `Cmd+-` | Zoom in / out |
 
@@ -90,6 +89,10 @@ A full TeX install (`brew install --cask mactex-no-gui`, ~6.9 GB) is not
 required.
 
 The **HTML → PNG / JPG / PDF** export captures the live preview and needs no extra install.
+
+> **Privacy:** Markdown → PDF renders Mermaid diagrams by sending each diagram's source to the public
+> [mermaid.ink](https://mermaid.ink) service (through `curl`). Nothing else leaves your machine. Use the
+> HTML → PDF export for documents whose diagrams must stay local.
 
 ## License
 

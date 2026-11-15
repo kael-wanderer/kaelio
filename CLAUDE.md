@@ -15,16 +15,16 @@ npm run build            # TS compile + Vite bundle → dist/
 npm run tauri build      # Full app bundle (per platform)
 ```
 
-No test framework or linter configured.
+Tests: `cd src-tauri && cargo test --lib` (Rust unit tests at the bottom of `lib.rs`). No frontend test framework or linter; `npx tsc --noEmit` is the frontend check.
 
-Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macOS/Windows/Linux, signs, creates GitHub Release with `latest.json` for auto-updater).
+Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macOS/Windows/Linux, signs, creates GitHub Release with `latest.json` for auto-updater). CI builds with `--config src-tauri/tauri.release.conf.json`, which turns on `createUpdaterArtifacts`; it stays off in `tauri.conf.json` so local builds need no signing key.
 
 ## Architecture
 
 **Tauri 2 IPC-first**: all file/system ops go through Rust commands, no direct Node.js access from frontend.
 
 ### Frontend (`src/`)
-- **Monolithic**: entire app in `src/main.ts` (~5000 lines) + `src/styles.css` + `index.html`
+- **Monolithic**: entire app in `src/main.ts` (~7600 lines) + `src/styles.css` + `index.html`
 - Vanilla TypeScript, no framework (CodeMirror 6 for editor, markdown-it for preview)
 - Rendering pipeline: markdown-it → callouts → checklists → KaTeX (math) → Mermaid (diagrams) → YAML frontmatter extraction
 - PDF viewing: `.pdf` files render via `pdfjs-dist` (canvas + lazy IntersectionObserver, persisted zoom under `kaelio-pdf-zoom`) in `renderPdfPreview`; replaced the old native `<iframe>`. Adds a transparent text layer for selection + Cmd+F search, "Extract to Markdown" (`extractPdfToMarkdown`, heuristic/lossy — no tables/OCR), and highlight annotations persisted to a `<file>.kaelio-annot.json` sidecar (original PDF never mutated)
@@ -38,7 +38,7 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 - Key bindings: Cmd+O (open), Cmd+S (save), Cmd+P (toggle preview), Cmd+E (read mode), Cmd+B (sidebar), Cmd+F (search — editor or preview depending on view mode)
 
 ### Backend (`src-tauri/`)
-- `src/lib.rs` (~2150 lines): all Tauri commands
+- `src/lib.rs` (~3300 lines): all Tauri commands. Sync commands run on the main thread; only the exports are async
 - File commands: `read_file`, `save_file`, `word_count`, `list_directory`, `get_home_dir`, `get_initial_file`, `delete_entry` (Trash → `~/.kaelio/trash` fallback), `copy_into_folder` (drag-to-copy into a sidebar folder), `read_binary_file` (raw bytes + MIME for the in-app image viewer: PNG/JPG/GIF/WEBP/BMP/ICO/AVIF, with zoom, and the PDF.js viewer)
 - Export (two families): **HTML group** (PNG/JPG/PDF) via frontend preview capture (`html-to-image` + `jsPDF`, full-width capture); **Markdown group** (PDF/DOCX) via Rust `export_pdf`/`export_docx`. Pandoc is **NOT bundled** — it's resolved from the system (`find_pandoc()`: Homebrew `/opt/homebrew/bin`, `/usr/local/bin`, then PATH). Markdown PDF/DOCX export requires `brew install pandoc`; Markdown PDF also requires `brew install typst`. MacTeX is not required. (Bundling pandoc as a Tauri sidecar was removed — exec'ing the build-machine path failed on end-user installs; `export_html` also removed.)
 - Git commands (git2 crate): `git_repo_info`, `git_status`, `git_diff_file`, `git_log`, `git_commit`, `git_push`, `git_pull`, `git_auto_sync`, `git_setup_sync`, `git_check_auth`, `git_init`, `git_discard_file`, `git_stage_file`, `git_file_at_commit`, `git_restore_file`, `git_conflict_info`, `git_resolve_conflict`
@@ -47,12 +47,14 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 - Session commands: `save_session`, `load_session` (read/write `~/.kaelio/session.json`)
 - Credential handling: SSH agent → SSH key files → system `git credential fill` (HTTPS)
 - Plugins: dialog, process, opener, updater
+- `save_file` and `git_restore_file` write through `write_atomic` (temp file + rename); other writes are still plain `fs::write`. Markdown PDF export sends Mermaid sources to mermaid.ink via `curl`
+- Security: CSP is set in `tauri.conf.json` (`csp` / `devCsp`); `withGlobalTauri` is on, so anything written to `innerHTML` must pass `escapeHtml` or `sanitizeHtmlString` (inert `DOMParser` parse)
 
 ### Build/Release
 - Vite dev server on :1420, HMR on :1421
-- CI matrix: macOS aarch64, Windows x86_64, Linux x86_64
+- CI matrix: macOS universal (aarch64 + x86_64), Windows x86_64, Linux x86_64
 - Updater: signed `.tar.gz`/`.sig` artifacts, `latest.json` manifest on GitHub Releases
-- Bundle file associations: `.md`, `.markdown`, `.yaml`, `.yml`, `.txt`
+- Bundle file associations: `.md`, `.markdown`, `.yaml`, `.yml`, `.txt`, plus json, csv, html, svg and images for viewing
 
 ## Docs
 

@@ -28,7 +28,7 @@ sequenceDiagram
 |--------|----------|-------|
 | Endpoint | `tauri.conf.json` plugins.updater.endpoints | `https://github.com/kael-wanderer/kaelio/releases/latest/download/latest.json` |
 | Public key | `tauri.conf.json` plugins.updater.pubkey | Ed25519 base64 |
-| Bundle artifacts | `tauri.conf.json` bundle.createUpdaterArtifacts | `true` |
+| Bundle artifacts | `bundle.createUpdaterArtifacts` | `false` in `tauri.conf.json` (local builds need no signing key); `true` in `tauri.release.conf.json`, which CI passes with `--config` |
 | Capabilities | `capabilities/default.json` | `updater:default`, `process:allow-restart` |
 
 ## 2. Rust Plugin Registration
@@ -59,17 +59,20 @@ Registered in `lib.rs` via `.setup()` with `#[cfg(desktop)]` guard. Also require
 
 | Platform | Updater bundle | Signature |
 |----------|---------------|-----------|
-| macOS | `kaelio.app.tar.gz` | `kaelio.app.tar.gz.sig` |
-| Linux | `mx_X.Y.Z_amd64.AppImage` | `*.AppImage.sig` |
-| Windows | `mx_X.Y.Z_x64-setup.exe` | `*-setup.exe.sig` |
+| macOS | `Kaelio.app.tar.gz` | `Kaelio.app.tar.gz.sig` |
+| Linux | `Kaelio_X.Y.Z_amd64.AppImage` | `*.AppImage.sig` |
+| Windows | `Kaelio_X.Y.Z_x64-setup.exe` | `*-setup.exe.sig` |
+
+> Releases up to 0.9.5 were built with updater artifacts off, so their `latest.json` carried empty signatures and in-app update could not work. Copies installed from those releases need one manual download.
 
 ## File Reference
 
 | File | Purpose |
 |------|---------|
-| `src/main.ts:711-772` | `doUpdateCheck()`, `checkForUpdates()` |
-| `src-tauri/src/lib.rs:243-247` | Plugin registration |
-| `src-tauri/tauri.conf.json:26-32` | Updater config |
+| `src/main.ts` | `doUpdateCheck()`, `checkForUpdates()` |
+| `src-tauri/src/lib.rs` | Plugin registration (`run()`) |
+| `src-tauri/tauri.conf.json` | Updater config (`plugins.updater`) |
+| `src-tauri/tauri.release.conf.json` | Release-only override enabling updater artifacts |
 | `src-tauri/capabilities/default.json` | Permissions |
 
 ## Cross-References

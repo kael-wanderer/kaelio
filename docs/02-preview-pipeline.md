@@ -74,11 +74,11 @@ Mermaid initialized with `startOnLoad: false`, `theme: "dark"`. Render errors ar
 
 | File | Purpose |
 |------|---------|
-| `src/main.ts:30` | markdown-it instance |
-| `src/main.ts:32-46` | `renderKaTeX()` |
-| `src/main.ts:54-63` | `processMermaidBlocks()` |
-| `src/main.ts:65-71` | `renderMermaidDivs()` |
-| `src/main.ts:75-84` | `updatePreview()` orchestrator |
+| `src/main.ts` | markdown-it instance |
+| `src/main.ts` | `renderKaTeX()` |
+| `src/main.ts` | `processMermaidBlocks()` |
+| `src/main.ts` | `renderMermaidDivs()` |
+| `src/main.ts` | `updatePreview()` orchestrator |
 
 ## Cross-References
 

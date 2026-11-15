@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- **Preview no longer runs scripts from a document.** The HTML sanitizer parsed markup inside the live page, so `<img onerror=…>` in a Markdown file ran before it could be stripped, with full access to Kaelio's file and Git commands. It now parses in an inert document, and also blocks `javascript:` URLs written with embedded whitespace, `<object>`, `<embed>`, `<base>` and `<meta>`.
+- **File names are escaped** in the sidebar, the recent-files list and the history panel; a crafted file name could run script when its folder was opened.
+- **Content Security Policy enabled** (it was off): inline scripts and event handlers are refused even if markup slips through.
+
+### Fixes
+
+- **File History no longer redirects Save.** Right-click → File History on another file made the next save write the open document over that file; it now opens the file first.
+- **Closing split view saves each tab's own content.** With two or more unsaved sub-pane tabs, one tab's text was written into every file. Closing a background sub tab no longer discards the visible tab's edits.
+- **Pull no longer discards uncommitted edits.** A fast-forward pull force-checked-out the working tree; it now stops and asks you to commit or discard first.
+- **Version history View / Restore work** with the abbreviated commit ids shown in the list.
+- **Sync setup refuses to adopt a parent repository** when the folder sits inside another Git repository.
+- Git authentication gives up after a few attempts instead of retrying a rejected credential forever.
+- Saves are atomic (temporary file, then rename), so a crash mid-save cannot truncate a document; save failures are shown instead of being ignored, and "Auto-saved" only appears after a successful save.
+- Crash-recovery Restore / Dismiss remove only the recovery file shown, not every pending one.
+- New File stops with an error when the folder is not writable instead of looping.
+- Character count counts characters, not bytes (accented and CJK text was over-counted).
+- Two windows exporting PDF/DOCX at the same time no longer overwrite each other's temporary files.
+- Zoom Out shortcut is displayed as `⌘-` instead of `⌘`.
+
+### Release
+
+- Updater bundles and signatures are built again (the `latest.json` published with recent releases, 0.9.5 included, had empty signatures, so in-app update could not work). The release job now fails if any are missing. Copies already installed need one manual download.
+
+### Cleanup
+
+- Removed the unused `docx` and `@tauri-apps/plugin-opener` npm packages and the `wait-timeout` crate; declared the CodeMirror packages that were imported but not listed; removed Vite template assets and dead zen-mode CSS.
+
 ## 0.9.5
 
 ### New

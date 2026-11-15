@@ -129,9 +129,9 @@ Mouse-drag on `#divider` resizes editor/preview split. Clamped to 20%-80% range.
 |------|---------|
 | `index.html` | DOM structure |
 | `src/styles.css` | All styles |
-| `src/main.ts:227-269` | View mode switching |
-| `src/main.ts:192-225` | Divider drag logic |
-| `src/main.ts:448-542` | Sidebar / file tree |
+| `src/main.ts` | View mode switching |
+| `src/main.ts` | Divider drag logic |
+| `src/main.ts` | Sidebar / file tree |
 
 ## Cross-References
 

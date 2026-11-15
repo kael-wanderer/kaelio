@@ -30,13 +30,13 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           targets: ${{ matrix.target == 'universal-apple-darwin' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.target }}
 
@@ -48,14 +48,18 @@ jobs:
 
       - run: npm ci
 
+      # tauri.release.conf.json turns on createUpdaterArtifacts, which produces the
+      # signed updater bundles (.app.tar.gz, .AppImage, -setup.exe plus .sig) that
+      # latest.json points at. It is off in tauri.conf.json so local builds do not
+      # need the signing key.
       - name: Build Tauri app
-        run: npx tauri build --target ${{ matrix.target }}
+        run: npx tauri build --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Upload bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: bundle-${{ matrix.label }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/
@@ -64,10 +68,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Download all bundles
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: bundles
           merge-multiple: true
@@ -116,6 +120,16 @@ jobs:
           echo "LINUX_FILE=${LINUX_FILE}"
           echo "WIN_SIG=${WIN_SIG}"
           echo "WIN_FILE=${WIN_FILE}"
+
+          # An updater manifest with a missing signature or file makes every
+          # installed copy fail to update, silently. Stop the release instead.
+          for pair in "macOS:${MAC_SIG}:${MAC_FILE}" "Linux:${LINUX_SIG}:${LINUX_FILE}" "Windows:${WIN_SIG}:${WIN_FILE}"; do
+            name="${pair%%:*}"; rest="${pair#*:}"; sig="${rest%%:*}"; file="${rest#*:}"
+            if [ -z "$sig" ] || [ -z "$file" ]; then
+              echo "::error::Missing updater bundle or signature for ${name}"
+              exit 1
+            fi
+          done
 
           cat > latest.json << ENDJSON
           {

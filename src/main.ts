@@ -270,7 +270,8 @@ function cm6KeyToDisplay(key: string): string {
     .replace(/Mod/g, "\u2318")
     .replace(/Shift/g, "\u21E7")
     .replace(/Alt/g, "\u2325")
-    .replace(/-/g, "")
+    // Drop the separators but keep a trailing "-" (the minus key in "Mod--").
+    .replace(/-(?!$)/g, "")
     .replace(/\b([a-z])\b/g, (_, c) => c.toUpperCase());
 }
 
@@ -357,7 +358,7 @@ function renderRecentFiles() {
   list.innerHTML = recent.map(p => {
     const name = p.split("/").pop()!;
     const dir = p.split("/").slice(0, -1).join("/");
-    return `<div class="recent-item" data-path="${p.replace(/"/g, "&quot;")}"><span class="recent-name">${name}</span><span class="recent-path">${dir}</span></div>`;
+    return `<div class="recent-item" data-path="${escapeHtml(p)}"><span class="recent-name">${escapeHtml(name)}</span><span class="recent-path">${escapeHtml(dir)}</span></div>`;
   }).join("");
   list.querySelectorAll(".recent-item").forEach(el => {
     el.addEventListener("click", () => {
@@ -1036,7 +1037,12 @@ function renderFrontmatter(yaml: string): string {
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function getPathExtension(path: string | null): string {
@@ -1999,7 +2005,12 @@ async function closeSubTab(id: string) {
   const tab = subTabs.find(t => t.id === id);
   if (!tab) return;
   if (tab.isModified) {
-    if (id !== subActiveTabId) { subActiveTabId = id; renderActiveSubTab(); }
+    if (id !== subActiveTabId) {
+      // Keep the visible tab's unsaved edits before showing the one being closed.
+      if (subMode === "edit") saveActiveSubTabState();
+      subActiveTabId = id;
+      renderActiveSubTab();
+    }
     const shouldSave = await showConfirmDialog(`Save changes to ${tab.title}?`);
     if (shouldSave) await saveSubFile();
   }
@@ -2108,7 +2119,10 @@ async function toggleSplit() {
   if (dirty.length > 0) {
     const shouldSave = await showConfirmDialog(`Save ${dirty.length} unsaved sub-pane file(s)?`);
     if (shouldSave) {
-      for (const t of dirty) { subActiveTabId = t.id; if (subMode === "edit") saveActiveSubTabState(); await saveSubFile(); }
+      // Capture the visible editor into its own tab once, then write every
+      // dirty tab from its own state.
+      if (subMode === "edit") saveActiveSubTabState();
+      for (const t of dirty) await saveSubTab(t);
     }
   }
   setSplit(false);
@@ -2462,6 +2476,7 @@ async function saveFile() {
       if (autoSyncEnabled && currentFolderPath) gitAutoSync(path);
     } catch (e) {
       console.error("Save failed:", e);
+      flashStatus(`Save failed: ${e}`, "var(--error)", 4000);
     }
     return;
   }
@@ -2477,6 +2492,7 @@ async function saveFile() {
   } catch (e) {
     fileWatchSuppressed = false;
     console.error("Save failed:", e);
+    flashStatus(`Save failed: ${e}`, "var(--error)", 4000);
   }
 }
 
@@ -2484,16 +2500,25 @@ async function saveSubFile() {
   const tab = getActiveSubTab();
   if (!tab) return;
   if (subMode === "edit") saveActiveSubTabState();
-  if (!tab.filePath) { flashStatus("Sub pane file has no path.", "var(--warning)"); return; }
+  await saveSubTab(tab);
+}
+
+// Writes one sub tab from its own stored state. Callers that save the visible
+// tab must call saveActiveSubTabState() first so the state is current.
+async function saveSubTab(tab: Tab): Promise<boolean> {
+  if (!tab.filePath) { flashStatus("Sub pane file has no path.", "var(--warning)"); return false; }
   const content = tab.editorState.doc.toString();
   try {
     await invoke("save_file", { path: tab.filePath, content });
     tab.isModified = false;
     renderSubTabs();
-    if (subMode === "preview") renderSubPreview(content);
+    if (subMode === "preview" && tab.id === subActiveTabId) renderSubPreview(content);
     if (autoSyncEnabled && currentFolderPath) gitAutoSync(tab.filePath);
+    return true;
   } catch (e) {
     console.error("Sub save failed:", e);
+    flashStatus(`Save failed: ${e}`, "var(--error)", 4000);
+    return false;
   }
 }
 
@@ -2607,18 +2632,25 @@ async function newFile() {
   if (currentFolderPath) {
     // Create in current folder
     let name = "untitled.md";
-    let counter = 1;
-    while (true) {
+    for (let counter = 1; counter <= 500; counter++) {
       try {
         await invoke("create_file", { path: `${currentFolderPath}/${name}` });
-        await openFile(`${currentFolderPath}/${name}`);
-        refreshSidebar();
-        return;
-      } catch {
-        counter++;
-        name = `untitled-${counter}.md`;
+      } catch (e) {
+        // Only a name collision is worth retrying; anything else (permission
+        // denied, folder gone) would otherwise loop forever.
+        if (!String(e).toLowerCase().includes("exist")) {
+          flashStatus(`Could not create file: ${e}`, "var(--error)", 4000);
+          return;
+        }
+        name = `untitled-${counter + 1}.md`;
+        continue;
       }
+      await openFile(`${currentFolderPath}/${name}`);
+      refreshSidebar();
+      return;
     }
+    flashStatus("Could not find a free untitled file name.", "var(--error)", 4000);
+    return;
   } else {
     // No folder — create a new untitled tab
     saveActiveTabState();
@@ -2656,7 +2688,8 @@ function scheduleAutoSave() {
   autoSaveTimer = setTimeout(async () => {
     if (currentFilePath) {
       await saveFile();
-      flashStatus("Auto-saved", "var(--success)");
+      // saveFile reports its own failure; only confirm when the save landed.
+      if (!isEditorDirty()) flashStatus("Auto-saved", "var(--success)");
     }
   }, AUTO_SAVE_DELAY);
 }
@@ -3050,7 +3083,7 @@ async function loadHistoryCommits() {
       const item = document.createElement("div");
       item.className = "history-item";
       const ago = timeAgo(entry.timestamp);
-      item.innerHTML = `<span class="history-actions"><button data-action="view" data-id="${entry.id}">View</button><button data-action="restore" data-id="${entry.id}">Restore</button></span><span class="history-sha">${entry.id}</span> <span class="history-msg">${escapeHtml(entry.message)}</span><br><span class="history-meta">${escapeHtml(entry.author)} · ${ago}</span>`;
+      item.innerHTML = `<span class="history-actions"><button data-action="view" data-id="${escapeHtml(entry.id)}">View</button><button data-action="restore" data-id="${escapeHtml(entry.id)}">Restore</button></span><span class="history-sha">${escapeHtml(entry.id)}</span> <span class="history-msg">${escapeHtml(entry.message)}</span><br><span class="history-meta">${escapeHtml(entry.author)} · ${ago}</span>`;
       item.querySelector('[data-action="view"]')?.addEventListener("click", (e) => {
         e.stopPropagation();
         showHistoryDiff(entry.id, entry.message, "commit");
@@ -3062,7 +3095,7 @@ async function loadHistoryCommits() {
       list.appendChild(item);
     }
   } catch (e) {
-    list.innerHTML = `<div class="history-empty">Error: ${e}</div>`;
+    list.innerHTML = `<div class="history-empty">Error: ${escapeHtml(String(e))}</div>`;
   }
 }
 
@@ -3094,7 +3127,7 @@ async function loadHistorySnapshots() {
       list.appendChild(item);
     }
   } catch (e) {
-    list.innerHTML = `<div class="history-empty">Error: ${e}</div>`;
+    list.innerHTML = `<div class="history-empty">Error: ${escapeHtml(String(e))}</div>`;
   }
 }
 
@@ -3241,18 +3274,16 @@ async function checkRecovery() {
         });
         setFilename(latest.original_path);
         setModified(true);
-        // Clean up all recovery files
-        for (const f of files) {
-          await invoke("delete_recovery", { recoveryPath: f.recovery_path });
-        }
+        // Remove only the file that was restored; others stay recoverable.
+        await invoke("delete_recovery", { recoveryPath: latest.recovery_path });
       } catch { /* ignore */ }
       banner.classList.add("hidden");
     }, { once: true });
 
     document.getElementById("recovery-dismiss")?.addEventListener("click", async () => {
-      for (const f of files) {
-        await invoke("delete_recovery", { recoveryPath: f.recovery_path });
-      }
+      try {
+        await invoke("delete_recovery", { recoveryPath: latest.recovery_path });
+      } catch { /* ignore */ }
       banner.classList.add("hidden");
     }, { once: true });
   } catch { /* ignore */ }
@@ -3841,7 +3872,6 @@ const SAMPLE_CONTENT = `# About Kaelio
 | \`Cmd+E\` | Read mode (preview only) |
 | \`Cmd+B\` | Toggle file sidebar |
 | \`Cmd+F\` | Search in file |
-| \`Cmd+H\` | Search & replace |
 | \`Cmd+Shift+P\` | Command palette |
 | \`Cmd+Shift+F\` | File search |
 | \`Cmd+Shift+C\` | Copy formatted HTML |
@@ -4056,7 +4086,7 @@ async function renderTreeEntries(entries: DirEntry[], container: HTMLElement, de
       : '<span class="tree-chevron-placeholder"></span>';
 
     const badge = entry.is_dir ? "" : `<span class="file-badge file-badge-${getFileIcon(entry)}">${getFileIcon(entry)}</span>`;
-    item.innerHTML = `${indent}${chevron}${badge}<span class="name">${entry.name}</span>`;
+    item.innerHTML = `${indent}${chevron}${badge}<span class="name">${escapeHtml(entry.name)}</span>`;
 
     // Mouse-based drag to move
     initTreeDrag(item, entry);
@@ -5994,22 +6024,34 @@ function appendSanitizedHtml(target: HTMLElement, html: string) {
   target.appendChild(template.content);
 }
 
+// Parses in an inert document (DOMParser): no resource loads and no event
+// handlers run while the markup is being cleaned. Assigning to innerHTML of an
+// element owned by the live document would fire <img onerror> during the parse,
+// before the attribute could be stripped.
 function sanitizeHtmlString(html: string): string {
-  const container = document.createElement("div");
-  container.innerHTML = html;
-  sanitizeDetachedHtml(container);
-  return container.innerHTML;
+  const doc = new DOMParser().parseFromString(`<!doctype html><body>${html}`, "text/html");
+  sanitizeDetachedHtml(doc.body);
+  return doc.body.innerHTML;
 }
 
+const SANITIZE_REMOVE_SELECTOR = "script, iframe[srcdoc], object, embed, base, meta";
+const SANITIZE_URL_ATTRS = new Set(["href", "src", "xlink:href", "action", "formaction", "data"]);
+const SANITIZE_BLOCKED_SCHEMES = ["javascript:", "vbscript:", "data:text/html"];
+
 function sanitizeDetachedHtml(root: ParentNode) {
-  root.querySelectorAll("script, iframe[srcdoc]").forEach(el => el.remove());
+  root.querySelectorAll(SANITIZE_REMOVE_SELECTOR).forEach(el => el.remove());
   root.querySelectorAll("*").forEach(el => {
     for (const attr of Array.from(el.attributes)) {
       const name = attr.name.toLowerCase();
-      const value = attr.value.trim().toLowerCase();
       if (name.startsWith("on")) {
         el.removeAttribute(attr.name);
-      } else if ((name === "href" || name === "src" || name === "xlink:href") && value.startsWith("javascript:")) {
+        continue;
+      }
+      if (!SANITIZE_URL_ATTRS.has(name)) continue;
+      // Browsers ignore whitespace and control characters inside a scheme
+      // ("java\tscript:"), so drop them before comparing.
+      const value = attr.value.replace(/[\u0000-\u0020\u007f-\u009f]/g, "").toLowerCase();
+      if (SANITIZE_BLOCKED_SCHEMES.some(scheme => value.startsWith(scheme))) {
         el.removeAttribute(attr.name);
       }
     }
@@ -7318,8 +7360,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     const target = contextMenuTarget;
     hideContextMenu();
     if (target && !target.isDir) {
-      currentFilePath = target.path;
-      showFileHistory();
+      // Open the file first. Repointing currentFilePath alone left another
+      // file's text in the editor, and the next save wrote it over this file.
+      void openFile(target.path).then(() => {
+        if (currentFilePath === target.path) showFileHistory();
+      });
     }
   });
   document.getElementById("ctx-git-discard")?.addEventListener("click", () => {

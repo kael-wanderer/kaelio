@@ -73,11 +73,11 @@ Deletes first try the platform Trash. If macOS denies that path for an unsigned 
 
 | File | Purpose |
 |------|---------|
-| `src-tauri/src/lib.rs:28-42` | `read_file`, `save_file` |
-| `src-tauri/src/lib.rs:44-51` | `word_count` |
-| `src-tauri/src/lib.rs:53-83` | `list_directory` |
-| `src/main.ts:130-175` | Frontend file open/save logic |
-| `src/main.ts:273-282` | Drag-and-drop handler |
+| `src-tauri/src/lib.rs` | `read_file`, `save_file` |
+| `src-tauri/src/lib.rs` | `word_count` |
+| `src-tauri/src/lib.rs` | `list_directory` |
+| `src/main.ts` | Frontend file open/save logic |
+| `src/main.ts` | Drag-and-drop handler |
 
 ## Cross-References
 

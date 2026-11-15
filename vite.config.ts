@@ -61,7 +61,6 @@ export default defineConfig(async () => ({
           if (id.includes("/markdown-it") || id.includes("/katex/")) return "vendor-markdown";
           if (id.includes("/jspdf/")) return "vendor-jspdf";
           if (id.includes("/html-to-image/") || id.includes("/html2canvas/")) return "vendor-capture";
-          if (id.includes("/docx/")) return "vendor-docx";
           if (id.includes("/cytoscape/")) return "vendor-cytoscape";
           if (id.includes("/d3") || id.includes("/dagre") || id.includes("/elkjs/")) return "vendor-graphs";
           if (id.includes("/lodash-es/")) return "vendor-lodash";
