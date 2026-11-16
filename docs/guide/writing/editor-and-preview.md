@@ -18,10 +18,12 @@ Kaelio shows your document twice: the Markdown source in the editor, and the for
 | View | How | Shows |
 |---|---|---|
 | Split (the default) | — | Editor on the left, preview on the right |
-| Editor only | **Show/Hide Preview**, <kbd>⌘</kbd><kbd>P</kbd> | The source, full width |
-| **Reading View** | <kbd>⌘</kbd><kbd>E</kbd> | The preview, full width |
+| Editor only | **Show/Hide Preview**, <kbd>⌘</kbd><kbd>⌥</kbd><kbd>P</kbd> | The source, full width |
+| **Reading View** | <kbd>⌘</kbd><kbd>E</kbd> | The preview, in a centred reading column |
 
 The same three are buttons on the activity bar at the far left. Kaelio remembers your choice.
+
+In Reading View, the text sits in a centred column. Choose its width under **View → Reading Width**: Narrow, Medium (the default), Wide or Full. Wide tables and diagrams scroll sideways inside the column. Split view always uses the full pane.
 
 ### Move between source and preview
 

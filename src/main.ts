@@ -31,6 +31,7 @@ import { migrateKeybindings } from "./lib/keybindings.ts";
 import { highlightCode } from "./lib/highlight.ts";
 import { extractHeadings, activeHeadingIndex } from "./lib/outline.ts";
 import { parseSplitSession, type SplitSession } from "./lib/session.ts";
+import { parseReadingWidth, readingWidthCss, nextReadingWidth, type ReadingWidth } from "./lib/reading-width.ts";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -3411,6 +3412,32 @@ function updateSubControlsUI() {
   document.getElementById("btn-sub-linenumbers")?.classList.toggle("active", subShowLineNumbers);
 }
 
+// --- Reading width (Reading View column) ---
+
+let readingWidth: ReadingWidth = parseReadingWidth(safeGetLocal("kaelio-reading-width"));
+
+function safeGetLocal(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function applyReadingWidth() {
+  document.documentElement.style.setProperty("--reading-width", readingWidthCss(readingWidth));
+  const select = document.getElementById("reading-width-select") as HTMLSelectElement | null;
+  if (select) select.value = readingWidth;
+}
+
+function setReadingWidth(w: ReadingWidth) {
+  readingWidth = w;
+  try { localStorage.setItem("kaelio-reading-width", w); } catch { /* not persisted */ }
+  applyReadingWidth();
+}
+
+function cycleReadingWidth() {
+  setReadingWidth(nextReadingWidth(readingWidth));
+  const names: Record<ReadingWidth, string> = { narrow: "Narrow", medium: "Medium", wide: "Wide", full: "Full" };
+  flashStatus(`Reading width: ${names[readingWidth]}`, "var(--accent)");
+}
+
 function setWrapMode(mode: WrapMode) {
   wrapMode = mode;
   localStorage.setItem("kaelio-wrap-mode", mode);
@@ -3699,6 +3726,7 @@ function setViewMode(mode: ViewMode) {
 
   currentViewMode = mode;
   localStorage.setItem("kaelio-view-mode", mode);
+  document.getElementById("preview-pane")?.classList.toggle("reading-view", mode === "preview");
 
   if (mode === "split") {
     editorWrapper.style.display = "";
@@ -4601,6 +4629,7 @@ function getCommands(): PaletteCommand[] {
     { label: "Show/Hide Preview", shortcut: sk("view.toggle-preview"), action: togglePreview },
     { label: "Show/Hide Explorer", shortcut: sk("view.toggle-sidebar"), action: toggleSidebar },
     { label: "Reading View", shortcut: sk("view.read-mode"), action: toggleReadMode },
+    { label: "Cycle Reading Width", action: cycleReadingWidth },
     { label: "Copy Formatted HTML", shortcut: sk("edit.copy-formatted"), action: copyFormattedHTML },
     { label: "Export HTML PDF", action: exportHtmlPdf },
     { label: "Export HTML PNG", action: exportHtmlPng },
@@ -6040,6 +6069,7 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
   const host = document.createElement("div");
   host.id = "preview-pane";
   host.className = `${previewPane.className} export-capture-host export-print-theme`.trim();
+  host.classList.remove("reading-view");
   host.style.position = "fixed";
   host.style.left = "0";
   host.style.top = "0";
@@ -6965,6 +6995,10 @@ async function handleNativeMenuCommand(command: string) {
     case "view.soft-wrap.off": return setWrapMode("off");
     case "view.soft-wrap.window": return setWrapMode("window");
     case "view.soft-wrap.column": return setWrapMode("column");
+    case "view.reading-width.narrow": return setReadingWidth("narrow");
+    case "view.reading-width.medium": return setReadingWidth("medium");
+    case "view.reading-width.wide": return setReadingWidth("wide");
+    case "view.reading-width.full": return setReadingWidth("full");
     case "view.zoom-in": return zoomIn();
     case "view.zoom-out": return zoomOut();
     case "view.zoom-reset": return zoomReset();
@@ -7306,6 +7340,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-read-mode")?.addEventListener("click", () => toggleReadMode());
   document.getElementById("btn-toggle-outline")?.addEventListener("click", () => toggleOutline());
   document.getElementById("btn-toggle-linenumbers")?.addEventListener("click", () => toggleLineNumbers());
+  const readingWidthSelect = document.getElementById("reading-width-select") as HTMLSelectElement | null;
+  if (readingWidthSelect) {
+    readingWidthSelect.addEventListener("change", () => setReadingWidth(parseReadingWidth(readingWidthSelect.value)));
+  }
+  applyReadingWidth();
   const wrapModeSelect = document.getElementById("wrap-mode-select") as HTMLSelectElement | null;
   if (wrapModeSelect) {
     wrapModeSelect.value = wrapMode;

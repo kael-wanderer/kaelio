@@ -1252,6 +1252,22 @@ body {
 :is(#preview-pane, #sub-pane) .hljs-emphasis { font-style: italic; }
 :is(#preview-pane, #sub-pane) .hljs-strong { font-weight: 600; }
 
+/* Reading width: centred column in Reading View only (split view keeps the full pane) */
+:root { --reading-width: 75ch; }
+#preview-pane.reading-view > :not(.html-preview-frame):not(.plain-text-preview):not(.asset-preview):not(.structured-preview):not(.table-preview-wrap) {
+  max-width: var(--reading-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+#preview-pane.reading-view .mermaid {
+  overflow-x: auto;
+  justify-content: flex-start;
+}
+#preview-pane.reading-view .mermaid > svg {
+  margin: 0 auto;
+  flex: none;
+}
+
 :is(#preview-pane, #sub-pane) .table-scroll {
   overflow-x: auto;
   margin: 0.5em 0;

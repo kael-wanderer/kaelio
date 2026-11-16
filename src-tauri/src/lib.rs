@@ -3073,6 +3073,18 @@ pub fn run() {
                 ],
             )?;
 
+            let reading_width_menu = Submenu::with_items(
+                handle,
+                "Reading Width",
+                true,
+                &[
+                    &MenuItem::with_id(handle, "view.reading-width.narrow", "Narrow", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "view.reading-width.medium", "Medium", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "view.reading-width.wide", "Wide", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "view.reading-width.full", "Full", true, None::<&str>)?,
+                ],
+            )?;
+
             let view_menu = Submenu::with_items(
                 handle,
                 "View",
@@ -3107,6 +3119,7 @@ pub fn run() {
                         None::<&str>,
                     )?,
                     &soft_wrap_menu,
+                    &reading_width_menu,
                     &PredefinedMenuItem::separator(handle)?,
                     &MenuItem::with_id(
                         handle,
