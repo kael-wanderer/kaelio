@@ -1,9 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.9.6
+
+Highlights: updates now ask before installing, Help ▸ Kaelio Guide, math that spans lines, one-line tag lists, Markdown-only scope with a single export menu, smart paste, table editing, and security fixes for the preview.
 
 ### Changes
 
+- **Updates ask first.** Kaelio checks for a new version at launch and once a day. When one is found, an **Update** button appears in the status bar; nothing is downloaded until you click **Install and Restart**. **Skip This Version** silences automatic checks for that version, and "Check automatically" can be turned off. Help ▸ Check for Updates still checks on demand.
+- **Help ▸ Kaelio Guide** opens the online user guide; the shortcuts window links to the shortcuts page.
 - **Run scripts in an HTML page, on request.** When an HTML file has scripts, a bar offers "Run scripts"; the page then runs in an isolated frame (no access to Kaelio, its storage or your other files; only the files in its folder for display and `https://` resources). Off by default and forgotten at restart. PNG export always captures the static page.
 - **See what changed after a reload.** When an open file changes on disk and Kaelio reloads it, the changed blocks in the preview get a coloured bar, and a status-bar chip ("2 changes ↓") jumps to each one; × clears them, and typing clears them too. Files over 20,000 lines reload without marks.
 - **Table editing.** In a Markdown pipe table, `Tab` and `Shift+Tab` move between cells and select their text, re-aligning the columns and keeping alignment colons; `Tab` in the last cell adds a row. Escaped pipes and pipes in inline code stay inside their cell. Outside a table `Tab` indents as before.
@@ -25,12 +29,15 @@
 
 ### Security
 
+- **KaTeX 0.19.1** (also used for Mermaid labels) clears the remaining npm audit advisory.
 - **Preview no longer runs scripts from a document.** The HTML sanitizer parsed markup inside the live page, so `<img onerror=…>` in a Markdown file ran before it could be stripped, with full access to Kaelio's file and Git commands. It now parses in an inert document, and also blocks `javascript:` URLs written with embedded whitespace, `<object>`, `<embed>`, `<base>` and `<meta>`.
 - **File names are escaped** in the sidebar, the recent-files list and the history panel; a crafted file name could run script when its folder was opened.
 - **Content Security Policy enabled** (it was off): inline scripts and event handlers are refused even if markup slips through.
 
 ### Fixes
 
+- **Math over several lines renders.** Display math written across lines between `$$` fences (such as `aligned` blocks) keeps its line breaks and `\\`, instead of failing. Prices such as "$5 and $10" stay text, and dollars in code are never math.
+- **One-line tag lists.** `tags: [work, planning]` in the frontmatter shows each tag as its own chip, and × removes just that tag from the frontmatter.
 - **Developer notes match the app.** CLAUDE.md now says the split view is restored from the session and lists the current shortcuts (`Cmd+P` file search, `Alt+Cmd+P` preview, `Shift+Cmd+F` search in files, `Shift+Cmd+O` outline).
 - **A pasted image's link no longer lands in another tab.** If you switch tabs while an image is being saved, the file is kept in `assets/` and the status bar says the link was not inserted.
 - **Images paste into Markdown files only.** Pasting an image into an HTML, YAML or text file no longer saves it to `assets/` or inserts a Markdown link; the status bar says why.

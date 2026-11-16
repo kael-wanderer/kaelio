@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Kaelio
 
-A fast, lightweight markdown editor built with Tauri 2 + Rust. Forked from [vibery-studio/mx](https://github.com/vibery-studio/mx) (GPL-3.0). Features: live split preview, Mermaid diagrams, KaTeX math, YAML frontmatter, PDF/DOCX/PNG export (Mermaid rendered locally), HTML viewing, auto-update, native Apple Silicon support, git sync (auto-commit/push on save), Obsidian-style callouts & interactive checklists, conflict resolution, version history with snapshots. Current version: 0.9.5. License: GPL-3.0.
+A fast, lightweight markdown editor built with Tauri 2 + Rust. Forked from [vibery-studio/mx](https://github.com/vibery-studio/mx) (GPL-3.0). Features: live split preview, Mermaid diagrams, KaTeX math, YAML frontmatter, PDF/DOCX/PNG export (Mermaid rendered locally), HTML viewing, auto-update, native Apple Silicon support, git sync (auto-commit/push on save), Obsidian-style callouts & interactive checklists, conflict resolution, version history with snapshots. Current version: 0.9.6. License: GPL-3.0.
 
 ## Commands
 
