@@ -15,25 +15,26 @@ Kaelio keeps two kinds of history for every file. **Commits** come from Git, if 
 
 ### Open the history
 
-Right-click a file in the Explorer and choose **File History**. The window has two tabs, **Commits** and **Snapshots**.
+Right-click a file in the Explorer and choose **File History**, or open the command palette (<kbd>⌘</kbd><kbd>⇧</kbd><kbd>P</kbd>) and choose **File History** for the file you are editing. It works for any saved file, also one opened on its own without a folder.
+
+The window shows one list, newest first. Each row has a **Commit** or **Snapshot** badge, a short description and how long ago it was taken. Hover the time to see the exact date.
+
+- **View** shows that version beside the current one (**Selected version** and **Current**). From there, **Restore this version** puts the old text into the editor; nothing is saved until you press <kbd>⌘</kbd><kbd>S</kbd>. **← Back** returns to the list.
+- **Restore** in the list brings that version back straight away.
+
+If the list says **No history yet**, the file has no commits and you have not edited it in Kaelio long enough for a snapshot to be taken.
 
 ### Commits
 
-The **Commits** tab lists the last 50 commits that changed this file, newest first, with the message, the author and how long ago.
+Commit rows show the short commit id and the message, for the last 50 commits that changed this file. They appear only when the file is in an open folder that is a Git repository. See [Sync with Git](git-sync.md).
 
-- **View** shows that version beside the current one (**Selected version** and **Current**). From there, **Restore this version** puts the old text into the editor; nothing is saved until you press <kbd>⌘</kbd><kbd>S</kbd>. **← Back** returns to the list.
-- **Restore** in the list writes that version to the file straight away and reloads it.
-
-The tab is empty if the folder is not a Git repository. See [Sync with Git](git-sync.md).
+**Restore** on a commit writes that version to the file and reloads it.
 
 ### Snapshots
 
-Kaelio saves a snapshot of the file you are editing a minute after you stop typing, whenever the text changed. It keeps the last 50 snapshots of each file.
+Kaelio saves a snapshot of the file you are editing a minute after you stop typing, whenever the text changed. It keeps the last 50 snapshots of each file. Snapshot rows read **Local snapshot**.
 
-- **View** shows the snapshot beside the current text.
-- **Restore** puts the snapshot's text into the editor if the file is open (save to keep it), or writes it to the file if it is not.
-
-If the tab says **No snapshots yet**, you have not edited this file in Kaelio long enough for one to be taken.
+**Restore** on a snapshot puts its text into the editor if the file is open (save to keep it), or writes it to the file if it is not.
 
 ### Crash recovery
 

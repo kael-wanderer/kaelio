@@ -4,6 +4,7 @@
 
 ### Changes
 
+- **One history list.** File History shows Git commits and local snapshots in one list, newest first, each with a Commit or Snapshot badge; the two tabs are gone. History now opens for any saved file (command palette → File History), with snapshots only when there is no folder or Git repository.
 - **Docs follow the Markdown focus.** README, the user guide (export, PDFs and other files, privacy, troubleshooting) and developer docs describe the single export menu, local diagram export and default-app opening; the PDF viewer guide page now redirects to "Images and other files".
 - **Export no longer sends diagrams to mermaid.ink.** Mermaid diagrams in PDF and DOCX export are rendered locally on a light theme, so nothing leaves your machine and export works offline. A diagram with a syntax error stays in the document as a code block.
 - **One export menu: PDF, DOCX, PNG.** The HTML ▸ and Markdown ▸ submenus are replaced by three items in the File menu, the toolbar, the macOS menu bar and the command palette. PDF and DOCX use Pandoc and are greyed out for HTML files ("Markdown only"). JPG export and the image-based PDF are removed.

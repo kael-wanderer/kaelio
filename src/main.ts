@@ -25,6 +25,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { migrateKeybindings, nativeMenuAccelerators } from "./lib/keybindings.ts";
 import { exportAvailability } from "./lib/export-availability.ts";
 import { findMermaidBlocks, applyDiagramPlaceholders, diagramName } from "./lib/mermaid-export.ts";
+import { mergeHistory } from "./lib/history.ts";
 import { resolveLinkedPath } from "./lib/link-path.ts";
 import { fileKind } from "./lib/file-kind.ts";
 import { resolveLocalImagePath } from "./lib/image-src.ts";
@@ -2512,7 +2513,7 @@ function scheduleSnapshot() {
 }
 
 async function showFileHistory() {
-  if (!currentFilePath || !currentFolderPath) return;
+  if (!currentFilePath) return;
   historyDiffFilePath = currentFilePath;
   const modal = document.getElementById("history-modal");
   const list = document.getElementById("history-list");
@@ -2520,75 +2521,57 @@ async function showFileHistory() {
   if (!modal || !list || !diffView) return;
   list.classList.remove("hidden");
   diffView.classList.add("hidden");
-  // Activate commits tab by default
-  document.getElementById("history-tab-commits")?.classList.add("active");
-  document.getElementById("history-tab-snapshots")?.classList.remove("active");
-  await loadHistoryCommits();
+  await loadHistory();
   modal.classList.remove("hidden");
 }
 
-async function loadHistoryCommits() {
-  if (!historyDiffFilePath || !currentFolderPath) return;
+// One list: Git commits (when the file is in an open folder) and local
+// snapshots, newest first (spec I5). A git_log error means "no commits".
+async function loadHistory() {
+  const filePath = historyDiffFilePath;
+  if (!filePath) return;
   const list = document.getElementById("history-list");
   if (!list) return;
   list.innerHTML = "";
+  let snaps: SnapshotInfo[] = [];
   try {
-    const entries = await invoke<GitLogEntry[]>("git_log", {
-      folderPath: currentFolderPath, filePath: historyDiffFilePath, limit: 50
-    });
-    if (entries.length === 0) {
-      list.innerHTML = '<div class="history-empty">No commits for this file</div>';
-      return;
-    }
-    for (const entry of entries) {
-      const item = document.createElement("div");
-      item.className = "history-item";
-      const ago = timeAgo(entry.timestamp);
-      item.innerHTML = `<span class="history-actions"><button data-action="view" data-id="${escapeHtml(entry.id)}">View</button><button data-action="restore" data-id="${escapeHtml(entry.id)}">Restore</button></span><span class="history-sha">${escapeHtml(entry.id)}</span> <span class="history-msg">${escapeHtml(entry.message)}</span><br><span class="history-meta">${escapeHtml(entry.author)} · ${ago}</span>`;
-      item.querySelector('[data-action="view"]')?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        showHistoryDiff(entry.id, entry.message, "commit");
-      });
-      item.querySelector('[data-action="restore"]')?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        restoreFromCommit(entry.id);
-      });
-      list.appendChild(item);
-    }
+    snaps = await invoke<SnapshotInfo[]>("list_snapshots", { filePath });
   } catch (e) {
     list.innerHTML = `<div class="history-empty">Error: ${escapeHtml(String(e))}</div>`;
+    return;
   }
-}
-
-async function loadHistorySnapshots() {
-  if (!historyDiffFilePath) return;
-  const list = document.getElementById("history-list");
-  if (!list) return;
-  list.innerHTML = "";
-  try {
-    const snaps = await invoke<SnapshotInfo[]>("list_snapshots", { filePath: historyDiffFilePath });
-    if (snaps.length === 0) {
-      list.innerHTML = '<div class="history-empty">No snapshots yet. Snapshots are saved automatically as you edit.</div>';
-      return;
+  let commits: GitLogEntry[] = [];
+  if (currentFolderPath) {
+    try {
+      commits = await invoke<GitLogEntry[]>("git_log", { folderPath: currentFolderPath, filePath, limit: 50 });
+    } catch {
+      commits = [];
     }
-    for (const snap of snaps) {
-      const item = document.createElement("div");
-      item.className = "history-item";
-      const ago = timeAgo(snap.timestamp);
-      const date = new Date(snap.timestamp * 1000).toLocaleString();
-      item.innerHTML = `<span class="history-actions"><button data-action="view">View</button><button data-action="restore">Restore</button></span><span class="history-sha">snapshot</span> <span class="history-msg">${date}</span><br><span class="history-meta">${ago}</span>`;
-      item.querySelector('[data-action="view"]')?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        showSnapshotDiff(snap.snap_path, date);
-      });
-      item.querySelector('[data-action="restore"]')?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        restoreFromSnapshot(snap.snap_path);
-      });
-      list.appendChild(item);
-    }
-  } catch (e) {
-    list.innerHTML = `<div class="history-empty">Error: ${escapeHtml(String(e))}</div>`;
+  }
+  const entries = mergeHistory(commits, snaps);
+  if (entries.length === 0) {
+    list.innerHTML = '<div class="history-empty">No history yet. Snapshots are saved automatically as you edit.</div>';
+    return;
+  }
+  for (const entry of entries) {
+    const item = document.createElement("div");
+    item.className = "history-item";
+    const isCommit = entry.kind === "commit";
+    const shortId = isCommit ? entry.id.slice(0, 7) : "";
+    const msg = isCommit ? `${shortId} — ${entry.message}` : "Local snapshot";
+    const date = new Date(entry.timestamp * 1000).toLocaleString();
+    item.innerHTML = `<span class="history-badge ${isCommit ? "commit" : "snapshot"}">${isCommit ? "Commit" : "Snapshot"}</span><span class="history-msg">${escapeHtml(msg)}</span><span class="history-meta" title="${escapeHtml(date)}">${escapeHtml(timeAgo(entry.timestamp))}</span><span class="history-actions"><button data-action="view">View</button><button data-action="restore">Restore</button></span>`;
+    item.querySelector('[data-action="view"]')?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (entry.kind === "commit") showHistoryDiff(entry.id, entry.message, "commit");
+      else showSnapshotDiff(entry.snapPath, date);
+    });
+    item.querySelector('[data-action="restore"]')?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (entry.kind === "commit") restoreFromCommit(entry.id);
+      else restoreFromSnapshot(entry.snapPath);
+    });
+    list.appendChild(item);
   }
 }
 
@@ -3983,6 +3966,7 @@ function getCommands(): PaletteCommand[] {
     { label: "Reading View", shortcut: sk("view.read-mode"), action: toggleReadMode },
     { label: "Cycle Reading Width", action: cycleReadingWidth },
     { label: "Copy Formatted HTML", shortcut: sk("edit.copy-formatted"), action: copyFormattedHTML },
+    { label: "File History", action: () => { void showFileHistory(); } },
     { label: "Export PDF", action: exportPdf },
     { label: "Export DOCX", action: exportDocx },
     { label: "Export PNG", action: exportPng },
@@ -6715,18 +6699,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   document.getElementById("history-backdrop")?.addEventListener("click", () => {
     document.getElementById("history-modal")?.classList.add("hidden");
-  });
-  document.getElementById("history-tab-commits")?.addEventListener("click", () => {
-    document.getElementById("history-tab-commits")?.classList.add("active");
-    document.getElementById("history-tab-snapshots")?.classList.remove("active");
-    hideHistoryDiff();
-    loadHistoryCommits();
-  });
-  document.getElementById("history-tab-snapshots")?.addEventListener("click", () => {
-    document.getElementById("history-tab-snapshots")?.classList.add("active");
-    document.getElementById("history-tab-commits")?.classList.remove("active");
-    hideHistoryDiff();
-    loadHistorySnapshots();
   });
   document.getElementById("history-diff-back")?.addEventListener("click", () => hideHistoryDiff());
   document.getElementById("history-diff-restore")?.addEventListener("click", () => {

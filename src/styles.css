@@ -2327,13 +2327,16 @@ body {
 }
 .history-actions button:hover { background: var(--hover-bg); }
 
-/* History tabs */
-#history-tabs { display: flex; gap: 2px; }
-.history-tab {
-  background: none; border: none; color: var(--muted); cursor: pointer;
-  padding: 4px 10px; font-size: 12px; border-radius: 4px;
+/* One history list: badge, message, time, actions (spec I5) */
+.history-item { display: flex; align-items: center; gap: 10px; }
+.history-item .history-msg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-item .history-actions { float: none; }
+.history-badge {
+  flex: none; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px;
+  text-transform: uppercase; letter-spacing: 0.03em;
 }
-.history-tab.active { background: var(--hover-bg); color: var(--text); font-weight: 500; }
+.history-badge.commit { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.history-badge.snapshot { color: var(--success); background: color-mix(in srgb, var(--success) 15%, transparent); }
 
 /* History diff view */
 #history-diff { display: flex; flex-direction: column; height: 100%; }
