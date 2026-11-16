@@ -49,6 +49,11 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 - `save_file` and `git_restore_file` write through `write_atomic` (temp file + rename); other writes are still plain `fs::write`
 - Security: CSP is set in `tauri.conf.json` (`csp` / `devCsp`); `withGlobalTauri` is on, so anything written to `innerHTML` must pass `escapeHtml` or `sanitizeHtmlString` (inert `DOMParser` parse)
 
+### Running and testing the dev app
+
+- Run the dev app (`npm run tauri dev`) and do GUI testing on monitor 2 (the non-primary display) by default: put its windows there and do every click there, menu bar items included.
+- If monitor 2 is not connected, fall back to monitor 1.
+
 ### Build/Release
 - Vite dev server on :1420, HMR on :1421
 - CI matrix: macOS universal (aarch64 + x86_64), Windows x86_64, Linux x86_64
