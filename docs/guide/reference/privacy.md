@@ -29,7 +29,8 @@ To remove everything Kaelio keeps, quit it and delete the `~/.kaelio` folder.
 
 Only for these:
 
-- **Update check.** At launch, at most once a week, and when you choose Help ▸ **Check for Updates...**, Kaelio reads its release information from GitHub (`github.com/kael-wanderer/kaelio`) and downloads an update from there if one exists.
+- **Update check.** At launch, once a day while Kaelio is open (unless you turn that off), and when you choose Help ▸ **Check for Updates...**, Kaelio reads its release information from GitHub (`github.com/kael-wanderer/kaelio`). It downloads an update from there only when you click **Install and Restart**.
+- **The guide.** Help ▸ **Kaelio Guide** opens this guide (`kael.io.vn`) in your browser.
 - **Git sync,** only if you set it up. Kaelio pulls from and pushes to the repository you connected, and nowhere else. See [Sync with Git](../git/git-sync.md).
 - **Pictures from the web in your documents.** If a document shows an image by its web address (`![](https://…)`), the preview loads it from that address, as a browser would.
 

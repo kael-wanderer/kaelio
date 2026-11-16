@@ -64,7 +64,7 @@ Kaelio opens text files and shows images and PDFs. Other formats, such as Word o
 
 ### Where is my update?
 
-Kaelio checks at most once a week. Choose Help ▸ **Check for Updates...** to check now.
+Kaelio checks at launch and once a day, and stays quiet about a version you chose to skip, or when **Check for updates automatically every day** is off. Choose Help ▸ **Check for Updates...** to check now; it always shows what it finds.
 
 ## What it will not do
 

@@ -48,13 +48,20 @@ During install, Kaelio registers itself for `.md`, `.markdown`, `.txt`, `.yaml` 
 
 ### Keep Kaelio updated
 
-Kaelio checks for a new version a few seconds after it starts, at most once a week. To check now, choose Help ▸ **Check for Updates...**.
+Kaelio checks for a new version a few seconds after it starts, and once a day while it stays open. To check now, choose Help ▸ **Check for Updates...**.
 
-When there is a newer version, Kaelio downloads and installs it by itself; the status bar shows **Downloading update... N%**, then **Update installed — click to restart**. Click that message to restart into the new version, or keep working and it takes effect the next time you open Kaelio. Your settings and files are not touched.
+When there is a newer version, an **Update N** button appears in the status bar. Click it to see what changed, then choose:
+
+- **Install and Restart** to download the update, install it and reopen Kaelio.
+- **Later** to keep working. The button stays until you install.
+- **Skip This Version** to stop being told about that version. A newer one is still offered, and Help ▸ **Check for Updates...** always shows what it finds.
+- **Release Notes** to open the release page on GitHub.
+
+To stop the daily check, clear **Check for updates automatically every day** in the same window. Your settings and files are not touched by an update.
 
 ## What it will not do
 
-- It never restarts by itself to finish an update. You choose when.
+- It never downloads, installs or restarts by itself. You choose when.
 - It never sends anything about you to check for updates. It only reads the latest version number from GitHub.
 
 ## Next steps
