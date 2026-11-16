@@ -30,6 +30,7 @@ import { mergeHistory } from "./lib/history.ts";
 import { decidePaste } from "./lib/smart-paste.ts";
 import { tabInTable } from "./lib/table.ts";
 import { changedLineRanges, blocksToMark, type LineRange } from "./lib/line-diff.ts";
+import { hasScriptTag } from "./lib/html-scripts.ts";
 import { resolveLinkedPath } from "./lib/link-path.ts";
 import { fileKind } from "./lib/file-kind.ts";
 import { resolveLocalImagePath } from "./lib/image-src.ts";
@@ -1174,13 +1175,109 @@ function isHtmlPath(path: string | null): boolean {
 // --- Preview rendering ---
 
 
+// --- HTML view: static by default, opt-in sandboxed scripts (spec I3) ---
+
+/** Files whose scripts the user chose to run. Memory only: never persisted. */
+const htmlScriptsAllowed = new Set<string>();
+/** kaelio-html grant per file path: token and the served file name. */
+const htmlGrantTokens = new Map<string, { token: string; fileName: string }>();
+/** The isolation spike ran on macOS only; Windows and Linux webviews stay
+ *  static until the probe has been run there. */
+const htmlScriptsSupported = /Mac/i.test(navigator.userAgent);
+/** Set during PNG export so the static render is captured. */
+let htmlForceStatic = false;
+/** Identifies what the script frame shows, so typing does not reload it. */
+let htmlScriptFrameKey = "";
+
+function htmlScriptBar(running: boolean, text: string, buttonLabel: string, onClick: () => void): HTMLElement {
+  const bar = document.createElement("div");
+  bar.className = `html-script-bar${running ? " running" : ""}`;
+  const dot = document.createElement("span");
+  dot.className = "html-script-dot";
+  const label = document.createElement("span");
+  label.className = "html-script-text";
+  label.textContent = text;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.textContent = buttonLabel;
+  btn.addEventListener("click", onClick);
+  bar.append(dot, label, btn);
+  return bar;
+}
+
+function rerenderHtmlPreview() {
+  htmlScriptFrameKey = "";
+  void updatePreview(editor.state.doc.toString());
+}
+
+function revokeHtmlGrant(path: string) {
+  const grant = htmlGrantTokens.get(path);
+  if (!grant) return;
+  htmlGrantTokens.delete(path);
+  invoke("html_revoke", { token: grant.token }).catch(() => {});
+}
+
 function renderHtmlPreview(previewPane: HTMLElement, content: string) {
+  const path = currentFilePath;
+  if (path && htmlScriptsSupported && htmlScriptsAllowed.has(path) && !htmlForceStatic) {
+    void renderHtmlScriptMode(previewPane, path);
+    return;
+  }
+  htmlScriptFrameKey = "";
   previewPane.innerHTML = "";
+  if (path && htmlScriptsSupported && !htmlForceStatic && hasScriptTag(content)) {
+    previewPane.appendChild(htmlScriptBar(false, "Scripts are off for this page.", "Run scripts", () => {
+      htmlScriptsAllowed.add(path);
+      rerenderHtmlPreview();
+    }));
+  }
   const frame = document.createElement("iframe");
   frame.className = "html-preview-frame";
   // allow-same-origin lets the export pipeline read contentDocument; no allow-scripts so untrusted HTML still can't execute.
   frame.setAttribute("sandbox", "allow-same-origin");
   frame.srcdoc = content;
+  previewPane.appendChild(frame);
+}
+
+/** Script mode: the saved file is served from the kaelio-html scheme into a
+ *  frame with sandbox="allow-scripts" and never allow-same-origin, so the
+ *  page cannot reach the app, its storage or Tauri IPC. */
+async function renderHtmlScriptMode(previewPane: HTMLElement, path: string) {
+  const unsaved = getActiveTab()?.isModified ?? false;
+  const barText = "Scripts are running in an isolated frame." + (unsaved ? " Showing the last saved version." : "");
+  const key = `${path}|${fileSnapshots.get(path)?.modified_ms ?? ""}`;
+  const existing = previewPane.querySelector<HTMLIFrameElement>("iframe.html-script-frame");
+  if (existing && htmlScriptFrameKey === key) {
+    const label = previewPane.querySelector(".html-script-text");
+    if (label) label.textContent = barText;
+    return;
+  }
+  let grant = htmlGrantTokens.get(path);
+  if (!grant) {
+    try {
+      const g = await invoke<{ token: string; file_name: string }>("html_grant", { path });
+      grant = { token: g.token, fileName: g.file_name };
+      htmlGrantTokens.set(path, grant);
+    } catch (e) {
+      htmlScriptsAllowed.delete(path);
+      flashStatus(`Cannot run scripts: ${e}`, "var(--error)", 4000);
+      if (currentFilePath === path) rerenderHtmlPreview();
+      return;
+    }
+  }
+  // The file or mode may have changed while the grant was requested
+  if (currentFilePath !== path || !htmlScriptsAllowed.has(path) || htmlForceStatic) return;
+  htmlScriptFrameKey = key;
+  previewPane.innerHTML = "";
+  previewPane.appendChild(htmlScriptBar(true, barText, "Turn off", () => {
+    htmlScriptsAllowed.delete(path);
+    revokeHtmlGrant(path);
+    rerenderHtmlPreview();
+  }));
+  const frame = document.createElement("iframe");
+  frame.className = "html-preview-frame html-script-frame";
+  frame.setAttribute("sandbox", "allow-scripts");
+  frame.src = `${convertFileSrc("", "kaelio-html")}${grant.token}/${encodeURIComponent(grant.fileName)}`;
   previewPane.appendChild(frame);
 }
 
@@ -2039,6 +2136,8 @@ async function saveFile() {
     await invoke("save_file", { path: currentFilePath, content });
     await refreshCurrentFileSnapshot(currentFilePath);
     setModified(false);
+    // Script mode serves the saved file: show the new version
+    if (htmlScriptsAllowed.has(currentFilePath)) rerenderHtmlPreview();
     deleteRecoveryForCurrent();
     persistOpenTabs();
     if (autoSyncEnabled && currentFolderPath) gitAutoSync(currentFilePath);
@@ -4761,6 +4860,7 @@ async function closeTab(tabId: string) {
   const idx = tabs.findIndex(t => t.id === tabId);
   if (idx === -1) return;
   tabs.splice(idx, 1);
+  if (tab.filePath && !tabs.some(t => t.filePath === tab.filePath)) revokeHtmlGrant(tab.filePath);
 
   if (tabs.length === 0) {
     // Create a new untitled tab
@@ -5571,6 +5671,10 @@ function nextPaint(): Promise<void> {
 }
 
 async function waitForPreviewAssets(node: HTMLElement) {
+  // Relative images (an HTML page's own <img src="pic.png">) are read from
+  // disk as data URLs; the asset: protocol is not enabled, and an image that
+  // fails to load makes the capture throw.
+  await loadLocalImages(node, currentFilePath);
   const mermaidNodes = node.querySelectorAll(".mermaid");
   if (mermaidNodes.length > 0) {
     try {
@@ -5838,8 +5942,16 @@ async function exportPng() {
   });
   if (!outputPath) return;
 
+  // PNG export of an HTML file always captures the static render (spec I3)
+  const scriptMode = !!currentFilePath && isHtmlPath(currentFilePath) && htmlScriptsAllowed.has(currentFilePath);
   try {
     await withPreviewAvailable(async () => {
+      if (scriptMode) {
+        htmlForceStatic = true;
+        await updatePreview(editor.state.doc.toString());
+        const staticFrame = document.querySelector<HTMLIFrameElement>("#preview-pane .html-preview-frame");
+        if (staticFrame) await waitForFrameLoad(staticFrame);
+      }
       const prepared = preparePreviewCaptureNode();
       const node = prepared.node;
       try {
@@ -5855,11 +5967,28 @@ async function exportPng() {
         prepared.cleanup();
       }
     });
-    flashStatus(`PNG saved: ${outputPath.split("/").pop()}`, "var(--success)", 3000);
+    flashStatus(scriptMode ? "Exported the static version (scripts off)" : `PNG saved: ${outputPath.split("/").pop()}`, "var(--success)", 3000);
   } catch (e) {
     console.error("PNG export failed:", e);
     flashStatus(`Export failed: ${e}`, "var(--error)", 8000);
+  } finally {
+    if (scriptMode) {
+      htmlForceStatic = false;
+      rerenderHtmlPreview();
+    }
   }
+}
+
+/** Resolves when a just-created frame has loaded (or after 3 s). */
+function waitForFrameLoad(frame: HTMLIFrameElement): Promise<void> {
+  return new Promise(resolve => {
+    if (frame.contentDocument?.readyState === "complete" && frame.contentDocument.body?.childNodes.length) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(resolve, 3000);
+    frame.addEventListener("load", () => { clearTimeout(timer); resolve(); }, { once: true });
+  });
 }
 
 function exportNonce(): string {

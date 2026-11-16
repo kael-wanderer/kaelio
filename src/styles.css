@@ -1275,7 +1275,7 @@ body {
 
 /* Reading width: centred column in Reading View only (split view keeps the full pane) */
 :root { --reading-width: 75ch; }
-#preview-pane.reading-view > :not(.html-preview-frame):not(.plain-text-preview) {
+#preview-pane.reading-view > :not(.html-preview-frame):not(.plain-text-preview):not(.html-script-bar) {
   max-width: var(--reading-width);
   margin-left: auto;
   margin-right: auto;
@@ -3115,3 +3115,21 @@ mark.preview-search-match.active {
 }
 #status-changes:hover, #status-changes-clear:hover { background: color-mix(in srgb, var(--warning) 15%, transparent); }
 #status-changes-clear { border-left: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); }
+
+/* HTML view script bar (spec I3) */
+.html-script-bar {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px; padding: 6px 10px;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: var(--surface); color: var(--text);
+  font-family: var(--font-ui); font-size: 12px;
+}
+.html-script-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); flex: none; }
+.html-script-bar.running .html-script-dot { background: var(--success); }
+.html-script-text { flex: 1; min-width: 0; }
+.html-script-bar button {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  border-radius: 3px; padding: 2px 10px; font-size: 12px; cursor: pointer; font-family: var(--font-ui);
+}
+.html-script-bar:not(.running) button { border-color: var(--accent); color: var(--accent); }
+.html-script-bar button:hover { background: var(--hover-bg); }

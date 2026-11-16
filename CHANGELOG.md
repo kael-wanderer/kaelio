@@ -4,6 +4,7 @@
 
 ### Changes
 
+- **Run scripts in an HTML page, on request.** When an HTML file has scripts, a bar offers "Run scripts"; the page then runs in an isolated frame (no access to Kaelio, its storage or your other files; only its own folder and `https://` resources). Off by default and forgotten at restart. PNG export always captures the static page.
 - **See what changed after a reload.** When an open file changes on disk and Kaelio reloads it, the changed blocks in the preview get a coloured bar, and a status-bar chip ("2 changes ↓") jumps to each one; × clears them, and typing clears them too. Files over 20,000 lines reload without marks.
 - **Table editing.** In a Markdown pipe table, `Tab` and `Shift+Tab` move between cells and select their text, re-aligning the columns and keeping alignment colons; `Tab` in the last cell adds a row. Escaped pipes and pipes in inline code stay inside their cell. Outside a table `Tab` indents as before.
 - **Smart paste.** Pasting formatted text (from a chat window or web page) inserts Markdown: headings, lists, tables, links, bold, italic, code and quotes. Pasting a URL over selected text makes a link. Code-editor text, anything pasted inside code, and HTML over 2 MB stay plain; `Cmd+Shift+V` pastes plain text. One undo reverts a paste.
@@ -30,6 +31,7 @@
 
 ### Fixes
 
+- **PNG export of an HTML page with local images works.** An `<img>` with a relative path made the export fail; images are now read from disk for the capture.
 - **Links with spaces open.** A preview link such as `[Q3](<Q3 report.pdf>)`, or any link from a note in a folder with a space in its name, now opens the file instead of "Cannot open this file".
 - **PDF export shows images again.** Images, including diagrams, failed with "file not found" because Typst looked for Pandoc's temporary image files under the wrong folder. Raw ```` ```{=typst} ```` blocks in a note are now printed as text in PDF export, so a note cannot make the export read other files.
 - **File History no longer redirects Save.** Right-click → File History on another file made the next save write the open document over that file; it now opens the file first.

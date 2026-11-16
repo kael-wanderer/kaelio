@@ -2905,6 +2905,183 @@ fn load_session() -> Result<String, String> {
     }
 }
 
+// --- kaelio-html scheme: opt-in scripts in HTML view (spec I3) ---
+//
+// A page in script mode runs in a frame with sandbox="allow-scripts" (never
+// allow-same-origin) loaded from kaelio-html://localhost/<token>/<path>.
+// Each token grants read access to one folder, the folder of the HTML file
+// the user chose to run; nothing outside it is served.
+
+/// (token, canonical folder), newest last.
+pub struct HtmlGrants(Mutex<Vec<(String, PathBuf)>>);
+
+const MAX_HTML_GRANTS: usize = 32;
+
+#[derive(Debug, Serialize)]
+pub struct HtmlGrant {
+    token: String,
+    file_name: String,
+}
+
+fn new_html_token() -> Result<String, String> {
+    let mut bytes = [0u8; 16];
+    getrandom::fill(&mut bytes).map_err(|e| format!("No randomness: {}", e))?;
+    Ok(bytes.iter().map(|b| format!("{:02x}", b)).collect())
+}
+
+/// Grants the folder of an existing .html/.htm file under a fresh token.
+fn grant_html(grants: &mut Vec<(String, PathBuf)>, path: &Path) -> Result<HtmlGrant, String> {
+    let canonical = fs::canonicalize(path).map_err(|_| "File not found".to_string())?;
+    let meta = fs::metadata(&canonical).map_err(|_| "File not found".to_string())?;
+    if !meta.is_file() {
+        return Err("Not a file".to_string());
+    }
+    let ext = canonical
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    if ext != "html" && ext != "htm" {
+        return Err("Only HTML files can run scripts".to_string());
+    }
+    let folder = canonical.parent().ok_or("No parent folder")?.to_path_buf();
+    let file_name = canonical
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("Invalid file name")?
+        .to_string();
+    let token = new_html_token()?;
+    grants.push((token.clone(), folder));
+    while grants.len() > MAX_HTML_GRANTS {
+        grants.remove(0);
+    }
+    Ok(HtmlGrant { token, file_name })
+}
+
+fn revoke_html(grants: &mut Vec<(String, PathBuf)>, token: &str) {
+    grants.retain(|(t, _)| t != token);
+}
+
+/// Maps a scheme request path ("/<token>/<relative path>") to a file inside
+/// the granted folder. 404: unknown token, missing file, not a file.
+/// 403: empty or absolute relative path, NUL byte, or a path that resolves
+/// (after "..", encoding and symlinks) outside the granted folder.
+fn resolve_html_request(grants: &[(String, PathBuf)], url_path: &str) -> Result<PathBuf, u16> {
+    let decoded = percent_encoding::percent_decode_str(url_path)
+        .decode_utf8()
+        .map_err(|_| 403u16)?;
+    if decoded.contains('\0') {
+        return Err(403);
+    }
+    let trimmed = decoded.strip_prefix('/').unwrap_or(&decoded);
+    let (token, rest) = match trimmed.split_once('/') {
+        Some((t, r)) => (t, r),
+        None => (trimmed, ""),
+    };
+    let folder = grants
+        .iter()
+        .find(|(t, _)| t == token)
+        .map(|(_, f)| f)
+        .ok_or(404u16)?;
+    if rest.is_empty() {
+        return Err(403);
+    }
+    let rel = Path::new(rest);
+    if rest.starts_with('/') || rest.starts_with('\\') || rel.is_absolute() || rel.has_root() {
+        return Err(403);
+    }
+    let resolved = fs::canonicalize(folder.join(rel)).map_err(|_| 404u16)?;
+    if !resolved.starts_with(folder) {
+        return Err(403);
+    }
+    if !resolved.is_file() {
+        return Err(404);
+    }
+    Ok(resolved)
+}
+
+fn html_content_type(path: &Path) -> &'static str {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    match ext.as_str() {
+        "html" | "htm" => "text/html; charset=utf-8",
+        "css" => "text/css",
+        "js" | "mjs" => "text/javascript",
+        "json" => "application/json",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "ttf" => "font/ttf",
+        _ => "application/octet-stream",
+    }
+}
+
+/// The CSP sent with every kaelio-html response. SELF is the scheme's own
+/// origin as each platform's webview sees it. No 'unsafe-eval'.
+fn html_scheme_csp() -> String {
+    let own = if cfg!(windows) { "http://kaelio-html.localhost" } else { "kaelio-html:" };
+    format!(
+        "default-src 'none'; script-src 'unsafe-inline' https: {0}; style-src 'unsafe-inline' https: {0}; \
+         img-src data: blob: https: {0}; font-src data: https: {0}; media-src https: {0}; \
+         connect-src https: {0}; frame-src 'none'; form-action 'none'; base-uri 'none'",
+        own
+    )
+}
+
+fn html_scheme_response(
+    grants: &HtmlGrants,
+    method: &tauri::http::Method,
+    url_path: &str,
+) -> tauri::http::Response<Vec<u8>> {
+    let status = |code: u16| {
+        tauri::http::Response::builder()
+            .status(code)
+            .header("Cache-Control", "no-store")
+            .body(Vec::new())
+            .unwrap()
+    };
+    if method != tauri::http::Method::GET {
+        return status(405);
+    }
+    let resolved = {
+        let list = grants.0.lock().unwrap();
+        resolve_html_request(&list, url_path)
+    };
+    let path = match resolved {
+        Ok(p) => p,
+        Err(code) => return status(code),
+    };
+    match fs::read(&path) {
+        Ok(bytes) => tauri::http::Response::builder()
+            .header("Content-Type", html_content_type(&path))
+            .header("X-Content-Type-Options", "nosniff")
+            .header("Cache-Control", "no-store")
+            .header("Content-Security-Policy", html_scheme_csp())
+            .body(bytes)
+            .unwrap(),
+        Err(_) => status(404),
+    }
+}
+
+#[tauri::command]
+fn html_grant(path: String, grants: tauri::State<'_, HtmlGrants>) -> Result<HtmlGrant, String> {
+    let mut list = grants.0.lock().unwrap();
+    grant_html(&mut list, Path::new(&path))
+}
+
+#[tauri::command]
+fn html_revoke(token: String, grants: tauri::State<'_, HtmlGrants>) {
+    let mut list = grants.0.lock().unwrap();
+    revoke_html(&mut list, &token);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     ensure_std_fds();
@@ -2916,6 +3093,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .manage(HtmlGrants(Mutex::new(Vec::new())))
+        .register_uri_scheme_protocol("kaelio-html", |ctx, request| {
+            let grants = ctx.app_handle().state::<HtmlGrants>();
+            html_scheme_response(&grants, request.method(), request.uri().path())
+        })
         .menu(|handle| {
             let app_menu = Submenu::with_items(
                 handle,
@@ -3326,6 +3508,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            html_grant,
+            html_revoke,
             read_file,
             read_binary_file,
             open_in_default_app,
@@ -3833,5 +4017,161 @@ mod audit_tests {
             !typst.lines().any(|l| l.trim_start().starts_with("#raw(read(")) && !typst.contains(" #read(\"/etc/hosts\")"),
             "raw Typst reached the output:\n{typst}"
         );
+    }
+
+    // --- kaelio-html scheme (opt-in scripts in HTML view) ---
+
+    struct HtmlFixture {
+        base: std::path::PathBuf,
+        root: std::path::PathBuf,
+    }
+
+    impl Drop for HtmlFixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.base);
+        }
+    }
+
+    /// root/page.html, root/sub/a.css, sibling secret/key.txt, root/link -> secret
+    fn html_fixture() -> HtmlFixture {
+        let base = super::unique_export_dir("kaelio_html_test");
+        let root = base.join("root");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::create_dir_all(base.join("secret")).unwrap();
+        std::fs::write(root.join("page.html"), "<p>hi</p>").unwrap();
+        std::fs::write(root.join("sub/a.css"), "p{}").unwrap();
+        std::fs::write(base.join("secret/key.txt"), "secret").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(base.join("secret"), root.join("link")).unwrap();
+        let root = std::fs::canonicalize(&root).unwrap();
+        HtmlFixture { base, root }
+    }
+
+    fn html_grants_for(root: &std::path::Path) -> Vec<(String, std::path::PathBuf)> {
+        vec![("tok".to_string(), root.to_path_buf())]
+    }
+
+    #[test]
+    fn html_request_serves_file_in_granted_folder() {
+        let f = html_fixture();
+        let g = html_grants_for(&f.root);
+        assert_eq!(super::resolve_html_request(&g, "/tok/page.html"), Ok(f.root.join("page.html")));
+        assert_eq!(super::resolve_html_request(&g, "/tok/sub/a.css"), Ok(f.root.join("sub/a.css")));
+        assert_eq!(super::resolve_html_request(&g, "/tok/page%2Ehtml"), Ok(f.root.join("page.html")));
+    }
+
+    #[test]
+    fn html_request_unknown_token_is_404() {
+        let f = html_fixture();
+        let g = html_grants_for(&f.root);
+        assert_eq!(super::resolve_html_request(&g, "/nope/page.html"), Err(404));
+    }
+
+    #[test]
+    fn html_request_parent_traversal_is_403() {
+        let f = html_fixture();
+        let g = html_grants_for(&f.root);
+        assert_eq!(super::resolve_html_request(&g, "/tok/../secret/key.txt"), Err(403));
+    }
+
+    #[test]
+    fn html_request_encoded_traversal_is_403() {
+        let f = html_fixture();
+        let g = html_grants_for(&f.root);
+        assert_eq!(super::resolve_html_request(&g, "/tok/%2e%2e/secret/key.txt"), Err(403));
+        assert_eq!(super::resolve_html_request(&g, "/tok/%2E%2E%2Fsecret%2Fkey.txt"), Err(403));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn html_request_symlink_out_of_folder_is_403() {
+        let f = html_fixture();
+        let g = html_grants_for(&f.root);
+        assert_eq!(super::resolve_html_request(&g, "/tok/link/key.txt"), Err(403));
+    }
+
+    #[test]
+    fn html_request_missing_file_is_404() {
+        let f = html_fixture();
+        let g = html_grants_for(&f.root);
+        assert_eq!(super::resolve_html_request(&g, "/tok/none.html"), Err(404));
+    }
+
+    #[test]
+    fn html_request_directory_is_404() {
+        let f = html_fixture();
+        let g = html_grants_for(&f.root);
+        assert_eq!(super::resolve_html_request(&g, "/tok/sub"), Err(404));
+    }
+
+    #[test]
+    fn html_request_empty_rest_is_403() {
+        let f = html_fixture();
+        let g = html_grants_for(&f.root);
+        assert_eq!(super::resolve_html_request(&g, "/tok"), Err(403));
+        assert_eq!(super::resolve_html_request(&g, "/tok/"), Err(403));
+    }
+
+    #[test]
+    fn html_request_absolute_or_nul_is_403() {
+        let f = html_fixture();
+        let g = html_grants_for(&f.root);
+        assert_eq!(super::resolve_html_request(&g, "/tok//etc/passwd"), Err(403));
+        assert_eq!(super::resolve_html_request(&g, "/tok/%2Fetc%2Fpasswd"), Err(403));
+        assert_eq!(super::resolve_html_request(&g, "/tok/page.html%00.png"), Err(403));
+    }
+
+    #[test]
+    fn html_grant_rejects_non_html_and_missing_files() {
+        let f = html_fixture();
+        std::fs::write(f.root.join("x.md"), "# x").unwrap();
+        let mut grants = Vec::new();
+        assert!(super::grant_html(&mut grants, &f.root.join("x.md")).is_err());
+        assert!(super::grant_html(&mut grants, &f.root.join("missing.html")).is_err());
+        assert!(super::grant_html(&mut grants, &f.root.join("sub")).is_err());
+        assert!(grants.is_empty());
+        let g = super::grant_html(&mut grants, &f.root.join("page.html")).unwrap();
+        assert_eq!(g.file_name, "page.html");
+        assert_eq!(g.token.len(), 32);
+        assert!(g.token.chars().all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c)));
+        assert_eq!(grants, vec![(g.token.clone(), f.root.clone())]);
+    }
+
+    #[test]
+    fn html_grants_evict_oldest_beyond_32() {
+        let f = html_fixture();
+        let mut grants = Vec::new();
+        let first = super::grant_html(&mut grants, &f.root.join("page.html")).unwrap();
+        for _ in 0..32 {
+            super::grant_html(&mut grants, &f.root.join("page.html")).unwrap();
+        }
+        assert_eq!(grants.len(), 32);
+        assert!(!grants.iter().any(|(t, _)| *t == first.token));
+        assert_eq!(super::resolve_html_request(&grants, &format!("/{}/page.html", first.token)), Err(404));
+    }
+
+    #[test]
+    fn html_revoke_removes_only_that_token() {
+        let f = html_fixture();
+        let mut grants = Vec::new();
+        let a = super::grant_html(&mut grants, &f.root.join("page.html")).unwrap();
+        let b = super::grant_html(&mut grants, &f.root.join("page.html")).unwrap();
+        super::revoke_html(&mut grants, &a.token);
+        assert_eq!(grants.len(), 1);
+        assert_eq!(grants[0].0, b.token);
+    }
+
+    #[test]
+    fn html_content_type_known_and_fallback() {
+        use std::path::Path;
+        assert_eq!(super::html_content_type(Path::new("a.HTML")), "text/html; charset=utf-8");
+        assert_eq!(super::html_content_type(Path::new("a.htm")), "text/html; charset=utf-8");
+        assert_eq!(super::html_content_type(Path::new("a.css")), "text/css");
+        assert_eq!(super::html_content_type(Path::new("a.mjs")), "text/javascript");
+        assert_eq!(super::html_content_type(Path::new("a.json")), "application/json");
+        assert_eq!(super::html_content_type(Path::new("a.svg")), "image/svg+xml");
+        assert_eq!(super::html_content_type(Path::new("a.woff2")), "font/woff2");
+        assert_eq!(super::html_content_type(Path::new("a.exe")), "application/octet-stream");
+        assert_eq!(super::html_content_type(Path::new("noext")), "application/octet-stream");
     }
 }

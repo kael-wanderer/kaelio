@@ -33,6 +33,8 @@ Only for these:
 - **Git sync,** only if you set it up. Kaelio pulls from and pushes to the repository you connected, and nowhere else. See [Sync with Git](../git/git-sync.md).
 - **Pictures from the web in your documents.** If a document shows an image by its web address (`![](https://…)`), the preview loads it from that address, as a browser would.
 
+- **HTML pages you run scripts for.** Scripts are off by default. When you click **Run scripts** on an HTML page, the page may load scripts, styles, fonts and data from the `https://` addresses it names, as it would in a browser. It runs in an isolated frame with no access to Kaelio or your other files. See [Images and other files](../files/images-and-other-files.md).
+
 Export never goes online: Mermaid diagrams in a PDF or DOCX are drawn on your computer. See [Export and copy](../export/export.md).
 
 Links you click to web pages open in your browser, not in Kaelio. PDFs and images you click open in your default app.
