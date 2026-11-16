@@ -3026,8 +3026,16 @@ fn resolve_html_request(grants: &[(String, PathBuf)], url_path: &str) -> Result<
     if rest.starts_with('/') || rest.starts_with('\\') || rel.is_absolute() || rel.has_root() {
         return Err(403);
     }
+    // Hidden files and folders (.env, .git, …) are never served.
+    if rest.split(['/', '\\']).any(|seg| seg.starts_with('.')) {
+        return Err(403);
+    }
     let resolved = fs::canonicalize(folder.join(rel)).map_err(|_| 404u16)?;
-    if !resolved.starts_with(folder) {
+    let below = resolved.strip_prefix(folder).map_err(|_| 403u16)?;
+    if below
+        .components()
+        .any(|c| c.as_os_str().to_string_lossy().starts_with('.'))
+    {
         return Err(403);
     }
     if !resolved.is_file() {
@@ -4097,6 +4105,34 @@ mod audit_tests {
         assert_eq!(super::resolve_html_request(&g, "/tok/page.html"), Ok(f.root.join("page.html")));
         assert_eq!(super::resolve_html_request(&g, "/tok/sub/a.css"), Ok(f.root.join("sub/a.css")));
         assert_eq!(super::resolve_html_request(&g, "/tok/page%2Ehtml"), Ok(f.root.join("page.html")));
+    }
+
+    #[test]
+    fn html_request_hidden_segment_is_403() {
+        let f = html_fixture();
+        std::fs::write(f.root.join(".env"), "KEY=1").unwrap();
+        std::fs::create_dir_all(f.root.join(".git")).unwrap();
+        std::fs::write(f.root.join(".git/config"), "[core]").unwrap();
+        std::fs::create_dir_all(f.root.join("sub/.hidden")).unwrap();
+        std::fs::write(f.root.join("sub/.hidden/a.js"), "1").unwrap();
+        let g = html_grants_for(&f.root);
+        assert_eq!(super::resolve_html_request(&g, "/tok/.env"), Err(403));
+        assert_eq!(super::resolve_html_request(&g, "/tok/.git/config"), Err(403));
+        assert_eq!(super::resolve_html_request(&g, "/tok/sub/.hidden/a.js"), Err(403));
+        assert_eq!(super::resolve_html_request(&g, "/tok/%2eenv"), Err(403));
+        assert_eq!(super::resolve_html_request(&g, "/tok/sub%2F.hidden%2Fa.js"), Err(403));
+        assert_eq!(super::resolve_html_request(&g, "/tok/sub/a.css"), Ok(f.root.join("sub/a.css")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn html_request_symlink_into_hidden_folder_is_403() {
+        let f = html_fixture();
+        std::fs::create_dir_all(f.root.join(".private")).unwrap();
+        std::fs::write(f.root.join(".private/notes.txt"), "x").unwrap();
+        std::os::unix::fs::symlink(f.root.join(".private"), f.root.join("visible")).unwrap();
+        let g = html_grants_for(&f.root);
+        assert_eq!(super::resolve_html_request(&g, "/tok/visible/notes.txt"), Err(403));
     }
 
     #[test]
