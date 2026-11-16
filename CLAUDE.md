@@ -26,7 +26,7 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 ### Frontend (`src/`)
 - **Mostly monolithic**: app wiring in `src/main.ts` (~7400 lines) + `src/styles.css` + `index.html`; pure, tested helpers in `src/lib/` (`file-kind`, `export-availability`, `mermaid-export`, `keybindings`, `outline`, `session`, `history` (merged commit/snapshot list), `smart-paste` (turndown + GFM), `table` (pipe-table Tab/align), `line-diff` (changed-since-reload marks), `html-scripts`, …)
 - Vanilla TypeScript, no framework (CodeMirror 6 for editor, markdown-it for preview)
-- Rendering pipeline: markdown-it → callouts → checklists → KaTeX (math) → Mermaid (diagrams) → YAML frontmatter extraction
+- Rendering pipeline: YAML frontmatter extraction (`src/lib/frontmatter.ts`: block and `[a, b]` lists; tag × edits only the frontmatter) → markdown-it with math parsed from source (`src/lib/markdown-math.ts`: `$…$` / `$$…$$`, Pandoc dollar rules, first `$` after an opener must close, so prices stay text; KaTeX renders) → callouts → checklists → sanitize → Mermaid (diagrams)
 - File kinds (`fileKind` in `src/lib/file-kind.ts`): Markdown and HTML preview; other text opens as plain text; PDF, images and SVG are `external` and go to the system default app via `open_in_default_app` (no tab; session restore skips them). There is no in-app PDF, image, CSV or JSON viewer (removed for the Markdown focus; BugText covers PDFs)
 - Git integration: state management (gitStatusMap, gitRepoInfo, autoSyncEnabled), non-blocking sync via fire-and-forget promises
 - 300ms debounce on content change before re-rendering preview

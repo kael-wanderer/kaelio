@@ -49,7 +49,15 @@ Click a diagram to open it full screen. Scroll or double-click to zoom, drag to 
 ### Math (KaTeX)
 
 - Inline math: `$E = mc^2$`
-- A display formula on its own lines: `$$ \int_0^1 x^2 \, dx $$`
+- A display formula, on one line or across several:
+
+```markdown
+$$
+\int_0^1 x^2 \, dx = \frac{1}{3}
+$$
+```
+
+A dollar sign followed by a space, or a closing one followed by a digit, is plain text, so prices such as "$5 and $10" stay as written. To show a literal dollar sign next to text, write `\$`. Dollar signs inside code are never math.
 
 If a formula has an error, the preview shows its source in red instead of failing the whole page.
 
@@ -66,7 +74,7 @@ tags:
 ---
 ```
 
-Values under `tags`, `tag`, `categories` or `keywords` appear as pills. Click **×** on a pill to remove that tag from the frontmatter (this works for tags written as a list, one per line).
+Values under `tags`, `tag`, `categories` or `keywords` appear as pills. Tags can be written one per line, as above, or on one line as `tags: [work, planning]`. Click **×** on a pill to remove that tag from the frontmatter; the text of the note is never changed.
 
 ### Links, wikilinks and headings
 
