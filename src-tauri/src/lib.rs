@@ -449,6 +449,103 @@ fn save_binary_base64(path: String, data_base64: String) -> Result<(), String> {
     fs::write(path, bytes).map_err(|e| e.to_string())
 }
 
+const MAX_PASTED_IMAGE_BYTES: usize = 20 * 1024 * 1024;
+
+/// Maps an allowed clipboard image MIME type to its file extension, but only
+/// when the bytes really start with that format's signature.
+fn pasted_image_extension(bytes: &[u8], mime: &str) -> Result<&'static str, String> {
+    let (ext, ok) = match mime {
+        "image/png" => ("png", bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47])),
+        "image/jpeg" => ("jpg", bytes.starts_with(&[0xFF, 0xD8, 0xFF])),
+        "image/gif" => ("gif", bytes.starts_with(b"GIF8")),
+        "image/webp" => (
+            "webp",
+            bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP",
+        ),
+        _ => return Err("Unsupported image type".to_string()),
+    };
+    if ok {
+        Ok(ext)
+    } else {
+        Err("Invalid image data".to_string())
+    }
+}
+
+/// `YYYYMMDD-HHMMSS`: exactly 8 digits, a dash, 6 digits.
+fn is_valid_paste_stamp(stamp: &str) -> bool {
+    let b = stamp.as_bytes();
+    b.len() == 15
+        && b[8] == b'-'
+        && b.iter()
+            .enumerate()
+            .all(|(i, c)| i == 8 || c.is_ascii_digit())
+}
+
+/// Saves a pasted image to `<note folder>/assets/pasted-<stamp>.<ext>` (with a
+/// `-2`, `-3`… suffix on collision) and returns the path relative to the note's
+/// folder with `/` separators. Never overwrites an existing file.
+fn save_pasted_image_impl(
+    note_path: &Path,
+    bytes: &[u8],
+    mime: &str,
+    stamp: &str,
+) -> Result<String, String> {
+    let ext = pasted_image_extension(bytes, mime)?;
+    if bytes.len() > MAX_PASTED_IMAGE_BYTES {
+        return Err("Image too large".to_string());
+    }
+    if !is_valid_paste_stamp(stamp) {
+        return Err("Invalid image data".to_string());
+    }
+    let is_file = fs::metadata(note_path).map(|m| m.is_file()).unwrap_or(false);
+    let folder = match note_path.parent() {
+        Some(p) if is_file => p,
+        _ => return Err("Save the note first".to_string()),
+    };
+    let assets = folder.join("assets");
+    fs::create_dir_all(&assets).map_err(|_| "Could not create assets folder".to_string())?;
+
+    for n in 1..=1000u32 {
+        let name = if n == 1 {
+            format!("pasted-{}.{}", stamp, ext)
+        } else {
+            format!("pasted-{}-{}.{}", stamp, n, ext)
+        };
+        let target = assets.join(&name);
+        match fs::OpenOptions::new().write(true).create_new(true).open(&target) {
+            Ok(mut file) => {
+                use std::io::Write;
+                if file.write_all(bytes).and_then(|_| file.sync_all()).is_err() {
+                    drop(file);
+                    let _ = fs::remove_file(&target);
+                    return Err("Could not save image".to_string());
+                }
+                return Ok(format!("assets/{}", name));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(_) => return Err("Could not save image".to_string()),
+        }
+    }
+    Err("Could not save image".to_string())
+}
+
+#[tauri::command]
+fn save_pasted_image(
+    note_path: String,
+    data_base64: String,
+    mime: String,
+    stamp: String,
+) -> Result<String, String> {
+    // Reject before decoding: base64 of 20 MB is at most ~26.7 MB of text.
+    if data_base64.len() > (MAX_PASTED_IMAGE_BYTES / 3 + 1) * 4 {
+        return Err("Image too large".to_string());
+    }
+    let bytes = general_purpose::STANDARD
+        .decode(data_base64.as_bytes())
+        .map_err(|_| "Invalid image data".to_string())?;
+    save_pasted_image_impl(Path::new(&note_path), &bytes, &mime, &stamp)
+}
+
 /// Writes `bytes` to `path` without ever leaving a truncated file behind: the
 /// data goes to a temporary file in the same directory, is flushed to disk, and
 /// is then renamed over the target. A symlink is followed so the link survives.
@@ -3152,6 +3249,7 @@ pub fn run() {
             write_annotations,
             file_metadata,
             save_binary_base64,
+            save_pasted_image,
             save_file,
             word_count,
             list_directory,
@@ -3356,5 +3454,87 @@ mod audit_tests {
     #[test]
     fn export_scratch_directories_are_unique_per_call() {
         assert_ne!(unique_export_dir("x"), unique_export_dir("x"));
+    }
+
+    const PNG: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4];
+
+    fn note_in(dir: &Path) -> PathBuf {
+        let note = dir.join("note.md");
+        fs::write(&note, "# note").unwrap();
+        note
+    }
+
+    #[test]
+    fn pasted_image_is_written_under_assets_and_returns_relative_path() {
+        let dir = scratch_dir("paste_ok");
+        let note = note_in(&dir);
+        let rel = save_pasted_image_impl(&note, PNG, "image/png", "20261116-073501").unwrap();
+        assert_eq!(rel, "assets/pasted-20261116-073501.png");
+        assert_eq!(fs::read(dir.join("assets/pasted-20261116-073501.png")).unwrap(), PNG);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pasted_image_collision_gets_numeric_suffix() {
+        let dir = scratch_dir("paste_collide");
+        let note = note_in(&dir);
+        save_pasted_image_impl(&note, PNG, "image/png", "20261116-073501").unwrap();
+        let mut other = PNG.to_vec();
+        other.push(9);
+        let rel = save_pasted_image_impl(&note, &other, "image/png", "20261116-073501").unwrap();
+        assert_eq!(rel, "assets/pasted-20261116-073501-2.png");
+        assert_eq!(fs::read(dir.join("assets/pasted-20261116-073501.png")).unwrap(), PNG);
+        assert_eq!(fs::read(dir.join("assets/pasted-20261116-073501-2.png")).unwrap(), other);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pasted_image_rejects_unlisted_mime() {
+        let dir = scratch_dir("paste_mime");
+        let note = note_in(&dir);
+        assert!(save_pasted_image_impl(&note, b"<svg/>", "image/svg+xml", "20261116-073501").is_err());
+        assert!(!dir.join("assets").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pasted_image_rejects_bytes_that_do_not_match_mime() {
+        let dir = scratch_dir("paste_magic");
+        let note = note_in(&dir);
+        assert!(save_pasted_image_impl(&note, b"<html>", "image/png", "20261116-073501").is_err());
+        assert!(save_pasted_image_impl(&note, b"RIFF0000AVI ", "image/webp", "20261116-073501").is_err());
+        assert!(!dir.join("assets").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pasted_image_rejects_oversize() {
+        let dir = scratch_dir("paste_big");
+        let note = note_in(&dir);
+        let mut big = vec![0u8; 20 * 1024 * 1024 + 1];
+        big[..PNG.len()].copy_from_slice(PNG);
+        assert!(save_pasted_image_impl(&note, &big, "image/png", "20261116-073501").is_err());
+        assert!(!dir.join("assets").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pasted_image_rejects_bad_stamp() {
+        let dir = scratch_dir("paste_stamp");
+        let note = note_in(&dir);
+        assert!(save_pasted_image_impl(&note, PNG, "image/png", "../../x").is_err());
+        assert!(save_pasted_image_impl(&note, PNG, "image/png", "2026").is_err());
+        assert!(!dir.join("assets").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pasted_image_rejects_missing_note() {
+        let dir = scratch_dir("paste_missing");
+        let note = dir.join("missing.md");
+        assert!(save_pasted_image_impl(&note, PNG, "image/png", "20261116-073501").is_err());
+        assert!(save_pasted_image_impl(&dir, PNG, "image/png", "20261116-073501").is_err());
+        assert!(!dir.join("assets").exists());
+        let _ = fs::remove_dir_all(&dir);
     }
 }

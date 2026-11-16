@@ -5134,6 +5134,10 @@ function ensureSubEditor(): EditorView {
     parent,
   });
   editorSub.dom.addEventListener("focusin", () => { activePane = "sub"; });
+  // Image paste: read the path at event time, the sub pane's file changes with its tabs
+  editorSub.dom.addEventListener("paste", (e) => {
+    if (editorSub) void handleImagePaste(e as ClipboardEvent, editorSub, subFilePath);
+  });
   return editorSub;
 }
 
@@ -6520,7 +6524,23 @@ function showImageLightbox(src: string) {
 
 // --- Image paste from clipboard (#30) ---
 
-async function handleImagePaste(e: ClipboardEvent) {
+function pasteStamp(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+function readBlobAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("Could not read image"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Saves a pasted clipboard image to `assets/` beside the note (Rust validates
+ *  type, signature and size) and inserts a relative link at the cursor. */
+async function handleImagePaste(e: ClipboardEvent, view: EditorView, notePath: string | null) {
   if (!e.clipboardData) return;
   const items = Array.from(e.clipboardData.items);
   const imageItem = items.find(item => item.type.startsWith("image/"));
@@ -6530,30 +6550,22 @@ async function handleImagePaste(e: ClipboardEvent) {
   const blob = imageItem.getAsFile();
   if (!blob) return;
 
-  // Need a folder to save the image
-  const dir = currentFilePath
-    ? currentFilePath.substring(0, currentFilePath.lastIndexOf("/"))
-    : currentFolderPath;
-  if (!dir) {
+  if (!notePath) {
     flashStatus("Save file first to paste images", "var(--warning)");
     return;
   }
 
   try {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      // For now insert as data URL (works in preview), save actual file if possible
-      const insert = `![pasted image](${dataUrl})\n`;
-      const pos = editor.state.selection.main.head;
-      editor.dispatch({
-        changes: { from: pos, insert },
-      });
-      flashStatus("Image pasted!", "var(--success)");
-    };
-    reader.readAsDataURL(blob);
-  } catch (e) {
-    flashStatus(`Paste failed: ${e}`, "var(--error)", 3000);
+    const dataBase64 = dataUrlBase64(await readBlobAsDataUrl(blob));
+    const rel = await invoke<string>("save_pasted_image", {
+      notePath, dataBase64, mime: blob.type, stamp: pasteStamp(new Date()),
+    });
+    const pos = view.state.selection.main.head;
+    view.dispatch({ changes: { from: pos, insert: `![](${rel})\n` } });
+    flashStatus("Image saved to assets/", "var(--success)");
+  } catch (err) {
+    const msg = typeof err === "string" ? err : err instanceof Error ? err.message : "Paste failed";
+    flashStatus(msg, "var(--error)", 3000);
   }
 }
 
@@ -7524,7 +7536,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   // Image paste from clipboard
-  editor.dom.addEventListener("paste", (e) => handleImagePaste(e as ClipboardEvent));
+  editor.dom.addEventListener("paste", (e) => { void handleImagePaste(e as ClipboardEvent, editor, currentFilePath); });
 
   // Apply customizable keybindings (sets up global keydown handler from registry)
   applyBindings();

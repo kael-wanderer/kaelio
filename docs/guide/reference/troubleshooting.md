@@ -56,7 +56,7 @@ In the **Save changes to** question, **Cancel** closes without saving. Check **F
 
 ### Images I pasted make my file huge
 
-Pasted images are stored inside the Markdown text. For large pictures, save the image as a file in your folder and link it with a relative path instead.
+Kaelio now saves pasted images as files in an `assets` folder beside the note. Images pasted with an older version are still stored inside the Markdown text as long `data:` links; to shrink the file, save such an image into your folder and replace the `data:` link with a relative path.
 
 ### A file opens as "binary files are not editable"
 

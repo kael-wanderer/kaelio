@@ -4,6 +4,7 @@
 
 ### Changes
 
+- **Pasted images are saved as files.** A pasted image goes to `assets/` beside the note and a relative link is inserted, instead of a base64 blob in the Markdown. PNG, JPEG, GIF and WebP up to 20 MB; files are never overwritten. Works in the split pane too.
 - **Conventional shortcuts.** `Cmd+P` opens file search (quick open), `Cmd+Shift+F` searches in files, `Cmd+Alt+P` shows/hides the preview, and `Cmd+Shift+O` toggles the outline. Custom bindings you saved are kept; a new default that collides with one of them is left unbound.
 
 ### Security
