@@ -44,6 +44,8 @@ import {
   UPDATE_INTERVAL_MS, LAST_CHECK_KEY, SKIPPED_KEY, AUTO_CHECK_KEY,
   isDue, shouldOffer, parseAutoCheck, releaseUrl, releaseNotesText,
 } from "./lib/update-check.ts";
+import { mathPlugin } from "./lib/markdown-math.ts";
+import { extractFrontmatter, parseYamlFrontmatter, removeFrontmatterTag } from "./lib/frontmatter.ts";
 import { parseReadingWidth, readingWidthCss, nextReadingWidth, type ReadingWidth } from "./lib/reading-width.ts";
 
 
@@ -755,7 +757,21 @@ const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 
 // --- Markdown-it with KaTeX ---
 
-const md = new MarkdownIt({ html: true, linkify: true, typographer: true, breaks: true, highlight: highlightCode }).use(footnote);
+// Math is parsed from the Markdown source (src/lib/markdown-math.ts), so line
+// breaks and backslash escapes reach KaTeX intact.
+function renderMath(tex: string, displayMode: boolean): string {
+  try {
+    return katex.renderToString(tex, { displayMode, throwOnError: false });
+  } catch {
+    return displayMode
+      ? `<pre class="katex-error">${escapeHtml(tex)}</pre>`
+      : `<code class="katex-error">${escapeHtml(tex)}</code>`;
+  }
+}
+
+const md = new MarkdownIt({ html: true, linkify: true, typographer: true, breaks: true, highlight: highlightCode })
+  .use(footnote)
+  .use(mathPlugin, { render: renderMath });
 
 // Tag block-level rendered elements with their source line number so the preview
 // can be mapped back to editor positions for scroll-sync and click-to-cursor.
@@ -860,20 +876,6 @@ function renderChecklists(html: string): string {
       return `<li class="task-item"${liAttrs}><input type="checkbox" class="task-check" data-idx="${id}" ${checked ? "checked" : ""} /><span>${content}</span></li>`;
     }
   );
-}
-
-function renderKaTeX(html: string): string {
-  html = html.replace(/\$\$([\s\S]+?)\$\$/g, (_match, tex: string) => {
-    try {
-      return katex.renderToString(tex.trim(), { displayMode: true, throwOnError: false });
-    } catch { return `<pre class="katex-error">${tex}</pre>`; }
-  });
-  html = html.replace(/(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)/g, (_match, tex: string) => {
-    try {
-      return katex.renderToString(tex.trim(), { displayMode: false, throwOnError: false });
-    } catch { return `<code class="katex-error">${tex}</code>`; }
-  });
-  return html;
 }
 
 // --- Mermaid ---
@@ -1097,60 +1099,14 @@ function openMermaidOverlay(source: HTMLElement) {
 
 // --- YAML Frontmatter ---
 
-function extractFrontmatter(content: string): { frontmatter: string | null; body: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n?/);
-  if (!match) return { frontmatter: null, body: content };
-  return { frontmatter: match[1], body: content.slice(match[0].length) };
-}
-
-function parseYamlFrontmatter(yaml: string): { key: string; value: string }[] {
-  const lines = yaml.split("\n");
-  const entries: { key: string; value: string }[] = [];
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    const match = line.match(/^(\w[\w\s-]*):\s*(.*)/);
-    if (match) {
-      const key = match[1].trim();
-      let val = match[2].trim();
-      if (val === ">" || val === "|" || val === ">-" || val === "|-") {
-        val = "";
-        i++;
-        while (i < lines.length && (lines[i].startsWith("  ") || lines[i].trim() === "")) {
-          val += (val ? " " : "") + lines[i].trim();
-          i++;
-        }
-        val = val.trim();
-      } else if (val === "") {
-        i++;
-        const listItems: string[] = [];
-        while (i < lines.length && (lines[i].startsWith("  ") || lines[i].startsWith("\t"))) {
-          const item = lines[i].trim();
-          if (item.startsWith("- ")) listItems.push(item.slice(2));
-          else listItems.push(item);
-          i++;
-        }
-        val = listItems.join(", ");
-      } else {
-        val = val.replace(/^["']|["']$/g, "");
-        i++;
-      }
-      entries.push({ key, value: val });
-    } else {
-      i++;
-    }
-  }
-  return entries;
-}
-
 function renderFrontmatter(yaml: string): string {
   const entries = parseYamlFrontmatter(yaml);
   if (entries.length === 0) return "";
-  const rows = entries.map(({ key, value }) => {
+  const rows = entries.map(({ key, value, items }) => {
     const lk = key.toLowerCase();
     // Render tags/categories/keywords as styled labels
     if ((lk === "tags" || lk === "tag" || lk === "categories" || lk === "keywords") && value) {
-      const tags = value.split(",").map(t => t.trim()).filter(Boolean);
+      const tags = items ?? value.split(",").map(t => t.trim()).filter(Boolean);
       const tagHtml = tags.map(t =>
         `<span class="fm-tag" data-tag="${escapeHtml(t)}">${escapeHtml(t)}<button class="fm-tag-remove" data-tag="${escapeHtml(t)}">×</button></span>`
       ).join("");
@@ -1336,7 +1292,6 @@ async function updatePreview(content: string) {
   html += md.render(body, { lineOffset });
   html = renderCallouts(html);
   html = renderChecklists(html);
-  html = renderKaTeX(html);
   html = processMermaidBlocks(html);
   html = addCodeCopyButtons(html);
   html = sanitizeHtmlString(html);
@@ -1373,15 +1328,9 @@ async function updatePreview(content: string) {
       e.stopPropagation();
       const tag = (btn as HTMLElement).dataset.tag;
       if (!tag) return;
-      const doc = editor.state.doc.toString();
-      // Find and remove the tag line "  - tagname" in frontmatter
-      const tagLineRegex = new RegExp(`^([ \\t]+- ${tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\s*$`, "m");
-      const match = tagLineRegex.exec(doc);
-      if (match) {
-        const from = match.index;
-        const to = from + match[0].length + 1; // +1 for newline
-        editor.dispatch({ changes: { from, to: Math.min(to, doc.length), insert: "" } });
-      }
+      // Only the frontmatter is edited: `- tag` lines or a `[a, b]` list.
+      const change = removeFrontmatterTag(editor.state.doc.toString(), tag);
+      if (change) editor.dispatch({ changes: change });
     });
   });
   reapplyPreviewSearch();
@@ -1400,7 +1349,6 @@ function renderSubPreview(content: string) {
   html += md.render(body, { lineOffset: 0 });
   html = renderCallouts(html);
   html = renderChecklists(html);
-  html = renderKaTeX(html);
   html = addCodeCopyButtons(html);
   html = sanitizeHtmlString(html);
   pane.innerHTML = html;
@@ -5406,7 +5354,6 @@ function renderMarkdownPreviewHtml(content: string): string {
   html += md.render(body, { lineOffset });
   html = renderCallouts(html);
   html = renderChecklists(html);
-  html = renderKaTeX(html);
   html = processMermaidBlocks(html);
   return sanitizeHtmlString(html);
 }

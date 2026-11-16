@@ -3236,3 +3236,6 @@ mark.preview-search-match.active {
 }
 .html-script-bar:not(.running) button { border-color: var(--accent); color: var(--accent); }
 .html-script-bar button:hover { background: var(--hover-bg); }
+
+/* Display math: wide formulas scroll instead of overflowing the preview */
+.math-block { overflow-x: auto; overflow-y: hidden; }
