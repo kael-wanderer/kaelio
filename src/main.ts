@@ -30,6 +30,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { migrateKeybindings } from "./lib/keybindings.ts";
 import { highlightCode } from "./lib/highlight.ts";
 import { extractHeadings, activeHeadingIndex } from "./lib/outline.ts";
+import { parseSplitSession, type SplitSession } from "./lib/session.ts";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -105,6 +106,7 @@ interface SessionData {
   lastFile?: string | null;
   currentFolder?: string | null;
   savedAt?: number;
+  split?: SplitSession;
 }
 let sessionData: SessionData = {};
 let editor: EditorView;
@@ -2056,6 +2058,7 @@ function switchSubTab(id: string) {
   subActiveTabId = id;
   renderActiveSubTab();
   renderSubTabs();
+  persistSplitChange();
 }
 
 async function closeSubTab(id: string) {
@@ -2078,6 +2081,7 @@ async function closeSubTab(id: string) {
     subFilePath = null;
     setSplit(false);
     renderSubTabs();
+    persistSplitChange();
     return;
   }
   if (id === subActiveTabId) {
@@ -2085,16 +2089,18 @@ async function closeSubTab(id: string) {
     renderActiveSubTab();
   }
   renderSubTabs();
+  persistSplitChange();
 }
 
-async function openInSubPane(path: string) {
+async function openInSubPane(path: string, opts: { quiet?: boolean } = {}): Promise<boolean> {
   const existing = subTabs.find(t => t.filePath === path);
   if (existing) {
     subActiveTabId = existing.id;
     setSplit(true);
     renderActiveSubTab();
     renderSubTabs();
-    return;
+    persistSplitChange();
+    return true;
   }
   try {
     const result = await invoke<{ path: string; content: string }>("read_file", { path });
@@ -2104,9 +2110,34 @@ async function openInSubPane(path: string) {
     setSplit(true);
     renderActiveSubTab();
     renderSubTabs();
+    persistSplitChange();
+    return true;
   } catch (e) {
-    flashStatus(`Could not open: ${path}`, "var(--red, #f38ba8)");
+    if (!opts.quiet) flashStatus(`Could not open: ${path}`, "var(--red, #f38ba8)");
+    return false;
   }
+}
+
+// Session restore finished (or skipped): from now on split-pane changes are persisted.
+let sessionRestoreDone = false;
+function persistSplitChange() {
+  if (sessionRestoreDone) persistOpenTabs();
+}
+
+/** Re-opens the split pane saved in the session. Files that no longer open are skipped. */
+async function restoreSplitSession(saved: SplitSession | null) {
+  if (!saved || !saved.open || saved.tabs.length === 0) return;
+  let opened = 0;
+  for (const t of saved.tabs) {
+    if (await openInSubPane(t.filePath, { quiet: true })) opened++;
+  }
+  if (opened === 0) return;
+  const activePath = saved.tabs.find(t => t.isActive)?.filePath;
+  const active = activePath ? subTabs.find(t => t.filePath === activePath) : undefined;
+  if (active && active.id !== subActiveTabId) switchSubTab(active.id);
+  if (saved.mode !== subMode) setSubMode(saved.mode);
+  activePane = "main";
+  editor?.focus();
 }
 
 function updateSubModeIcon() {
@@ -2143,6 +2174,7 @@ function setSubMode(mode: "edit" | "preview") {
     editPane?.classList.add("hidden");
   }
   updateSubModeIcon();
+  persistSplitChange();
 }
 
 function toggleSubMode() {
@@ -2162,6 +2194,7 @@ function setSplit(open: boolean) {
   if (!open && activePane === "sub") activePane = "main";
   updateSubControlsUI();
   updateTabBarVisibility();
+  persistSplitChange();
 }
 
 async function toggleSplit() {
@@ -5514,6 +5547,13 @@ function persistOpenTabs() {
     cursorOffset: t.editorState.selection.main.head,
   }));
   sessionData.openTabs = tabData;
+  sessionData.split = {
+    open: splitOpen,
+    mode: subMode,
+    tabs: subTabs
+      .filter(t => t.filePath)
+      .map(t => ({ filePath: t.filePath!, isActive: t.id === subActiveTabId })),
+  };
   sessionData.currentFolder = currentFolderPath;
   sessionData.lastFile = currentFilePath;
   sessionData.savedAt = Date.now();
@@ -7594,6 +7634,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (path) {
       await openFile(path);
     } else if (isMainWindow && restoreLastSession) {
+      // Read the saved split before restoring main tabs: openFile persists the session and would overwrite it
+      const savedSplit = parseSplitSession(sessionData.split);
       // Restore tabs from previous session (from disk)
       try {
         const fileTabs = (sessionData.openTabs || []).filter(t => t.filePath);
@@ -7641,7 +7683,12 @@ window.addEventListener("DOMContentLoaded", async () => {
       } catch {
         if (sessionData.lastFile) openFile(sessionData.lastFile);
       }
+      try {
+        await restoreSplitSession(savedSplit);
+      } catch { /* a broken split session never blocks startup */ }
     }
+  }).finally(() => {
+    sessionRestoreDone = true;
   });
 
   // Image lightbox — click images in preview to zoom

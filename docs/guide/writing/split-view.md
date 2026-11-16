@@ -42,7 +42,7 @@ Click **⊟** again. If files in the second pane have unsaved changes, Kaelio as
 ## What it will not do
 
 - Kaelio shows at most two panes.
-- Split view is not restored after you quit; the main pane's tabs are.
+- Split view is restored after you quit, along with the main pane's tabs: the second pane's tabs, its active tab and its edit or preview mode come back on the next launch. A file that no longer exists is skipped.
 
 ## Next steps
 
