@@ -106,6 +106,7 @@
           <div class="toolbar-dropdown app-menu-dropdown">
             <button id="btn-help-menu">Help <span class="arrow">▾</span></button>
             <div class="dropdown-menu hidden">
+              <div id="btn-guide" class="dropdown-item">Kaelio Guide</div>
               <div id="btn-keyboard-shortcuts" class="dropdown-item">Keyboard Shortcuts <span class="shortcut">⌘/</span></div>
               <div id="btn-customize-shortcuts" class="dropdown-item">Customize Shortcuts</div>
               <div class="dropdown-divider"></div>
@@ -315,6 +316,7 @@
         <span id="status-words">0 words</span>
         <span id="status-tokens">0 chars</span>
         <span id="status-changes-wrap" class="hidden"><button id="status-changes" type="button"></button><button id="status-changes-clear" type="button" aria-label="Clear change highlights" title="Clear change highlights">×</button></span>
+        <button id="status-update" type="button" class="hidden" title="A new version of Kaelio is available"></button>
         <button id="status-help" title="Keyboard Shortcuts (⌘/)">?</button>
         <a id="status-github" href="https://github.com/kael-wanderer/kaelio" target="_blank">GitHub</a>
       </div>
@@ -327,6 +329,30 @@
             <button id="help-close">✕</button>
           </div>
           <div id="help-content"></div>
+        </div>
+      </div>
+      <!-- Software update modal -->
+      <div id="update-modal" class="hidden">
+        <div id="update-backdrop"></div>
+        <div id="update-dialog" role="dialog" aria-modal="true" aria-labelledby="update-title">
+          <div id="update-header">
+            <span id="update-title">Software Update</span>
+            <button id="update-close" type="button" aria-label="Close">✕</button>
+          </div>
+          <div id="update-body">
+            <p id="update-status" aria-live="polite"></p>
+            <p id="update-current"></p>
+            <pre id="update-notes" class="hidden"></pre>
+            <progress id="update-progress" class="hidden" max="100"></progress>
+            <label id="update-auto-label"><input id="update-auto" type="checkbox"> Check for updates automatically every day</label>
+          </div>
+          <div id="update-actions">
+            <button id="update-notes-link" type="button" class="hidden">Release Notes</button>
+            <span class="update-spacer"></span>
+            <button id="update-skip" type="button" class="hidden">Skip This Version</button>
+            <button id="update-later" type="button">Close</button>
+            <button id="update-install" type="button" class="primary hidden">Install and Restart</button>
+          </div>
         </div>
       </div>
       <!-- Shortcuts settings modal -->

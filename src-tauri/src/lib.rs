@@ -3490,6 +3490,7 @@ pub fn run() {
                 "Help",
                 true,
                 &[
+                    &MenuItem::with_id(handle, "help.guide", "Kaelio Guide", true, None::<&str>)?,
                     &MenuItem::with_id(
                         handle,
                         "help.shortcuts",

@@ -20,7 +20,8 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { check } from "@tauri-apps/plugin-updater";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { getVersion } from "@tauri-apps/api/app";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { readText as readClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import { migrateKeybindings, nativeMenuAccelerators } from "./lib/keybindings.ts";
@@ -38,6 +39,11 @@ import { LocalImageCache } from "./lib/image-cache.ts";
 import { highlightCode } from "./lib/highlight.ts";
 import { extractHeadings, activeHeadingIndex } from "./lib/outline.ts";
 import { parseSplitSession, type SplitSession } from "./lib/session.ts";
+import { guideUrl, type GuidePage } from "./lib/guide-link.ts";
+import {
+  UPDATE_INTERVAL_MS, LAST_CHECK_KEY, SKIPPED_KEY, AUTO_CHECK_KEY,
+  isDue, shouldOffer, parseAutoCheck, releaseUrl, releaseNotesText,
+} from "./lib/update-check.ts";
 import { parseReadingWidth, readingWidthCss, nextReadingWidth, type ReadingWidth } from "./lib/reading-width.ts";
 
 
@@ -4195,6 +4201,7 @@ function getCommands(): PaletteCommand[] {
     { label: "Cycle Font", action: cycleFont },
     { label: "Appearance Settings", action: toggleAppearancePopover },
     { label: "Reload Custom CSS", action: loadCustomCSS },
+    { label: "Kaelio Guide", action: () => openGuide() },
     { label: "Check for Updates", action: () => doUpdateCheck(true) },
     { label: "Keyboard Shortcuts", shortcut: "⌘/", action: toggleHelp },
     { label: "About Kaelio", action: () => invoke("plugin:opener|open_url", { url: "https://github.com/kael-wanderer/kaelio" }) },
@@ -5192,12 +5199,13 @@ function toggleHelp() {
       `<div class="help-group"><h3>${group}</h3>${keys.map(([k, d]) =>
         `<div class="help-row"><kbd>${k || "—"}</kbd><span>${d}</span></div>`
       ).join("")}</div>`
-    ).join("") + `<div class="help-customize"><button id="help-customize-btn">Customize Shortcuts...</button></div>`;
+    ).join("") + `<div class="help-customize"><button id="help-customize-btn">Customize Shortcuts...</button><button id="help-guide-btn">Shortcuts in the Guide</button></div>`;
 
     document.getElementById("help-customize-btn")?.addEventListener("click", () => {
       modal.classList.add("hidden");
       toggleShortcutsModal();
     });
+    document.getElementById("help-guide-btn")?.addEventListener("click", () => openGuide("keyboardShortcuts"));
   }
   modal.classList.remove("hidden");
 }
@@ -6355,67 +6363,198 @@ async function handleImagePaste(e: ClipboardEvent, view: EditorView, notePath: s
 }
 
 // --- Auto update ---
+//
+// After Bugler: check at launch and once a day while Kaelio runs. A found
+// version shows a status-bar chip; nothing downloads or installs until the
+// user clicks Install and Restart. Skip This Version silences automatic
+// checks for that version; a manual check always shows what it found.
 
-async function doUpdateCheck(manual: boolean) {
-  const statusWords = document.getElementById("status-words");
+let pendingUpdate: Update | null = null;
+let updateChecking = false;
+let updateInstalling = false;
+/** A manual check asked while an automatic one was already running: the
+ * running check reports to the dialog as if it were manual. */
+let updateManualWaiting = false;
+
+function lsGet(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function lsSet(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* storage unavailable */ }
+}
+
+function openGuide(page: GuidePage = "home") {
+  void invoke("plugin:opener|open_url", { url: guideUrl(page) });
+}
+
+type UpdateView =
+  | { kind: "checking" }
+  | { kind: "upToDate" }
+  | { kind: "failed" }
+  | { kind: "available"; update: Update }
+  | { kind: "installing"; update: Update; pct: number | null }
+  | { kind: "installFailed"; update: Update };
+
+function renderUpdateDialog(view: UpdateView) {
+  const el = (id: string) => document.getElementById(id);
+  const status = el("update-status");
+  const notes = el("update-notes");
+  const progress = el("update-progress") as HTMLProgressElement | null;
+  const install = el("update-install") as HTMLButtonElement | null;
+  const skip = el("update-skip") as HTMLButtonElement | null;
+  const later = el("update-later") as HTMLButtonElement | null;
+  const link = el("update-notes-link");
+  if (!status || !notes || !progress || !install || !skip || !later || !link) return;
+
+  const update = "update" in view ? view.update : null;
+  status.classList.toggle("error", view.kind === "failed" || view.kind === "installFailed");
+  switch (view.kind) {
+    case "checking": status.textContent = "Checking for updates…"; break;
+    case "upToDate": status.textContent = "Kaelio is up to date."; break;
+    case "failed": status.textContent = "Couldn't check for updates. Check your connection and try again."; break;
+    case "available": status.textContent = `Kaelio ${view.update.version} is available.`; break;
+    case "installing": status.textContent = view.pct === null
+      ? `Installing Kaelio ${view.update.version}…`
+      : `Downloading Kaelio ${view.update.version}… ${view.pct}%`; break;
+    case "installFailed": status.textContent = "The update couldn't be installed. Try again, or download it from the release page."; break;
+  }
+
+  const notesText = update ? releaseNotesText(update.body) : "";
+  notes.textContent = notesText; // plain text, never HTML
+  notes.classList.toggle("hidden", !notesText || view.kind === "installing");
+
+  progress.classList.toggle("hidden", view.kind !== "installing");
+  if (view.kind === "installing") {
+    if (view.pct === null) progress.removeAttribute("value"); else progress.value = view.pct;
+  }
+
+  const offering = view.kind === "available" || view.kind === "installFailed";
+  install.classList.toggle("hidden", !offering && view.kind !== "installing");
+  install.disabled = view.kind === "installing";
+  install.textContent = view.kind === "installFailed" ? "Try Again" : "Install and Restart";
+  skip.classList.toggle("hidden", view.kind !== "available");
+  link.classList.toggle("hidden", !update);
+  later.textContent = offering ? "Later" : view.kind === "failed" ? "Close" : "OK";
+  later.disabled = view.kind === "installing";
+}
+
+function updateDialogOpen(): boolean {
+  return !document.getElementById("update-modal")?.classList.contains("hidden");
+}
+
+function showUpdateDialog(view: UpdateView) {
+  const modal = document.getElementById("update-modal");
+  if (!modal) return;
+  const auto = document.getElementById("update-auto") as HTMLInputElement | null;
+  if (auto) auto.checked = parseAutoCheck(lsGet(AUTO_CHECK_KEY));
+  renderUpdateDialog(view);
+  modal.classList.remove("hidden");
+}
+
+function hideUpdateDialog() {
+  if (updateInstalling) return;
+  document.getElementById("update-modal")?.classList.add("hidden");
+}
+
+function setUpdateChip(update: Update | null) {
+  const chip = document.getElementById("status-update");
+  if (!chip) return;
+  chip.textContent = update ? `Update ${update.version}` : "";
+  chip.classList.toggle("hidden", !update);
+}
+
+/** One check. `manual` opens the dialog and always reports; an automatic
+ * check is silent unless it finds a version the user has not skipped. */
+async function doUpdateCheck(manual: boolean, force = false) {
+  if (updateInstalling) { if (manual) showUpdateDialog({ kind: "installing", update: pendingUpdate!, pct: null }); return; }
+  if (!manual) {
+    if (!parseAutoCheck(lsGet(AUTO_CHECK_KEY))) return;
+    if (!force && !isDue(Date.now(), lsGet(LAST_CHECK_KEY))) return;
+  }
+  if (manual) { updateManualWaiting = true; showUpdateDialog({ kind: "checking" }); }
+  if (updateChecking) return;
+  updateChecking = true;
+  const report = () => updateManualWaiting && updateDialogOpen();
+  lsSet(LAST_CHECK_KEY, String(Date.now()));
   try {
-    if (manual && statusWords) {
-      statusWords.textContent = "Checking for updates...";
-      statusWords.style.color = "var(--accent)";
-    }
-
     const update = await check();
     if (!update) {
-      if (manual && statusWords) {
-        statusWords.textContent = "You're on the latest version";
-        statusWords.style.color = "var(--success)";
-        setTimeout(() => { statusWords.textContent = ""; statusWords.style.color = ""; }, 3000);
-      }
+      pendingUpdate = null;
+      setUpdateChip(null);
+      if (report()) renderUpdateDialog({ kind: "upToDate" });
       return;
     }
-
-    if (statusWords) {
-      statusWords.textContent = `Update ${update.version} available — downloading...`;
-      statusWords.style.color = "var(--accent)";
-    }
-
-    let totalSize = 0;
-    let downloaded = 0;
-    await update.downloadAndInstall((event) => {
-      if (event.event === "Started" && event.data.contentLength) {
-        totalSize = event.data.contentLength;
-      } else if (event.event === "Progress") {
-        downloaded += event.data.chunkLength;
-        if (statusWords && totalSize > 0) {
-          const pct = Math.round((downloaded / totalSize) * 100);
-          statusWords.textContent = `Downloading update... ${pct}%`;
-        }
-      }
-    });
-
-    if (statusWords) {
-      statusWords.textContent = "Update installed — click to restart";
-      statusWords.style.color = "var(--success)";
-      statusWords.style.cursor = "pointer";
-      statusWords.addEventListener("click", () => relaunch(), { once: true });
-    }
+    if (!shouldOffer(update.version, lsGet(SKIPPED_KEY), updateManualWaiting)) return;
+    pendingUpdate = update;
+    setUpdateChip(update);
+    if (report()) renderUpdateDialog({ kind: "available", update });
   } catch (e) {
     console.error("Update check failed:", e);
-    if (statusWords) {
-      const errMsg = String(e).length > 120 ? String(e).slice(0, 120) + "…" : String(e);
-      statusWords.textContent = manual ? `Update failed: ${errMsg}` : "";
-      statusWords.style.color = manual ? "var(--error)" : "";
-      if (manual) setTimeout(() => { statusWords.textContent = ""; statusWords.style.color = ""; }, 8000);
-    }
+    if (report()) renderUpdateDialog({ kind: "failed" });
+  } finally {
+    updateChecking = false;
+    updateManualWaiting = false;
   }
 }
 
-async function checkForUpdates() {
-  const lastCheck = localStorage.getItem("kaelio-update-last-check");
-  const now = Date.now();
-  if (lastCheck && now - Number(lastCheck) < 7 * 24 * 60 * 60 * 1000) return;
-  localStorage.setItem("kaelio-update-last-check", String(now));
-  await doUpdateCheck(false);
+async function installPendingUpdate() {
+  const update = pendingUpdate;
+  if (!update || updateInstalling) return;
+  updateInstalling = true;
+  renderUpdateDialog({ kind: "installing", update, pct: null });
+  let total = 0;
+  let done = 0;
+  try {
+    await update.downloadAndInstall((event) => {
+      if (event.event === "Started" && event.data.contentLength) {
+        total = event.data.contentLength;
+      } else if (event.event === "Progress") {
+        done += event.data.chunkLength;
+        if (total > 0) renderUpdateDialog({ kind: "installing", update, pct: Math.min(100, Math.round((done / total) * 100)) });
+      } else if (event.event === "Finished") {
+        renderUpdateDialog({ kind: "installing", update, pct: null });
+      }
+    });
+    await relaunch();
+  } catch (e) {
+    console.error("Update install failed:", e);
+    updateInstalling = false;
+    renderUpdateDialog({ kind: "installFailed", update });
+  }
+}
+
+function initUpdates() {
+  document.getElementById("status-update")?.addEventListener("click", () => {
+    if (pendingUpdate) showUpdateDialog({ kind: "available", update: pendingUpdate });
+  });
+  document.getElementById("update-install")?.addEventListener("click", () => void installPendingUpdate());
+  document.getElementById("update-skip")?.addEventListener("click", () => {
+    if (pendingUpdate) lsSet(SKIPPED_KEY, pendingUpdate.version);
+    pendingUpdate = null;
+    setUpdateChip(null);
+    hideUpdateDialog();
+  });
+  document.getElementById("update-later")?.addEventListener("click", hideUpdateDialog);
+  document.getElementById("update-close")?.addEventListener("click", hideUpdateDialog);
+  document.getElementById("update-backdrop")?.addEventListener("click", hideUpdateDialog);
+  document.getElementById("update-notes-link")?.addEventListener("click", () => {
+    if (pendingUpdate) void invoke("plugin:opener|open_url", { url: releaseUrl(pendingUpdate.version) });
+  });
+  document.getElementById("update-auto")?.addEventListener("change", (e) => {
+    lsSet(AUTO_CHECK_KEY, (e.target as HTMLInputElement).checked ? "1" : "0");
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && updateDialogOpen()) { e.preventDefault(); hideUpdateDialog(); }
+  });
+  getVersion().then((v) => {
+    const cur = document.getElementById("update-current");
+    if (cur) cur.textContent = `You have Kaelio ${v}.`;
+  }).catch(() => { /* version unavailable */ });
+
+  // Launch check (forced, like Bugler), then an hourly tick that checks once
+  // a day has passed since the last check.
+  setTimeout(() => void doUpdateCheck(false, true), 3000);
+  setInterval(() => void doUpdateCheck(false), Math.min(UPDATE_INTERVAL_MS, 60 * 60 * 1000));
 }
 
 // --- Formatting toolbar ---
@@ -6633,6 +6772,7 @@ async function handleNativeMenuCommand(command: string) {
     case "search.content-search": return sidebarSearchMode ? deactivateSidebarSearch() : activateSidebarSearch();
     case "help.shortcuts": return toggleHelp();
     case "help.customize-shortcuts": return toggleShortcutsModal();
+    case "help.guide": return openGuide();
     case "help.check-updates": return doUpdateCheck(true);
     case "help.about": return void invoke("plugin:opener|open_url", { url: "https://github.com/kael-wanderer/kaelio" });
   }
@@ -6996,6 +7136,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   // Help menu items
+  document.getElementById("btn-guide")?.addEventListener("click", () => openGuide());
   document.getElementById("btn-keyboard-shortcuts")?.addEventListener("click", toggleHelp);
   document.getElementById("btn-customize-shortcuts")?.addEventListener("click", toggleShortcutsModal);
   document.getElementById("btn-check-updates")?.addEventListener("click", () => doUpdateCheck(true));
@@ -7434,8 +7575,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Check for crash recovery
   setTimeout(checkRecovery, 500);
 
-  // Check for updates after 3s
-  setTimeout(checkForUpdates, 3000);
+  // Update checks: launch, then daily
+  initUpdates();
 
   // Scroll sync
   initScrollSync();
