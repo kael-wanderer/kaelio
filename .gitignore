@@ -28,3 +28,4 @@ src-tauri/target/
 
 # Personal wiki (synced separately; excluded from the public repo)
 wiki/
+.impeccable/
