@@ -25,6 +25,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { migrateKeybindings, nativeMenuAccelerators } from "./lib/keybindings.ts";
 import { exportAvailability } from "./lib/export-availability.ts";
 import { findMermaidBlocks, applyDiagramPlaceholders, diagramName } from "./lib/mermaid-export.ts";
+import { resolveLinkedPath } from "./lib/link-path.ts";
 import { fileKind } from "./lib/file-kind.ts";
 import { resolveLocalImagePath } from "./lib/image-src.ts";
 import { highlightCode } from "./lib/highlight.ts";
@@ -6985,9 +6986,12 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (currentFilePath) {
-      const dir = currentFilePath.substring(0, currentFilePath.lastIndexOf("/"));
-      // Normalize relative paths (handles ../ and cross-folder navigation)
-      const resolved = new URL(filePart, "file://" + dir + "/").pathname;
+      // Normalize relative paths (handles ../, cross-folder navigation and spaces in names)
+      const resolved = resolveLinkedPath(filePart, currentFilePath);
+      if (!resolved) {
+        flashStatus("Cannot open this link", "var(--error)", 3000);
+        return;
+      }
       openFile(resolved).then(async () => {
         if (fragment) {
           // Cancel pending debounce and render immediately so the anchor exists in the DOM

@@ -23,7 +23,7 @@ sequenceDiagram
     UI->>Rust: export_pdf(markdown, outputPath, diagrams[])
     Rust->>Rust: write_diagrams (validate, write to temp dir)
     Rust->>Rust: link_diagrams (name → absolute path)
-    Rust->>Pandoc: pandoc export.md -o output.pdf --pdf-engine typst --pdf-engine-opt=--root=/
+    Rust->>Pandoc: pandoc export.md -o output.pdf --from markdown…-raw_attribute --pdf-engine typst --pdf-engine-opt=--root=/
     Pandoc-->>Rust: PDF file
     Rust-->>UI: output path
 ```
@@ -57,7 +57,8 @@ sequenceDiagram
 | Setting | Value |
 |---------|-------|
 | PDF engine | typst (full path from `find_typst()`) |
-| Typst root | `/` (`--pdf-engine-opt=--root=/`): Pandoc copies images into an absolute temp media folder, and Typst otherwise resolves that path under the working directory |
+| Input format | `PANDOC_MARKDOWN_INPUT_FORMAT` + `-raw_attribute`: raw ```` ```{=typst} ```` blocks are printed as text, so a note cannot run Typst code such as `#read("/path")` |
+| Typst root | `/` on macOS/Linux (`--pdf-engine-opt=--root=/`): Pandoc copies images into an absolute temp media folder, and Typst otherwise resolves that path under the working directory. Safe only with `-raw_attribute`. Not set on Windows (unverified there) |
 | Margins | 1 inch |
 | Font size | 11pt |
 | Color links | true |

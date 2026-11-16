@@ -1438,18 +1438,25 @@ fn style_docx_tables(path: &Path) -> Result<(), String> {
 
 /// Pandoc arguments for Markdown -> PDF through Typst.
 fn pandoc_pdf_args(input: &Path, output_path: &str, typst_path: &Path, typst_header: &Path) -> Vec<String> {
-    vec![
+    let mut args = vec![
         input.to_string_lossy().to_string(),
         "-o".to_string(),
         output_path.to_string(),
         "--from".to_string(),
-        PANDOC_MARKDOWN_INPUT_FORMAT.to_string(),
+        // No raw blocks (```{=typst}): a note must not hand Typst code such as
+        // `#read("/path")` that would copy local files into the PDF.
+        format!("{PANDOC_MARKDOWN_INPUT_FORMAT}-raw_attribute"),
         "--pdf-engine".to_string(),
         typst_path.to_string_lossy().to_string(),
-        // Given a full engine path, Pandoc copies images into an absolute temp media
-        // folder but leaves Typst's root at the working directory, which Typst then
-        // prefixes to the absolute path. Rooting Typst at `/` resolves those paths.
-        "--pdf-engine-opt=--root=/".to_string(),
+    ];
+    // Given a full engine path, Pandoc copies images into an absolute temp media
+    // folder but leaves Typst's root at the working directory, which Typst then
+    // prefixes to the absolute path. Rooting Typst at `/` resolves those paths.
+    // Safe only together with `-raw_attribute` above. Not verified on Windows.
+    if !cfg!(target_os = "windows") {
+        args.push("--pdf-engine-opt=--root=/".to_string());
+    }
+    args.extend([
         "--include-in-header".to_string(),
         typst_header.to_string_lossy().to_string(),
         "-V".to_string(),
@@ -1459,7 +1466,8 @@ fn pandoc_pdf_args(input: &Path, output_path: &str, typst_path: &Path, typst_hea
         "-V".to_string(),
         "colorlinks=true".to_string(),
         "--syntax-highlighting=none".to_string(),
-    ]
+    ]);
+    args
 }
 
 #[tauri::command]
@@ -3798,5 +3806,31 @@ mod audit_tests {
         let stderr = String::from_utf8_lossy(&out.stderr).to_string();
         let _ = fs::remove_dir_all(&dir);
         assert!(out.status.success(), "pandoc failed: {stderr}");
+    }
+
+    /// A raw Typst block in an untrusted note must not reach Typst as code:
+    /// with Typst rooted at `/`, `#read(...)` could copy any local file into the PDF.
+    #[test]
+    fn pandoc_pdf_args_do_not_pass_raw_typst_through() {
+        let Some(pandoc) = find_pandoc() else {
+            eprintln!("pandoc not installed; skipping");
+            return;
+        };
+        let dir = scratch_dir("pandoc_raw_typst");
+        let input = dir.join("export.md");
+        fs::write(&input, "# T\n\n```{=typst}\n#raw(read(\"/etc/hosts\"))\n```\n\nInline `#read(\"/etc/hosts\")`{=typst} too.\n").unwrap();
+        let args = pandoc_pdf_args(&input, "unused.pdf", Path::new("typst"), Path::new("h.typ"));
+        let from = args.iter().position(|a| a == "--from").map(|i| args[i + 1].clone()).unwrap();
+        let out = Command::new(&pandoc)
+            .args([input.to_string_lossy().as_ref(), "--from", &from, "-t", "typst"])
+            .output()
+            .unwrap();
+        let _ = fs::remove_dir_all(&dir);
+        let typst = String::from_utf8_lossy(&out.stdout).to_string();
+        assert!(out.status.success());
+        assert!(
+            !typst.lines().any(|l| l.trim_start().starts_with("#raw(read(")) && !typst.contains(" #read(\"/etc/hosts\")"),
+            "raw Typst reached the output:\n{typst}"
+        );
     }
 }

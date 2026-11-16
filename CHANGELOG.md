@@ -26,7 +26,8 @@
 
 ### Fixes
 
-- **PDF export shows images again.** Images, including diagrams, failed with "file not found" because Typst looked for Pandoc's temporary image files under the wrong folder.
+- **Links with spaces open.** A preview link such as `[Q3](<Q3 report.pdf>)`, or any link from a note in a folder with a space in its name, now opens the file instead of "Cannot open this file".
+- **PDF export shows images again.** Images, including diagrams, failed with "file not found" because Typst looked for Pandoc's temporary image files under the wrong folder. Raw ```` ```{=typst} ```` blocks in a note are now printed as text in PDF export, so a note cannot make the export read other files.
 - **File History no longer redirects Save.** Right-click → File History on another file made the next save write the open document over that file; it now opens the file first.
 - **Closing split view saves each tab's own content.** With two or more unsaved sub-pane tabs, one tab's text was written into every file. Closing a background sub tab no longer discards the visible tab's edits.
 - **Pull no longer discards uncommitted edits.** A fast-forward pull force-checked-out the working tree; it now stops and asks you to commit or discard first.
