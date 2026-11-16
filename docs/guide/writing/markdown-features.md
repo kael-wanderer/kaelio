@@ -80,8 +80,8 @@ Values under `tags`, `tag`, `categories` or `keywords` appear as pills. Click **
 - Footnotes use the usual syntax: `text[^1]`, then `[^1]: The note.` at the bottom.
 - Wide tables scroll sideways instead of squeezing.
 - Click an image in the preview to see it larger; click again to close it.
-- Paste an image from the clipboard straight into the editor to add it to the document. Kaelio saves the picture in an `assets` folder beside the note (for example `assets/pasted-20261116-073501.png`) and inserts a relative link to it. PNG, JPEG, GIF and WebP images up to 20 MB are accepted, and an existing file is never overwritten. Save a new note once before pasting an image into it.
-- For pictures saved as files, keep them in your folder and link them with the usual Markdown image syntax and a relative path.
+- Paste an image from the clipboard straight into the editor to add it to the document. Kaelio saves the picture in an `assets` folder beside the note (for example `assets/pasted-20261116-073501.png`) and inserts a relative link to it. PNG, JPEG, GIF and WebP images up to 20 MB are accepted, and an existing file is never overwritten. Save a new note once before pasting an image into it. Images paste into Markdown files only. If you switch tabs while the image is being saved, the file is still saved to `assets/` but no link is inserted; the status bar tells you.
+- For pictures saved as files, keep them in your folder and link them with the usual Markdown image syntax and a relative path. If you replace a picture on disk, the preview shows the new version by itself.
 
 ### Editing tables
 

@@ -37,13 +37,13 @@ Above the editor, the formatting bar inserts Markdown for you: **Bold**, **Itali
 ### Smart paste
 
 - **Rich text becomes Markdown.** Copy a formatted page, for example an answer from a chat window or a web article, and paste it into the editor: headings, lists, tables, links, bold, italic, code and quotes arrive as Markdown.
-- **A URL over selected text becomes a link.** Select some words and paste a single `http://` or `https://` address; you get `[the words](address)`.
+- **A URL over selected text becomes a link.** Select some words and paste a single `http://` or `https://` address; you get `[the words](address)`. Square brackets in the words are escaped so the link stays valid, and an address with parentheses is wrapped in `<…>`. If the selection runs over more than one line, the address pastes as plain text.
 - Text copied from a code editor or a terminal pastes as plain text, with its indentation.
 - Inside a code block or inline code, paste is always plain.
 - Press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>V</kbd> (**Paste as Plain Text**) to paste the clipboard's plain text without any conversion.
 - One <kbd>⌘</kbd><kbd>Z</kbd> undoes a whole paste.
 
-Images and data-URL pictures are not converted; paste an image on its own to save it to `assets/`.
+Smart paste works in Markdown files only; in HTML, YAML and other text files paste is always plain. Images and data-URL pictures are not converted; paste an image on its own to save it to `assets/`.
 
 ### Find and replace
 

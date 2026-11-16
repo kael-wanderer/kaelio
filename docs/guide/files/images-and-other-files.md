@@ -25,7 +25,7 @@ Click the file in the Explorer, or a link to it in the preview. What happens dep
 
 Scripts in an HTML file are off by default, so a page that draws a chart with JavaScript shows an empty space. If the page has scripts, a bar above it reads **Scripts are off for this page.** Click **Run scripts** to run them. (macOS only for now; on Windows and Linux HTML pages stay static.)
 
-- The page then runs in an isolated frame: it cannot reach Kaelio's commands or its settings, and it cannot read your files. It can show pictures and use styles and scripts from its own folder and its subfolders, and from `https://` addresses it asks for. A page that loads its own data files with `fetch` will not get them.
+- The page then runs in an isolated frame: it cannot reach Kaelio's commands or its settings, and it cannot read your files. It can show pictures and use styles and scripts from its own folder and its subfolders, and from `https://` addresses it asks for. A page that loads its own data files with `fetch` will not get them. Hidden files and folders (names starting with a dot, such as `.env` or `.git`) are never served to the page.
 - A page saved directly in your home folder cannot run scripts: move it into a folder of its own first.
 - The bar reads **Scripts are running in an isolated frame.** Click **Turn off** to go back to the static page.
 - The frame shows the saved file. While you have unsaved edits the bar adds **Showing the last saved version.**; save to see them.
