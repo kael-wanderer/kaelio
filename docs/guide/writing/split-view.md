@@ -9,7 +9,7 @@ Split view adds a second pane to the right of the window. It has its own tabs, i
 
 - When you write one document while reading another.
 - When you want to compare two versions of a file by eye.
-- When you read a PDF and take notes about it at the same time.
+- When you read one note and take notes about it in another at the same time.
 
 ## How to use it
 
@@ -47,5 +47,5 @@ Click **⊟** again. If files in the second pane have unsaved changes, Kaelio as
 ## Next steps
 
 - [Compare two files](../recipes/compare-two-files.md)
-- [Read and highlight PDFs](../files/pdf-viewer.md)
+- [Images and other files](../files/images-and-other-files.md)
 - [Explorer, tabs and windows](../files/explorer-and-tabs.md)

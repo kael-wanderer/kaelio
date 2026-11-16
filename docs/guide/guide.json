@@ -29,7 +29,7 @@
         {
           "slug": "recipes/note-to-pdf",
           "title": "Turn a note into a PDF",
-          "summary": "Choose the right PDF export, install what it needs, and keep private diagrams on your computer."
+          "summary": "Install Pandoc and Typst once, then export a note as a PDF with selectable text and local diagrams."
         },
         {
           "slug": "recipes/sync-two-computers",
@@ -77,14 +77,9 @@
           "summary": "Find a file by name, search the text of every note in a folder, and run any command by typing its name."
         },
         {
-          "slug": "files/pdf-viewer",
-          "title": "Read and highlight PDFs",
-          "summary": "Open a PDF inside Kaelio, search and select its text, highlight passages, and pull its text into a Markdown note."
-        },
-        {
           "slug": "files/images-and-other-files",
           "title": "Images and other files",
-          "summary": "How Kaelio shows images, SVG, HTML, JSON, CSV and plain text files, and which of them you can edit."
+          "summary": "How Kaelio handles Markdown, HTML, plain text and code, and why PDFs and images open in your default app."
         }
       ]
     },
@@ -109,7 +104,7 @@
         {
           "slug": "export/export",
           "title": "Export and copy",
-          "summary": "Save a document as PNG, JPG, PDF or DOCX, or copy it as formatted text, Markdown or plain text."
+          "summary": "Save a document as PDF, DOCX or PNG, or copy it as formatted text, Markdown or plain text."
         }
       ]
     },
@@ -138,5 +133,8 @@
         }
       ]
     }
-  ]
+  ],
+  "redirects": {
+    "files/pdf-viewer": "files/images-and-other-files"
+  }
 }

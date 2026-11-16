@@ -21,7 +21,6 @@ Kaelio is an editor for files on your computer. There is no account, no sign-in 
 | Crash-recovery copies of unsaved files | `~/.kaelio/recovery/` |
 | Deleted files, only when the system Trash is unavailable | `~/.kaelio/trash/` |
 | Your preview style, if you add one | `~/.kaelio/preview.css` |
-| PDF highlights | Next to the PDF, as a `.kaelio-annot.json` file named after the PDF |
 | Settings: theme, font, sizes, shortcuts, recent files | Kaelio's own app storage on this computer |
 
 To remove everything Kaelio keeps, quit it and delete the `~/.kaelio` folder.
@@ -32,10 +31,11 @@ Only for these:
 
 - **Update check.** At launch, at most once a week, and when you choose Help ▸ **Check for Updates...**, Kaelio reads its release information from GitHub (`github.com/kael-wanderer/kaelio`) and downloads an update from there if one exists.
 - **Git sync,** only if you set it up. Kaelio pulls from and pushes to the repository you connected, and nowhere else. See [Sync with Git](../git/git-sync.md).
-- **Markdown ▸ PDF export with diagrams.** Each Mermaid diagram's text is sent to the public mermaid.ink service to be drawn. Nothing else in the document is sent. **HTML ▸ PDF** draws diagrams locally instead. See [Export and copy](../export/export.md).
 - **Pictures from the web in your documents.** If a document shows an image by its web address (`![](https://…)`), the preview loads it from that address, as a browser would.
 
-Links you click to web pages open in your browser, not in Kaelio.
+Export never goes online: Mermaid diagrams in a PDF or DOCX are drawn on your computer. See [Export and copy](../export/export.md).
+
+Links you click to web pages open in your browser, not in Kaelio. PDFs and images you click open in your default app.
 
 ## What it will not do
 

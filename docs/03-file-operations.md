@@ -31,7 +31,7 @@ flowchart TB
 | `search_in_files` | `folder_path: String, query: String` | `Vec<SearchResult>` | Case-insensitive filename matches first, then content search across `.md`/`.markdown`/`.txt` files |
 | `delete_entry` | `path: String` | `DeleteResult { destination, used_system_trash }` | Move an entry to system Trash, falling back to recoverable Kaelio trash |
 | `copy_into_folder` | `source: String, dest_dir: String` | `String` (new path) | Copy a file or folder into a folder; auto-deduplicates the name on collision (drag-to-copy) |
-| `read_binary_file` | `path: String` | `BinaryFileInfo { data, mime, size }` | Read raw bytes + MIME for the image viewer (PNG/JPG/GIF/WEBP/BMP/ICO/AVIF) |
+| `read_binary_file` | `path: String` | `BinaryFileInfo { data, mime, size }` | Read raw bytes + MIME; loads relative images in the Markdown preview (PNG/JPG/GIF/WEBP/BMP/ICO/AVIF) |
 
 ## 2. Sidebar Search
 

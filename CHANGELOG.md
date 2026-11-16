@@ -4,6 +4,7 @@
 
 ### Changes
 
+- **Docs follow the Markdown focus.** README, the user guide (export, PDFs and other files, privacy, troubleshooting) and developer docs describe the single export menu, local diagram export and default-app opening; the PDF viewer guide page now redirects to "Images and other files".
 - **Export no longer sends diagrams to mermaid.ink.** Mermaid diagrams in PDF and DOCX export are rendered locally on a light theme, so nothing leaves your machine and export works offline. A diagram with a syntax error stays in the document as a code block.
 - **One export menu: PDF, DOCX, PNG.** The HTML ▸ and Markdown ▸ submenus are replaced by three items in the File menu, the toolbar, the macOS menu bar and the command palette. PDF and DOCX use Pandoc and are greyed out for HTML files ("Markdown only"). JPG export and the image-based PDF are removed.
 - **PDFs and images open in your default app.** Clicking a PDF, image or SVG in the sidebar or a link in the preview hands it to the system default app instead of a Kaelio tab. The CSV table, JSON and standalone image viewers are gone; JSON and CSV open as plain text, and images inside a note keep their lightbox. File associations are now Markdown, YAML, TXT and HTML.
@@ -25,6 +26,7 @@
 
 ### Fixes
 
+- **PDF export shows images again.** Images, including diagrams, failed with "file not found" because Typst looked for Pandoc's temporary image files under the wrong folder.
 - **File History no longer redirects Save.** Right-click → File History on another file made the next save write the open document over that file; it now opens the file first.
 - **Closing split view saves each tab's own content.** With two or more unsaved sub-pane tabs, one tab's text was written into every file. Closing a background sub tab no longer discards the visible tab's edits.
 - **Pull no longer discards uncommitted edits.** A fast-forward pull force-checked-out the working tree; it now stops and asks you to commit or discard first.

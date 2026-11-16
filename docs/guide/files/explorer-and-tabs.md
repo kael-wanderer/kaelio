@@ -36,7 +36,6 @@ From left to right at the top of the Explorer: **Search in folder** (⌕), **Ref
 | **Copy Path** ▸ **Absolute Path** / **Relative Path** | Copy where the file is. |
 | **Reveal in Finder** | Show it in Finder. |
 | **Open in Split Window** | Open it in the [second pane](../writing/split-view.md). |
-| **Extract to Markdown** | For PDFs: see [Read and highlight PDFs](pdf-viewer.md). |
 | **Select for Compare**, **Compare with Selected** | Show two files side by side. |
 | **File History** | Earlier versions: see [File history and snapshots](../git/history-and-snapshots.md). |
 | **Discard Changes** | Put a changed file back to its last Git commit. |

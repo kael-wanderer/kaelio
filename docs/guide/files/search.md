@@ -36,7 +36,6 @@ Press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>P</kbd> and type a few letters of what yo
 - **Toggle Auto-save**
 - **Cycle Theme** and **Cycle Font**
 - **Reload Custom CSS**
-- **Extract PDF to Markdown** (when a PDF is open)
 
 ### Find in the current file
 

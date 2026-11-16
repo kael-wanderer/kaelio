@@ -12,7 +12,7 @@ Kaelio runs on macOS (Apple silicon and Intel), Windows and Linux. It is free an
 - When you write notes, documentation or drafts in Markdown and want to see the result while you type.
 - When you read Markdown that others wrote, such as README files or AI-generated reports, and want it nicely formatted.
 - When you want your notes backed up to GitHub without learning Git.
-- When you want to read a PDF beside the notes you take on it.
+- When you want to view an HTML page beside the Markdown that describes it.
 
 ## How to use it
 
@@ -26,9 +26,9 @@ The window has a few parts. Each has its own page in this guide.
 | [Search](../files/search.md) | Find a file by name, search inside files, or run any command from the Command Palette. |
 | [Git panel](../git/git-sync.md) | Back up and sync a folder with GitHub. |
 | [File History](../git/history-and-snapshots.md) | Earlier versions of a file, from Git and from automatic snapshots. |
-| [Export](../export/export.md) | Save a document as PNG, JPG, PDF or DOCX, or copy it formatted. |
+| [Export](../export/export.md) | Save a document as PDF, DOCX or PNG, or copy it formatted. |
 
-Kaelio also opens images, PDFs, HTML, JSON, CSV and other text files. See [Images and other files](../files/images-and-other-files.md) and [Read and highlight PDFs](../files/pdf-viewer.md).
+Kaelio also shows HTML pages and opens JSON, CSV and other text files as plain text. PDFs and images open in your default app. See [Images and other files](../files/images-and-other-files.md).
 
 > [!TIP]
 > Press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>P</kbd> to open the Command Palette and type what you want to do. Every command is there.

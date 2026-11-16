@@ -1,80 +1,104 @@
 # 04-pdf-export
 
-> **Export menu (0.9.2+) has two families.** **HTML group** (PNG / JPG / PDF) captures the rendered preview as an image via `html-to-image` (+ `jsPDF` for PDF) — visual output, full-width/full-height capture (forces preview mode so split panes don't clip it). Long HTML captures are sliced and stitched before final crop so WebKit does not drop content from oversized rasterizations. **Markdown group** (PDF / DOCX) converts the markdown source via the Rust Pandoc commands below — real, editable documents. The Pandoc/Typst flow described here is the **Markdown → PDF** path.
+> **One export menu: PDF / DOCX / PNG.** **PNG** captures the rendered preview via `html-to-image` (full-width/full-height capture; forces preview mode so split panes don't clip it; long captures are sliced and stitched before the final crop). **PDF** and **DOCX** convert the Markdown source through the Rust Pandoc commands below and are Markdown-only: for an HTML file they are greyed out ("Markdown only", `exportAvailability` in `src/lib/export-availability.ts`). JPG and the image-based PDF (jsPDF) were removed.
 
-PDF export converts markdown to PDF via Pandoc with Typst. Mermaid diagrams are pre-rendered to PNG via the mermaid.ink API before Pandoc processing. Markdown tables are exported with explicit grid styling because Pandoc's default Typst table style is borderless.
+PDF export converts Markdown to PDF via Pandoc with Typst. Mermaid diagrams are rendered to PNG **in the frontend**, with the same Mermaid instance the preview uses, before Pandoc runs. Nothing leaves the machine. Markdown tables are exported with explicit grid styling because Pandoc's default Typst table style is borderless.
 
 ## System Diagram
 
 ```mermaid
 sequenceDiagram
     participant UI as Frontend
+    participant Mer as Mermaid (off-screen)
     participant Rust as Rust Backend
-    participant Curl as curl
-    participant Ink as mermaid.ink
-    participant Pandoc as pandoc
+    participant Pandoc as pandoc + typst
 
-    UI->>Rust: export_pdf(markdown, outputPath)
-    Rust->>Rust: Extract mermaid blocks
-    Rust->>Curl: Download diagram PNG
-    Curl->>Ink: GET /img/{base64}?type=png
-    Ink-->>Curl: PNG bytes
-    Curl-->>Rust: Save to tmp file
-    Rust->>Rust: Replace mermaid blocks with ![img](path)
-    Rust->>Pandoc: pandoc export.md -o output.pdf
+    UI->>UI: findMermaidBlocks(markdown)
+    loop each block
+        UI->>Mer: mermaid.run (light theme, 1200px host)
+        Mer-->>UI: SVG
+        UI->>UI: captureNodeImage → PNG (2×)
+    end
+    UI->>UI: applyDiagramPlaceholders → ![diagram](kaelio-diagram-<nonce>-<i>.png)
+    UI->>Rust: export_pdf(markdown, outputPath, diagrams[])
+    Rust->>Rust: write_diagrams (validate, write to temp dir)
+    Rust->>Rust: link_diagrams (name → absolute path)
+    Rust->>Pandoc: pandoc export.md -o output.pdf --pdf-engine typst --pdf-engine-opt=--root=/
     Pandoc-->>Rust: PDF file
     Rust-->>UI: output path
 ```
 
-## 1. Mermaid Pre-rendering
+## 1. Mermaid rendering (frontend)
 
-Mermaid code blocks are extracted from markdown, base64-encoded (custom encoder in `base64_encode()`), and fetched as PNG from `mermaid.ink`. Images saved to a per-export directory, `$TMPDIR/kaelio_export_<pid>_<nanos>/`. Diagram source is sent to mermaid.ink, a third-party service. On failure, falls back to plain code block.
+`renderDiagramsForExport` in `src/main.ts`:
 
-## 2. Pandoc Pipeline
+- `findMermaidBlocks` (`src/lib/mermaid-export.ts`) finds top-level ```` ```mermaid ```` fences, following CommonMark fence rules (a longer outer fence hides inner ones; an unterminated fence is ignored).
+- Each block is rendered off-screen on a white 1200px host. A source without an `%%{init` directive is prefixed with `%%{init: {'theme':'default'}}%%` so diagrams are readable on the white page whatever the app theme. The result is captured with `captureNodeImage` as PNG.
+- A 16-hex-char nonce from `crypto.getRandomValues` names the images: `kaelio-diagram-<nonce>-<index>.png`.
+- A block whose render or capture fails stays in the document as a plain code block (its fence loses the `mermaid` language). Export goes on.
+- The status bar shows "Rendering diagram i/n…".
+
+## 2. Diagram validation (Rust)
+
+`export_pdf` and `export_docx` take `diagrams: Vec<DiagramImage { name, data_base64 }>`. `write_diagrams` writes them into the per-export temp directory (`$TMPDIR/kaelio_export_<pid>_<nanos>/`) only if every one passes:
+
+| Rule | Value |
+|---|---|
+| `name` | exactly `kaelio-diagram-<16 lowercase hex>-<1–4 digits>.png` (no separators) |
+| Count | at most 200 |
+| Decoded size | at most 10 MB each |
+| Content | starts with the PNG signature `89 50 4E 47 0D 0A 1A 0A` |
+| Any failure | the call returns `Invalid diagram data` and removes files it already wrote |
+
+`link_diagrams` then rewrites each `](<name>)` to `](<absolute path>)`.
+
+## 3. Pandoc Pipeline
 
 | Setting | Value |
 |---------|-------|
-| PDF engine | typst |
+| PDF engine | typst (full path from `find_typst()`) |
+| Typst root | `/` (`--pdf-engine-opt=--root=/`): Pandoc copies images into an absolute temp media folder, and Typst otherwise resolves that path under the working directory |
 | Margins | 1 inch |
 | Font size | 11pt |
 | Color links | true |
 | Tables | 0.5pt light grid via temporary Typst header |
 | PATH | Inherits system PATH and appends Homebrew and common bin paths |
 
-## 3. External Dependencies
+Arguments are built by `pandoc_pdf_args()`; the test `pandoc_pdf_args_embed_an_absolute_path_image` runs the real tools when installed.
+
+## 4. External Dependencies
 
 | Tool | Required | Purpose |
 |------|----------|---------|
 | pandoc | Yes | Markdown → PDF/DOCX conversion |
-| typst | Yes for Markdown PDF | PDF engine used by Pandoc (`brew install typst`) |
-| curl | Yes | Download mermaid diagrams |
-| Internet | Optional | mermaid.ink API for diagrams |
+| typst | Yes for PDF | PDF engine used by Pandoc (`brew install typst`) |
 
-macOS setup:
+No network access is used. macOS setup:
 
 ```bash
 brew install pandoc
 brew install typst
 ```
 
-MacTeX is not required for Markdown PDF export.
+MacTeX is not required.
 
-## 4. UI Feedback
+## 5. UI Feedback
 
-Status bar shows progress: "Exporting PDF..." (blue) → "PDF saved: filename" (green, 3s) or "PDF failed: error" (red, 5s).
+Status bar shows progress: "Rendering diagram i/n…" → "Exporting PDF..." (blue) → "PDF saved: filename" (green, 3s) or "Export failed: error" (red).
 
 ## File Reference
 
 | File | Purpose |
 |------|---------|
-| `src-tauri/src/lib.rs` | `base64_encode()` |
-| `src-tauri/src/lib.rs` | `export_pdf()` command |
-| `src/main.ts` | Frontend `exportPDF()` UI handler |
+| `src/lib/mermaid-export.ts` | `findMermaidBlocks`, `applyDiagramPlaceholders`, `diagramName` |
+| `src/lib/export-availability.ts` | Which exports a file kind allows |
+| `src/main.ts` | `exportPdf`, `exportDocx`, `exportPng`, `renderDiagramsForExport` |
+| `src-tauri/src/lib.rs` | `export_pdf`, `export_docx`, `write_diagrams`, `link_diagrams`, `pandoc_pdf_args` |
 
 ## Cross-References
 
 | Doc | Relation |
 |-----|----------|
-| [02-preview-pipeline](02-preview-pipeline.md) | Different Mermaid rendering path |
+| [02-preview-pipeline](02-preview-pipeline.md) | Same Mermaid instance, rendered in the preview |
 | [03-file-operations](03-file-operations.md) | Shared file I/O patterns |
-| [05-ui-layout](05-ui-layout.md) | PDF button in toolbar |
+| [05-ui-layout](05-ui-layout.md) | Export menu in toolbar |

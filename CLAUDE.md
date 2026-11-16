@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Kaelio
 
-A fast, lightweight markdown editor built with Tauri 2 + Rust. Forked from [vibery-studio/mx](https://github.com/vibery-studio/mx) (GPL-3.0). Features: live split preview, Mermaid diagrams, KaTeX math, YAML frontmatter, PDF export via Pandoc, in-app PDF viewing (pdfjs: view/select/search/extract/annotate), auto-update, native Apple Silicon support, git sync (auto-commit/push on save), Obsidian-style callouts & interactive checklists, conflict resolution, version history with snapshots. Current version: 0.9.5. License: GPL-3.0.
+A fast, lightweight markdown editor built with Tauri 2 + Rust. Forked from [vibery-studio/mx](https://github.com/vibery-studio/mx) (GPL-3.0). Features: live split preview, Mermaid diagrams, KaTeX math, YAML frontmatter, PDF/DOCX/PNG export (Mermaid rendered locally), HTML viewing, auto-update, native Apple Silicon support, git sync (auto-commit/push on save), Obsidian-style callouts & interactive checklists, conflict resolution, version history with snapshots. Current version: 0.9.5. License: GPL-3.0.
 
 ## Commands
 
@@ -15,7 +15,7 @@ npm run build            # TS compile + Vite bundle → dist/
 npm run tauri build      # Full app bundle (per platform)
 ```
 
-Tests: `cd src-tauri && cargo test --lib` (Rust unit tests at the bottom of `lib.rs`). No frontend test framework or linter; `npx tsc --noEmit` is the frontend check.
+Tests: `npm test` (Node's built-in runner, `node --test`, over `src/lib/**/*.test.ts`; pure frontend logic lives in `src/lib/*.ts` with a test beside it) and `cd src-tauri && cargo test --lib` (Rust unit tests at the bottom of `lib.rs`). No linter; `npx tsc --noEmit` is the type check. Checks before a commit: `npm test`, `npx tsc --noEmit`, `cargo test --lib`, `npm run build`.
 
 Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macOS/Windows/Linux, signs, creates GitHub Release with `latest.json` for auto-updater). CI builds with `--config src-tauri/tauri.release.conf.json`, which turns on `createUpdaterArtifacts`; it stays off in `tauri.conf.json` so local builds need no signing key.
 
@@ -24,10 +24,10 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 **Tauri 2 IPC-first**: all file/system ops go through Rust commands, no direct Node.js access from frontend.
 
 ### Frontend (`src/`)
-- **Monolithic**: entire app in `src/main.ts` (~7600 lines) + `src/styles.css` + `index.html`
+- **Mostly monolithic**: app wiring in `src/main.ts` (~7200 lines) + `src/styles.css` + `index.html`; pure, tested helpers in `src/lib/` (`file-kind`, `export-availability`, `mermaid-export`, `keybindings`, `outline`, `session`, …)
 - Vanilla TypeScript, no framework (CodeMirror 6 for editor, markdown-it for preview)
 - Rendering pipeline: markdown-it → callouts → checklists → KaTeX (math) → Mermaid (diagrams) → YAML frontmatter extraction
-- PDF viewing: `.pdf` files render via `pdfjs-dist` (canvas + lazy IntersectionObserver, persisted zoom under `kaelio-pdf-zoom`) in `renderPdfPreview`; replaced the old native `<iframe>`. Adds a transparent text layer for selection + Cmd+F search, "Extract to Markdown" (`extractPdfToMarkdown`, heuristic/lossy — no tables/OCR), and highlight annotations persisted to a `<file>.kaelio-annot.json` sidecar (original PDF never mutated)
+- File kinds (`fileKind` in `src/lib/file-kind.ts`): Markdown and HTML preview; other text opens as plain text; PDF, images and SVG are `external` and go to the system default app via `open_in_default_app` (no tab; session restore skips them). There is no in-app PDF, image, CSV or JSON viewer (removed for the Markdown focus; BugText covers PDFs)
 - Git integration: state management (gitStatusMap, gitRepoInfo, autoSyncEnabled), non-blocking sync via fire-and-forget promises
 - 300ms debounce on content change before re-rendering preview
 - State: `currentFilePath`, `editor` (CM6 instance), `zoomLevel` — persisted in localStorage; session data (tabs, scroll, cursor) persisted to `~/.kaelio/session.json` via Rust with localStorage as sync backup
@@ -39,23 +39,22 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 
 ### Backend (`src-tauri/`)
 - `src/lib.rs` (~3300 lines): all Tauri commands. Sync commands run on the main thread; only the exports are async
-- File commands: `read_file`, `save_file`, `word_count`, `list_directory`, `get_home_dir`, `get_initial_file`, `delete_entry` (Trash → `~/.kaelio/trash` fallback), `copy_into_folder` (drag-to-copy into a sidebar folder), `read_binary_file` (raw bytes + MIME for the in-app image viewer: PNG/JPG/GIF/WEBP/BMP/ICO/AVIF, with zoom, and the PDF.js viewer)
-- Export (two families): **HTML group** (PNG/JPG/PDF) via frontend preview capture (`html-to-image` + `jsPDF`, full-width capture); **Markdown group** (PDF/DOCX) via Rust `export_pdf`/`export_docx`. Pandoc is **NOT bundled** — it's resolved from the system (`find_pandoc()`: Homebrew `/opt/homebrew/bin`, `/usr/local/bin`, then PATH). Markdown PDF/DOCX export requires `brew install pandoc`; Markdown PDF also requires `brew install typst`. MacTeX is not required. (Bundling pandoc as a Tauri sidecar was removed — exec'ing the build-machine path failed on end-user installs; `export_html` also removed.)
+- File commands: `read_file`, `save_file`, `word_count`, `list_directory`, `get_home_dir`, `get_initial_file`, `delete_entry` (Trash → `~/.kaelio/trash` fallback), `copy_into_folder` (drag-to-copy into a sidebar folder), `read_binary_file` (raw bytes + MIME; loads relative images in the preview), `save_pasted_image` (pasted image → `assets/` beside the note), `open_in_default_app` (allow-listed extensions only: pdf and images; canonical regular file, else refused)
+- Export: one menu, **PDF / DOCX / PNG** (`exportPdf`, `exportDocx`, `exportPng`; native menu ids `export.pdf|docx|png`). PNG captures the preview (`html-to-image`). PDF/DOCX go through Rust `export_pdf`/`export_docx` and are Markdown-only (`exportAvailability`). Mermaid blocks are rendered to PNG in the frontend (`renderDiagramsForExport`) and passed as `diagrams`; Rust validates names/size/PNG signature (`write_diagrams`) and links them (`link_diagrams`) — no network. Pandoc runs Typst with `--root=/` so absolute image paths resolve. Pandoc is **NOT bundled** — it's resolved from the system (`find_pandoc()`: Homebrew `/opt/homebrew/bin`, `/usr/local/bin`, then PATH). PDF/DOCX export requires `brew install pandoc`; PDF also requires `brew install typst`. MacTeX is not required. (Bundling pandoc as a Tauri sidecar was removed — exec'ing the build-machine path failed on end-user installs; `export_html` also removed.)
 - Git commands (git2 crate): `git_repo_info`, `git_status`, `git_diff_file`, `git_log`, `git_commit`, `git_push`, `git_pull`, `git_auto_sync`, `git_setup_sync`, `git_check_auth`, `git_init`, `git_discard_file`, `git_stage_file`, `git_file_at_commit`, `git_restore_file`, `git_conflict_info`, `git_resolve_conflict`
-- PDF annotation commands: `read_annotations`, `write_annotations` (read/write the `<pdf>.kaelio-annot.json` sidecar; original PDF is never modified)
 - Snapshot commands: `save_snapshot`, `list_snapshots`, `read_snapshot`
 - Session commands: `save_session`, `load_session` (read/write `~/.kaelio/session.json`)
 - Credential handling: SSH agent → SSH key files → system `git credential fill` (HTTPS)
 - Plugins: dialog, process, opener, updater
-- `save_file` and `git_restore_file` write through `write_atomic` (temp file + rename); other writes are still plain `fs::write`. Markdown PDF export sends Mermaid sources to mermaid.ink via `curl`
+- `save_file` and `git_restore_file` write through `write_atomic` (temp file + rename); other writes are still plain `fs::write`
 - Security: CSP is set in `tauri.conf.json` (`csp` / `devCsp`); `withGlobalTauri` is on, so anything written to `innerHTML` must pass `escapeHtml` or `sanitizeHtmlString` (inert `DOMParser` parse)
 
 ### Build/Release
 - Vite dev server on :1420, HMR on :1421
 - CI matrix: macOS universal (aarch64 + x86_64), Windows x86_64, Linux x86_64
 - Updater: signed `.tar.gz`/`.sig` artifacts, `latest.json` manifest on GitHub Releases
-- Bundle file associations: `.md`, `.markdown`, `.yaml`, `.yml`, `.txt`, plus json, csv, html, svg and images for viewing
+- Bundle file associations: `.md`, `.markdown`, `.yaml`, `.yml`, `.txt`, `.html`, `.htm`
 
 ## Docs
 
-Technical docs in `docs/` (00-08) cover architecture, editor engine, preview pipeline, file ops, PDF export, UI layout, auto-update, release pipeline, and PDF viewing.
+Technical docs in `docs/` (00-07) cover architecture, editor engine, preview pipeline, file ops, PDF export, UI layout, auto-update and release pipeline. The user guide is `docs/guide/` (`npm run guide:check`, `npm run guide:test`).

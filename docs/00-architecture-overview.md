@@ -38,13 +38,13 @@ flowchart TB
 | Editor | CodeMirror 6 | Markdown editing |
 | Preview | markdown-it + KaTeX + Mermaid | Live HTML rendering |
 | Backend | Rust | File ops, word count, PDF export |
-| PDF | Pandoc + mermaid.ink | Markdown-to-PDF pipeline |
+| PDF / DOCX | Pandoc + Typst, Mermaid rendered locally | Markdown-to-PDF/DOCX pipeline |
 | Update | tauri-plugin-updater | In-app auto-update via GitHub Releases |
 | CI/CD | GitHub Actions | Multi-platform build + release |
 
 ## 2. Process Model
 
-Tauri runs two processes: a Rust backend exposing commands via IPC, and a webview frontend on `localhost:1420` during dev. The frontend calls Rust via `invoke()`. No database, no network except optional mermaid.ink for PDF export.
+Tauri runs two processes: a Rust backend exposing commands via IPC, and a webview frontend on `localhost:1420` during dev. The frontend calls Rust via `invoke()`. No database, and no network use except the update check and Git sync.
 
 ## 3. Entry Points
 

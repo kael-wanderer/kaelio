@@ -17,15 +17,15 @@ Kaelio is not notarised by Apple. Open System Settings ▸ Privacy & Security an
 
 ### "Pandoc is required for PDF/DOCX export but was not found"
 
-Markdown PDF and DOCX exports need Pandoc. Run `brew install pandoc` in Terminal, then export again. You do not need to restart Kaelio.
+PDF and DOCX exports need Pandoc. Run `brew install pandoc` in Terminal, then export again. You do not need to restart Kaelio.
 
 ### "Typst is required for Markdown PDF export but was not found"
 
-Run `brew install typst`. Or use File ▸ **Export** ▸ **HTML** ▸ **PDF**, which needs nothing installed.
+Run `brew install typst`, then export again. If you only need a picture of the page, File ▸ **Export** ▸ **PNG…** needs nothing installed.
 
-### A diagram appears as code in my Markdown PDF
+### A diagram appears as code in my PDF
 
-Kaelio could not reach mermaid.ink to draw it, for example because you are offline. Try again when online, or use the HTML PDF export, which draws diagrams locally.
+The diagram has a mistake Mermaid cannot draw. The preview shows the same error; fix the diagram there and export again. The rest of the document exports normally.
 
 ### "No GitHub credentials found" or "Authentication failed"
 
@@ -52,7 +52,7 @@ In the **Save changes to** question, **Cancel** closes without saving. Check **F
 
 ### The preview searched the wrong thing with ⌘F
 
-<kbd>⌘</kbd><kbd>F</kbd> searches the editor when the editor is visible, and the preview only in **Reading View** (<kbd>⌘</kbd><kbd>E</kbd>) or for a PDF.
+<kbd>⌘</kbd><kbd>F</kbd> searches the editor when the editor is visible, and the preview only in **Reading View** (<kbd>⌘</kbd><kbd>E</kbd>).
 
 ### Images I pasted make my file huge
 

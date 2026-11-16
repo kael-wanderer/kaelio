@@ -28,6 +28,8 @@ Kaelio is a fork of [mx](https://github.com/vibery-studio/mx) (GPL-3.0), continu
 | **Custom themes** | Built-in Everforest and Nord themes plus your own custom theme — beyond mx's stock palette. |
 | **Custom fonts & sizes** | Pick your reading font and size, and zoom each split pane independently. |
 | **HTML rendering** | Open and render `.html` files inline in the preview pane. |
+| **Focused on Markdown** | PDFs and images open in your default app; JSON, CSV and other text open as plain text. |
+| **Local diagram export** | Mermaid diagrams in PDF/DOCX export are drawn on your machine — nothing is sent online. |
 
 Plus the full mx toolkit: Mermaid & KaTeX, Git sync, callouts, command palette, zoom, and PDF/DOCX export.
 
@@ -36,11 +38,11 @@ Plus the full mx toolkit: Mermaid & KaTeX, Git sync, callouts, command palette, 
 - **Editor** — live split preview, multiple tabs, code folding, formatting toolbar, search & replace (`Cmd+F`), line numbers, soft wrap.
 - **Markdown** — Mermaid (click-to-zoom), KaTeX (`$…$`, `$$…$$`), YAML frontmatter, footnotes, wikilinks, anchor navigation, copy-heading-link.
 - **Files** — sidebar browser, context menu, file search (`Cmd+P`), content search (`Cmd+Shift+F`), command palette, breadcrumbs, recent files. Drag files or folders from Finder onto a sidebar folder to copy them in; drag onto the editor to open.
-- **Image viewing** — open PNG, JPG, GIF, WEBP, BMP, ICO, and AVIF in the preview pane with zoom in/out.
+- **Other files** — HTML renders in the preview; JSON, CSV, YAML and other text open as plain text; PDFs, images and SVG open in your default app.
 - **Git sync** — one-click setup, auto commit+push on save, auto-pull on open, conflict resolution, per-file history & snapshots, status dots.
 - **Obsidian-style** — callouts (`> [!tip]`), interactive checklists, tag pills, wikilinks.
 - **Writing** — auto-save, crash recovery, 60s version snapshots, external-change detection, image paste & lightbox.
-- **Export** — copy as formatted HTML / raw / plain; image & PDF from the preview (PNG/JPG/PDF); Markdown to PDF/DOCX via Pandoc + Typst.
+- **Export** — one menu: PDF and DOCX via Pandoc (+ Typst for PDF), PNG from the preview; copy as formatted HTML / raw / plain.
 - **Platform** — multiple windows, real-time word/char count, weekly auto-update, file associations, macOS / Windows / Linux.
 
 ## Download
@@ -76,9 +78,9 @@ npm run tauri dev      # dev server + hot reload
 npm run tauri build    # production bundle
 ```
 
-### Markdown PDF / DOCX export — requirements
+### PDF / DOCX export — requirements
 
-The **Markdown → PDF / DOCX** export uses [Pandoc](https://pandoc.org). It is not
+The **PDF** and **DOCX** exports use [Pandoc](https://pandoc.org). It is not
 bundled, so install it (and a PDF engine) once:
 
 ```bash
@@ -86,15 +88,15 @@ brew install pandoc   # required for PDF and DOCX
 brew install typst    # PDF engine (lightweight, ~25 MB) — recommended
 ```
 
-Kaelio renders Markdown PDF with Typst, so `pandoc` + `typst` is all you need.
+Kaelio renders PDF with Typst, so `pandoc` + `typst` is all you need.
 A full TeX install (`brew install --cask mactex-no-gui`, ~6.9 GB) is not
 required.
 
-The **HTML → PNG / JPG / PDF** export captures the live preview and needs no extra install.
+The **PNG** export captures the live preview and needs no extra install. PDF and DOCX are for
+Markdown (and plain text); for an HTML file only PNG is available.
 
-> **Privacy:** Markdown → PDF renders Mermaid diagrams by sending each diagram's source to the public
-> [mermaid.ink](https://mermaid.ink) service (through `curl`). Nothing else leaves your machine. Use the
-> HTML → PDF export for documents whose diagrams must stay local.
+> **Privacy:** export makes no network request. Mermaid diagrams are rendered to PNG locally,
+> with the same Mermaid the preview uses, and handed to Pandoc as images.
 
 ## License
 
