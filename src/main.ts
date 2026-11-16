@@ -1,11 +1,11 @@
 /// <reference types="vite/client" />
 
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, ViewUpdate } from "@codemirror/view";
-import { EditorState, Compartment } from "@codemirror/state";
+import { EditorState, Compartment, Prec } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { defaultKeymap, indentWithTab, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap, indentWithTab, history, historyKeymap, isolateHistory } from "@codemirror/commands";
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap, syntaxTree } from "@codemirror/language";
 import { closeBrackets } from "@codemirror/autocomplete";
 import { search, searchKeymap } from "@codemirror/search";
@@ -28,6 +28,7 @@ import { exportAvailability } from "./lib/export-availability.ts";
 import { findMermaidBlocks, applyDiagramPlaceholders, diagramName } from "./lib/mermaid-export.ts";
 import { mergeHistory } from "./lib/history.ts";
 import { decidePaste } from "./lib/smart-paste.ts";
+import { tabInTable } from "./lib/table.ts";
 import { resolveLinkedPath } from "./lib/link-path.ts";
 import { fileKind } from "./lib/file-kind.ts";
 import { resolveLocalImagePath } from "./lib/image-src.ts";
@@ -4465,6 +4466,7 @@ function createEditorExtensions() {
     ]),
     keymapCompartment.of(buildKeymap()),
     smartPasteExtension(),
+    tableKeymapExtension(),
     EditorView.updateListener.of((update: ViewUpdate) => {
       if (update.docChanged || update.selectionSet) {
         if (update.docChanged) onContentChange(update.view);
@@ -4506,6 +4508,7 @@ function createSubEditorExtensions() {
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]),
     buildKeymap(),
     smartPasteExtension(),
+    tableKeymapExtension(),
     EditorView.updateListener.of((update: ViewUpdate) => {
       if (!update.docChanged) return;
       const tab = subTabs.find(t => t.id === subActiveTabId);
@@ -5937,6 +5940,68 @@ function readBlobAsDataUrl(blob: Blob): Promise<string> {
     reader.onerror = () => reject(new Error("Could not read image"));
     reader.readAsDataURL(blob);
   });
+}
+
+// --- Table editing (spec A2) ---
+
+const TABLE_FULL_DOC_LIMIT = 20000;
+
+/** Tab / Shift+Tab inside a Markdown pipe table: re-align it and select the
+ *  next / previous cell. Returns false outside a table so normal Tab runs. */
+function tableTab(view: EditorView, dir: 1 | -1): boolean {
+  const { state } = view;
+  if (state.selection.ranges.length !== 1) return false;
+  const sel = state.selection.main;
+  const line = state.doc.lineAt(sel.head);
+  if (state.doc.lineAt(sel.anchor).number !== line.number) return false;
+  if (cursorInFencedCode(view)) return false;
+  // Lines handed to tabInTable, and the 0-based doc line of lines[0]
+  let first = 0;
+  let lines: string[];
+  if (state.doc.lines <= TABLE_FULL_DOC_LIMIT) {
+    lines = state.doc.toString().split("\n");
+  } else {
+    // Large document: only the block of non-blank lines around the cursor
+    let a = line.number;
+    while (a > 1 && state.doc.line(a - 1).text.trim() !== "") a--;
+    let b = line.number;
+    while (b < state.doc.lines && state.doc.line(b + 1).text.trim() !== "") b++;
+    lines = [];
+    for (let n = a; n <= b; n++) lines.push(state.doc.line(n).text);
+    first = a - 1;
+  }
+  const r = tabInTable(lines, line.number - 1 - first, sel.head - line.from, dir);
+  if (!r) return false;
+  const from = state.doc.line(first + r.start + 1).from;
+  const to = state.doc.line(first + r.end + 1).to;
+  const insert = r.newLines.join("\n");
+  // Selection offset inside the inserted text
+  let lineStart = from;
+  for (let k = 0; k < r.selLine - r.start; k++) lineStart += r.newLines[k].length + 1;
+  view.dispatch({
+    changes: { from, to, insert },
+    selection: { anchor: lineStart + r.selFrom, head: lineStart + r.selTo },
+    scrollIntoView: true,
+    userEvent: "table.tab",
+    // One Tab step is one undo step, never merged with typing around it
+    annotations: isolateHistory.of("full"),
+  });
+  return true;
+}
+
+function cursorInFencedCode(view: EditorView): boolean {
+  const pos = view.state.selection.main.head;
+  for (let node: { name: string; parent: any } | null = syntaxTree(view.state).resolveInner(pos, -1); node; node = node.parent) {
+    if (node.name === "FencedCode" || node.name === "CodeBlock") return true;
+  }
+  return false;
+}
+
+function tableKeymapExtension() {
+  return Prec.high(keymap.of([
+    { key: "Tab", run: (view) => tableTab(view, 1) },
+    { key: "Shift-Tab", run: (view) => tableTab(view, -1) },
+  ]));
 }
 
 // --- Smart paste (spec A1) ---

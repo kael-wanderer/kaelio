@@ -83,6 +83,17 @@ Values under `tags`, `tag`, `categories` or `keywords` appear as pills. Click **
 - Paste an image from the clipboard straight into the editor to add it to the document. Kaelio saves the picture in an `assets` folder beside the note (for example `assets/pasted-20261116-073501.png`) and inserts a relative link to it. PNG, JPEG, GIF and WebP images up to 20 MB are accepted, and an existing file is never overwritten. Save a new note once before pasting an image into it.
 - For pictures saved as files, keep them in your folder and link them with the usual Markdown image syntax and a relative path.
 
+### Editing tables
+
+With the cursor on a line of a pipe table (a header row followed by a `|---|` row), <kbd>Tab</kbd> and <kbd>⇧</kbd><kbd>Tab</kbd> move between cells:
+
+- <kbd>Tab</kbd> selects the next cell's text; in the last cell of the last row it adds an empty row.
+- <kbd>⇧</kbd><kbd>Tab</kbd> selects the previous cell.
+- Each press lines the columns up and rebuilds the `---` row, keeping alignment colons (`:---`, `:---:`, `---:`).
+- `\|` and a pipe inside `` `code` `` stay part of the cell.
+
+One <kbd>⌘</kbd><kbd>Z</kbd> undoes one press. Outside a table, and inside a code block, <kbd>Tab</kbd> indents as usual. Column widths are counted in characters, so wide characters such as Chinese or emoji can look slightly off.
+
 ### Line breaks
 
 A single new line in your text is a line break in the preview. You do not need two spaces at the end of a line.
