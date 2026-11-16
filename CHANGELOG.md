@@ -31,6 +31,7 @@
 
 ### Fixes
 
+- **Developer notes match the app.** CLAUDE.md now says the split view is restored from the session and lists the current shortcuts (`Cmd+P` file search, `Alt+Cmd+P` preview, `Shift+Cmd+F` search in files, `Shift+Cmd+O` outline).
 - **A pasted image's link no longer lands in another tab.** If you switch tabs while an image is being saved, the file is kept in `assets/` and the status bar says the link was not inserted.
 - **Images paste into Markdown files only.** Pasting an image into an HTML, YAML or text file no longer saves it to `assets/` or inserts a Markdown link; the status bar says why.
 - **Pasting a URL over a selection makes a valid link.** Brackets in the selected text are escaped and a URL with parentheses is wrapped in `<…>`; a selection spanning several lines pastes the URL as plain text.
