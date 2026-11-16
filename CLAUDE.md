@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Kaelio
 
-A fast, lightweight markdown editor built with Tauri 2 + Rust. Forked from [vibery-studio/mx](https://github.com/vibery-studio/mx) (GPL-3.0). Features: live split preview, Mermaid diagrams, KaTeX math, YAML frontmatter, PDF/DOCX/PNG export (Mermaid rendered locally), HTML viewing, auto-update, native Apple Silicon support, git sync (auto-commit/push on save), Obsidian-style callouts & interactive checklists, conflict resolution, version history with snapshots. Current version: 0.9.6. License: GPL-3.0.
+A fast, lightweight markdown editor built with Tauri 2 + Rust. Forked from [vibery-studio/mx](https://github.com/vibery-studio/mx) (GPL-3.0). Features: live split preview, Mermaid diagrams, KaTeX math, YAML frontmatter, PDF/DOCX/PNG export (Mermaid rendered locally), HTML viewing, auto-update, native Apple Silicon support, git sync (auto-commit/push on save), Obsidian-style callouts & interactive checklists, conflict resolution, version history with snapshots. Current version: 0.9.7 (build 375). License: GPL-3.0.
 
 ## Commands
 
@@ -17,7 +17,7 @@ npm run tauri build      # Full app bundle (per platform)
 
 Tests: `npm test` (Node's built-in runner, `node --test`, over `src/lib/**/*.test.ts`; pure frontend logic lives in `src/lib/*.ts` with a test beside it) and `cd src-tauri && cargo test --lib` (Rust unit tests at the bottom of `lib.rs`). No linter; `npx tsc --noEmit` is the type check. Checks before a commit: `npm test`, `npx tsc --noEmit`, `cargo test --lib`, `npm run build`.
 
-Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macOS/Windows/Linux, signs, creates GitHub Release with `latest.json` for auto-updater). CI builds with `--config src-tauri/tauri.release.conf.json`, which turns on `createUpdaterArtifacts`; it stays off in `tauri.conf.json` so local builds need no signing key.
+Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macOS/Windows/Linux, signs, creates GitHub Release with `latest.json` for auto-updater). Version lives in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`; the build number is `bundle.macOS.bundleVersion` in `tauri.conf.json` (macOS `CFBundleVersion`, shown as "0.9.7 (375)" in About) and goes up on every build, even when the version stays the same. CI builds with `--config src-tauri/tauri.release.conf.json`, which turns on `createUpdaterArtifacts`; it stays off in `tauri.conf.json` so local builds need no signing key.
 
 ## Architecture
 

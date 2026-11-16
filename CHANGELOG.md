@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.7 (build 375)
+
+First build with a build number: macOS About now shows "Version 0.9.7 (375)". The build number goes up with every build, even when the version stays the same. No feature changes since 0.9.6; this build carries everything listed under 0.9.6 to Mac users installing from the DMG.
+
 ## 0.9.6
 
 Highlights: updates now ask before installing, Help ▸ Kaelio Guide, math that spans lines, one-line tag lists, Markdown-only scope with a single export menu, smart paste, table editing, and security fixes for the preview.
