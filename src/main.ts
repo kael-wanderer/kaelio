@@ -16,10 +16,6 @@ import panzoom from "panzoom";
 import katex from "katex";
 import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
-import * as pdfjsLib from "pdfjs-dist";
-// Vite bundles the worker as a local asset so PDF viewing works offline.
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
-import "pdfjs-dist/web/pdf_viewer.css";
 import "katex/dist/katex.min.css";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -34,7 +30,6 @@ import { extractHeadings, activeHeadingIndex } from "./lib/outline.ts";
 import { parseSplitSession, type SplitSession } from "./lib/session.ts";
 import { parseReadingWidth, readingWidthCss, nextReadingWidth, type ReadingWidth } from "./lib/reading-width.ts";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 // One-time migration of legacy "mx-*" localStorage keys to "kaelio-*".
 // Safe to ship indefinitely — does nothing once `kaelio-migrated` is set.
@@ -158,7 +153,6 @@ const JSON_EXTENSIONS = new Set(["json"]);
 const CSV_EXTENSIONS = new Set(["csv"]);
 const SVG_EXTENSIONS = new Set(["svg"]);
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif"]);
-const PDF_EXTENSIONS = new Set(["pdf"]);
 let currentFont: string = localStorage.getItem("kaelio-font") || "System";
 let currentTextSize = Number(localStorage.getItem("kaelio-text-size")) || 16;
 let currentExplorerTextSize = Number(localStorage.getItem("kaelio-explorer-text-size")) || 12;
@@ -1187,12 +1181,8 @@ function isImagePath(path: string | null): boolean {
   return IMAGE_EXTENSIONS.has(getPathExtension(path));
 }
 
-function isPdfPath(path: string | null): boolean {
-  return PDF_EXTENSIONS.has(getPathExtension(path));
-}
-
 function isPreviewOnlyPath(path: string | null): boolean {
-  return isImagePath(path) || isSvgPath(path) || isPdfPath(path);
+  return isImagePath(path) || isSvgPath(path);
 }
 
 function updatePreviewOrRevealPreviewOnly(content: string) {
@@ -1209,192 +1199,9 @@ const IMAGE_PREVIEW_MIN_ZOOM = 0.25;
 const IMAGE_PREVIEW_MAX_ZOOM = 5;
 const IMAGE_PREVIEW_ZOOM_STEP = 0.25;
 const imagePreviewZooms = new Map<string, number>();
-const PDF_ZOOM_MIN = 0.25;
-const PDF_ZOOM_MAX = 4;
-const PDF_ZOOM_STEP = 0.2;
-const PDF_ZOOM_KEY = "kaelio-pdf-zoom";
-const pdfPageText = new Map<number, string>();
-interface PdfAnnotation {
-  page: number;
-  type: "highlight" | "note";
-  rectPct: { x: number; y: number; w: number; h: number };
-  color?: string;
-  text?: string;
-}
-let pdfAnnotations: PdfAnnotation[] = [];
-let pdfAnnotationsDirty = false;
-let pdfHighlightMode = false;
-let pdfSearchMatches: HTMLElement[] = [];
-let pdfSearchIndex = -1;
-let pdfSearchToken = 0;
-let renderCurrentPdfPagesForSearch: (() => Promise<void>) | null = null;
-let currentPdfDoc: any = null;
 
 function clampImagePreviewZoom(zoom: number): number {
   return Math.min(IMAGE_PREVIEW_MAX_ZOOM, Math.max(IMAGE_PREVIEW_MIN_ZOOM, zoom));
-}
-
-function loadPdfZoom(): number {
-  const raw = Number(localStorage.getItem(PDF_ZOOM_KEY));
-  if (!Number.isFinite(raw) || raw <= 0) return 1;
-  return Math.min(PDF_ZOOM_MAX, Math.max(PDF_ZOOM_MIN, raw));
-}
-
-function savePdfZoom(zoom: number) {
-  localStorage.setItem(PDF_ZOOM_KEY, String(zoom));
-}
-
-function openUntitledMarkdownTab(content: string, title = "Extracted PDF.md") {
-  saveActiveTabState();
-  const tab = createTab(null, content);
-  tab.title = title;
-  tab.isModified = true;
-  tabs.push(tab);
-  activeTabId = tab.id;
-  currentFilePath = null;
-  editor.setState(tab.editorState);
-  const filename = document.getElementById("filename");
-  if (filename) filename.textContent = title;
-  sessionData.lastFile = null;
-  renderTabs();
-  persistOpenTabs();
-  updateBreadcrumb();
-  startFileWatch(null);
-  setModified(true);
-  updatePreview(content);
-  updateWordCount(content);
-  updateCursorPosition(editor);
-}
-
-// Heuristic, lossy: paragraphs from line grouping, blank lines between blocks.
-// No tables, columns, or OCR.
-async function extractPdfToMarkdown(doc: any): Promise<string> {
-  const out: string[] = [];
-  for (let n = 1; n <= doc.numPages; n++) {
-    const page = await doc.getPage(n);
-    const content = await page.getTextContent();
-    let line = "";
-    let lastY: number | null = null;
-    const lines: string[] = [];
-
-    for (const item of content.items as any[]) {
-      if (!("str" in item)) continue;
-      const y = item.transform[5];
-      if (lastY !== null && Math.abs(y - lastY) > 2) {
-        if (line.trim()) lines.push(line.trim());
-        line = "";
-      }
-      line += item.str + (item.hasEOL ? "" : " ");
-      lastY = y;
-    }
-    if (line.trim()) lines.push(line.trim());
-    out.push(lines.join("\n"));
-    out.push("");
-  }
-  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
-}
-
-async function extractCurrentPdfToMarkdown() {
-  if (!currentFilePath || !isPdfPath(currentFilePath)) {
-    flashStatus("Open a PDF first", "var(--error)", 3000);
-    return;
-  }
-  if (!currentPdfDoc) {
-    await updatePreview(editor.state.doc.toString());
-  }
-  if (!currentPdfDoc) {
-    flashStatus("Could not load PDF text for extraction", "var(--error)", 3000);
-    return;
-  }
-
-  const sourcePath = currentFilePath;
-  try {
-    flashStatus("Extracting PDF text...", "var(--accent)", 3000);
-    const markdown = await extractPdfToMarkdown(currentPdfDoc);
-    const sourceName = sourcePath.split("/").pop()?.replace(/\.pdf$/i, "") || "PDF";
-    openUntitledMarkdownTab(markdown, `${sourceName}.md`);
-    flashStatus(markdown.trim() ? "Extracted PDF text to Markdown" : "No selectable text found in PDF", "var(--success)", 4000);
-  } catch (err) {
-    flashStatus(`PDF extraction failed: ${err}`, "var(--error)", 5000);
-  }
-}
-
-function renderPdfAnnotationLayer(pageNumber: number, layer: HTMLElement) {
-  layer.replaceChildren();
-  const pageAnnotations = pdfAnnotations.filter((annotation) => annotation.page === pageNumber);
-  for (const annotation of pageAnnotations) {
-    const marker = document.createElement("div");
-    marker.className = annotation.type === "note" ? "pdf-annot-note" : "pdf-annot-highlight";
-    marker.style.left = `${annotation.rectPct.x}%`;
-    marker.style.top = `${annotation.rectPct.y}%`;
-    marker.style.width = `${annotation.rectPct.w}%`;
-    marker.style.height = `${annotation.rectPct.h}%`;
-    if (annotation.color && annotation.type === "highlight") marker.style.background = annotation.color;
-    if (annotation.text) marker.title = annotation.text;
-    layer.appendChild(marker);
-  }
-}
-
-async function savePdfAnnotations() {
-  if (!currentFilePath || !isPdfPath(currentFilePath) || !pdfAnnotationsDirty) return;
-  await invoke("write_annotations", {
-    pdfPath: currentFilePath,
-    json: JSON.stringify(pdfAnnotations, null, 2),
-  });
-  pdfAnnotationsDirty = false;
-  flashStatus("Annotations saved", "var(--success)", 2500);
-}
-
-function selectionIntersectsPage(rect: DOMRect, pageRect: DOMRect): boolean {
-  return rect.right > pageRect.left && rect.left < pageRect.right && rect.bottom > pageRect.top && rect.top < pageRect.bottom;
-}
-
-function addPdfHighlightFromSelection(container: HTMLElement) {
-  if (!pdfHighlightMode) return;
-  const selection = window.getSelection();
-  if (!selection || selection.isCollapsed || !selection.toString().trim() || selection.rangeCount === 0) return;
-
-  const range = selection.getRangeAt(0);
-  const selectionRects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
-  if (!selectionRects.length) return;
-
-  const pageInners = Array.from(container.querySelectorAll(".pdf-page-inner")) as HTMLElement[];
-  let added = false;
-  for (const pageInner of pageInners) {
-    const page = Number(pageInner.closest<HTMLElement>(".pdf-page")?.dataset.page);
-    if (!page) continue;
-    const pageRect = pageInner.getBoundingClientRect();
-    const pageRects = selectionRects.filter((rect) => selectionIntersectsPage(rect, pageRect));
-    if (!pageRects.length) continue;
-
-    const left = Math.max(0, Math.min(...pageRects.map((rect) => rect.left)) - pageRect.left);
-    const top = Math.max(0, Math.min(...pageRects.map((rect) => rect.top)) - pageRect.top);
-    const right = Math.min(pageRect.width, Math.max(...pageRects.map((rect) => rect.right)) - pageRect.left);
-    const bottom = Math.min(pageRect.height, Math.max(...pageRects.map((rect) => rect.bottom)) - pageRect.top);
-    if (right <= left || bottom <= top) continue;
-
-    const annotation: PdfAnnotation = {
-      page,
-      type: "highlight",
-      rectPct: {
-        x: (left / pageRect.width) * 100,
-        y: (top / pageRect.height) * 100,
-        w: ((right - left) / pageRect.width) * 100,
-        h: ((bottom - top) / pageRect.height) * 100,
-      },
-      color: "rgba(249,226,175,0.4)",
-    };
-    pdfAnnotations.push(annotation);
-    const layer = pageInner.querySelector<HTMLElement>(".pdf-annot-layer");
-    if (layer) renderPdfAnnotationLayer(page, layer);
-    added = true;
-  }
-
-  if (added) {
-    pdfAnnotationsDirty = true;
-    selection.removeAllRanges();
-    flashStatus("Highlight added", "var(--accent)", 1800);
-  }
 }
 
 function applyImagePreviewZoom(
@@ -1495,256 +1302,6 @@ async function renderImagePreview(previewPane: HTMLElement, path: string) {
   }
 }
 
-async function renderPdfPreview(previewPane: HTMLElement, path: string) {
-  previewPane.innerHTML = "";
-  pdfPageText.clear();
-  clearPdfSearch();
-  renderCurrentPdfPagesForSearch = null;
-  currentPdfDoc = null;
-  pdfAnnotations = [];
-  pdfAnnotationsDirty = false;
-  pdfHighlightMode = false;
-
-  const wrap = document.createElement("div");
-  wrap.className = "asset-preview pdf-preview-wrap";
-
-  const toolbar = document.createElement("div");
-  toolbar.className = "asset-preview-toolbar";
-  const zoomOut = document.createElement("button");
-  zoomOut.type = "button";
-  zoomOut.className = "asset-preview-tool";
-  zoomOut.textContent = "-";
-  zoomOut.title = "Zoom out";
-  zoomOut.setAttribute("aria-label", "Zoom out");
-  const zoomLabel = document.createElement("span");
-  zoomLabel.className = "asset-preview-zoom-label";
-  const zoomIn = document.createElement("button");
-  zoomIn.type = "button";
-  zoomIn.className = "asset-preview-tool";
-  zoomIn.textContent = "+";
-  zoomIn.title = "Zoom in";
-  zoomIn.setAttribute("aria-label", "Zoom in");
-  const highlightToggle = document.createElement("button");
-  highlightToggle.type = "button";
-  highlightToggle.className = "asset-preview-tool";
-  highlightToggle.textContent = "H";
-  highlightToggle.title = "Highlight selected PDF text";
-  highlightToggle.setAttribute("aria-label", "Highlight selected PDF text");
-  const saveAnnots = document.createElement("button");
-  saveAnnots.type = "button";
-  saveAnnots.className = "asset-preview-tool pdf-annotation-save";
-  saveAnnots.textContent = "Save";
-  saveAnnots.title = "Save annotations";
-  saveAnnots.setAttribute("aria-label", "Save annotations");
-  const pageLabel = document.createElement("span");
-  pageLabel.className = "pdf-page-label";
-  toolbar.append(zoomOut, zoomLabel, zoomIn, highlightToggle, saveAnnots, pageLabel);
-
-  const stage = document.createElement("div");
-  stage.className = "asset-preview-stage pdf-stage";
-  const loading = document.createElement("div");
-  loading.className = "asset-preview-message";
-  loading.textContent = "Loading PDF...";
-  stage.appendChild(loading);
-  wrap.append(toolbar, stage);
-  previewPane.appendChild(wrap);
-
-  let zoom = loadPdfZoom();
-  zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
-
-  try {
-    const file = await invoke<BinaryFileInfo>("read_binary_file", { path });
-    if (currentFilePath !== path) return;
-
-    const bytes = Uint8Array.from(atob(file.data_base64), (c) => c.charCodeAt(0));
-    const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
-    if (currentFilePath !== path) return;
-    currentPdfDoc = doc;
-    try {
-      const rawAnnotations = await invoke<string>("read_annotations", { pdfPath: path });
-      if (currentFilePath !== path) return;
-      const parsedAnnotations = JSON.parse(rawAnnotations);
-      pdfAnnotations = Array.isArray(parsedAnnotations) ? parsedAnnotations as PdfAnnotation[] : [];
-      pdfAnnotationsDirty = false;
-    } catch (err) {
-      console.warn("Could not load PDF annotations", err);
-      pdfAnnotations = [];
-      pdfAnnotationsDirty = false;
-    }
-
-    const pageCount = doc.numPages;
-    pageLabel.textContent = `1 / ${pageCount}`;
-
-    type PageSlot = { el: HTMLDivElement; rendered: boolean; rendering: boolean; renderPromise: Promise<void> | null };
-    const slots: PageSlot[] = [];
-    const container = document.createElement("div");
-    container.className = "pdf-pages";
-    stage.replaceChildren(container);
-
-    for (let n = 1; n <= pageCount; n++) {
-      const el = document.createElement("div");
-      el.className = "pdf-page";
-      el.dataset.page = String(n);
-      container.appendChild(el);
-      slots.push({ el, rendered: false, rendering: false, renderPromise: null });
-    }
-
-    async function sizePlaceholders() {
-      for (let n = 1; n <= pageCount; n++) {
-        const page = await doc.getPage(n);
-        if (currentFilePath !== path) return;
-        const viewport = page.getViewport({ scale: zoom });
-        const slot = slots[n - 1];
-        slot.el.style.width = `${Math.floor(viewport.width)}px`;
-        slot.el.style.height = `${Math.floor(viewport.height)}px`;
-      }
-    }
-
-    async function renderPage(n: number) {
-      if (n < 1 || n > pageCount) return;
-      const slot = slots[n - 1];
-      if (slot.rendered) return;
-      if (slot.renderPromise) {
-        await slot.renderPromise;
-        return;
-      }
-      slot.rendering = true;
-
-      slot.renderPromise = (async () => {
-        const page = await doc.getPage(n);
-        if (currentFilePath !== path) return;
-        const viewport = page.getViewport({ scale: zoom });
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-        canvas.style.width = `${canvas.width}px`;
-        canvas.style.height = `${canvas.height}px`;
-        canvas.className = "pdf-canvas";
-        const context = canvas.getContext("2d");
-        if (!context) throw new Error("Could not create PDF canvas context");
-        await page.render({ canvasContext: context, viewport }).promise;
-        if (currentFilePath !== path) return;
-
-        const textLayerDiv = document.createElement("div");
-        textLayerDiv.className = "textLayer pdf-text-layer";
-        textLayerDiv.style.width = `${canvas.width}px`;
-        textLayerDiv.style.height = `${canvas.height}px`;
-
-        const textContent = await page.getTextContent();
-        if (currentFilePath !== path) return;
-        const textLayer = new pdfjsLib.TextLayer({
-          textContentSource: textContent,
-          container: textLayerDiv,
-          viewport,
-        });
-        await textLayer.render();
-        if (currentFilePath !== path) return;
-
-        pdfPageText.set(n, textContent.items.map((item: any) => ("str" in item ? item.str : "")).join(" "));
-
-        const pageInner = document.createElement("div");
-        pageInner.className = "pdf-page-inner";
-        const annotLayer = document.createElement("div");
-        annotLayer.className = "pdf-annot-layer";
-        annotLayer.style.width = `${canvas.width}px`;
-        annotLayer.style.height = `${canvas.height}px`;
-        renderPdfAnnotationLayer(n, annotLayer);
-        pageInner.append(canvas, textLayerDiv, annotLayer);
-        slot.el.replaceChildren(pageInner);
-        slot.rendered = true;
-      })();
-
-      try {
-        await slot.renderPromise;
-      } finally {
-        slot.rendering = false;
-        slot.renderPromise = null;
-      }
-    }
-
-    async function renderAllPagesForSearch() {
-      await Promise.all(slots.map((_slot, index) => renderPage(index + 1)));
-    }
-    renderCurrentPdfPagesForSearch = renderAllPagesForSearch;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          const page = Number((entry.target as HTMLElement).dataset.page);
-          void renderPage(page);
-        }
-      },
-      { root: stage, rootMargin: "400px 0px" },
-    );
-    slots.forEach((slot) => observer.observe(slot.el));
-
-    stage.addEventListener("scroll", () => {
-      const mid = stage.scrollTop + stage.clientHeight / 2;
-      let current = 1;
-      for (let n = 1; n <= pageCount; n++) {
-        if (slots[n - 1].el.offsetTop <= mid) current = n;
-      }
-      pageLabel.textContent = `${current} / ${pageCount}`;
-    });
-
-    async function applyZoom(next: number) {
-      zoom = Math.min(PDF_ZOOM_MAX, Math.max(PDF_ZOOM_MIN, Number(next.toFixed(2))));
-      savePdfZoom(zoom);
-      zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
-      slots.forEach((slot) => {
-        slot.rendered = false;
-        slot.renderPromise = null;
-        slot.el.replaceChildren();
-      });
-      await sizePlaceholders();
-
-      const stageRect = stage.getBoundingClientRect();
-      slots.forEach((slot) => {
-        const rect = slot.el.getBoundingClientRect();
-        if (rect.bottom >= stageRect.top - 400 && rect.top <= stageRect.bottom + 400) {
-          void renderPage(Number(slot.el.dataset.page));
-        }
-      });
-    }
-
-    zoomOut.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      void applyZoom(zoom - PDF_ZOOM_STEP);
-    });
-    zoomIn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      void applyZoom(zoom + PDF_ZOOM_STEP);
-    });
-    highlightToggle.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      pdfHighlightMode = !pdfHighlightMode;
-      highlightToggle.classList.toggle("active", pdfHighlightMode);
-      flashStatus(pdfHighlightMode ? "PDF highlight mode on" : "PDF highlight mode off", "var(--accent)", 1800);
-    });
-    saveAnnots.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      void savePdfAnnotations();
-    });
-    stage.addEventListener("mouseup", () => addPdfHighlightFromSelection(container));
-
-    await sizePlaceholders();
-    void renderPage(1);
-    void renderPage(2);
-  } catch (err) {
-    if (currentFilePath !== path) return;
-    loading.classList.add("error");
-    const msg = String(err);
-    loading.textContent = /password|encrypt/i.test(msg)
-      ? "Password-protected PDFs are not supported yet."
-      : `Could not load PDF: ${msg}`;
-  }
-}
-
 function renderJsonPreview(previewPane: HTMLElement, content: string) {
   try {
     const parsed = JSON.parse(content);
@@ -1812,23 +1369,8 @@ async function updatePreview(content: string) {
   const previewWrapper = $("#preview-pane-wrapper");
   if (!previewPane || (previewWrapper && previewWrapper.style.display === "none")) return;
 
-  if (!currentFilePath || !isPdfPath(currentFilePath)) {
-    pdfPageText.clear();
-    clearPdfSearch();
-    renderCurrentPdfPagesForSearch = null;
-    currentPdfDoc = null;
-    pdfAnnotations = [];
-    pdfAnnotationsDirty = false;
-    pdfHighlightMode = false;
-  }
-
   if (currentFilePath && (isImagePath(currentFilePath) || isSvgPath(currentFilePath))) {
     await renderImagePreview(previewPane, currentFilePath);
-    return;
-  }
-
-  if (currentFilePath && isPdfPath(currentFilePath)) {
-    await renderPdfPreview(previewPane, currentFilePath);
     return;
   }
 
@@ -2603,7 +2145,7 @@ function setFilename(path: string | null) {
 async function saveFile() {
   const content = editor.state.doc.toString();
   if (currentFilePath && isPreviewOnlyPath(currentFilePath)) {
-    flashStatus("Preview-only file. Images, SVG, and PDF are not editable in Kaelio.", "var(--warning)", 4000);
+    flashStatus("Preview-only file. Images and SVG are not editable in Kaelio.", "var(--warning)", 4000);
     return;
   }
 
@@ -2694,14 +2236,6 @@ async function openFile(path: string, skipScrollRestore = false) {
     switchToTab(existingTab.id);
     return;
   }
-  if (currentFilePath && isPdfPath(currentFilePath) && pdfAnnotationsDirty) {
-    try {
-      await savePdfAnnotations();
-    } catch (err) {
-      flashStatus(`Annotation save failed: ${err}`, "var(--error)", 5000);
-    }
-  }
-
   if (isPreviewOnlyPath(path)) {
     saveScrollPosition();
     saveActiveTabState();
@@ -2768,14 +2302,6 @@ async function openFile(path: string, skipScrollRestore = false) {
 // --- New file ---
 
 async function newFile() {
-  if (currentFilePath && isPdfPath(currentFilePath) && pdfAnnotationsDirty) {
-    try {
-      await savePdfAnnotations();
-    } catch (err) {
-      flashStatus(`Annotation save failed: ${err}`, "var(--error)", 5000);
-    }
-  }
-
   if (currentFolderPath) {
     // Create in current folder
     let name = "untitled.md";
@@ -4392,12 +3918,9 @@ function showContextMenu(x: number, y: number, target: { path: string; isDir: bo
   contextMenuTarget = target;
 
   const isFile = !target.isDir;
-  const isPdfFile = isFile && isPdfPath(target.path);
   const hasCompare = !!compareSelected && compareSelected !== target.path;
   document.getElementById("ctx-split-divider")?.classList.toggle("hidden", !isFile);
   document.getElementById("ctx-open-split")?.classList.toggle("hidden", !isFile);
-  document.getElementById("ctx-pdf-divider")?.classList.toggle("hidden", !isPdfFile);
-  document.getElementById("ctx-extract-pdf-md")?.classList.toggle("hidden", !isPdfFile);
   document.getElementById("ctx-compare-divider")?.classList.toggle("hidden", !isFile);
   document.getElementById("ctx-select-compare")?.classList.toggle("hidden", !isFile);
   document.getElementById("ctx-compare-with")?.classList.toggle("hidden", !(isFile && hasCompare));
@@ -4478,21 +4001,6 @@ async function ctxDelete() {
   } catch (e) {
     console.error("[kaelio] delete_entry failed", { path: target.path, error: e });
     flashStatus(`Delete failed: ${e}`, "var(--error)", 10000);
-  }
-}
-
-async function ctxExtractPdfToMarkdown() {
-  if (!contextMenuTarget || contextMenuTarget.isDir || !isPdfPath(contextMenuTarget.path)) return;
-  const target = contextMenuTarget;
-  hideContextMenu();
-
-  try {
-    if (currentFilePath !== target.path) {
-      await openFile(target.path);
-    }
-    await extractCurrentPdfToMarkdown();
-  } catch (err) {
-    flashStatus(`PDF extraction failed: ${err}`, "var(--error)", 5000);
   }
 }
 
@@ -4711,12 +4219,6 @@ function getCommands(): PaletteCommand[] {
     { label: "Keyboard Shortcuts", shortcut: "⌘/", action: toggleHelp },
     { label: "About Kaelio", action: () => invoke("plugin:opener|open_url", { url: "https://github.com/kael-wanderer/kaelio" }) },
   ];
-  if (currentFilePath && isPdfPath(currentFilePath)) {
-    commands.splice(14, 0, {
-      label: "Extract PDF to Markdown",
-      action: () => { void extractCurrentPdfToMarkdown(); },
-    });
-  }
   return commands;
 }
 
@@ -4907,7 +4409,6 @@ function openPreviewSearch() {
   input.value = "";
   document.getElementById("preview-search-count")!.textContent = "";
   clearPreviewSearchHighlights();
-  clearPdfSearch();
   input.focus();
 }
 
@@ -4916,88 +4417,6 @@ function closePreviewSearch() {
   if (!bar) return;
   bar.classList.add("hidden");
   clearPreviewSearchHighlights();
-  clearPdfSearch();
-}
-
-function isCurrentPdfPreview(): boolean {
-  return Boolean(currentFilePath && isPdfPath(currentFilePath));
-}
-
-function clearPdfSearch() {
-  document.querySelectorAll("mark.pdf-search-hit").forEach((mark) => {
-    const parent = mark.parentNode;
-    mark.replaceWith(document.createTextNode(mark.textContent || ""));
-    parent?.normalize();
-  });
-  pdfSearchMatches = [];
-  pdfSearchIndex = -1;
-}
-
-function searchPdf(query: string) {
-  clearPdfSearch();
-  const countEl = document.getElementById("preview-search-count");
-  const trimmed = query.trim();
-  if (!trimmed) {
-    if (countEl) countEl.textContent = "";
-    return;
-  }
-
-  const lowerQuery = trimmed.toLowerCase();
-  const spans = Array.from(document.querySelectorAll(".pdf-text-layer span")) as HTMLElement[];
-  for (const span of spans) {
-    const text = span.textContent || "";
-    const lowerText = text.toLowerCase();
-    let index = lowerText.indexOf(lowerQuery);
-    if (index === -1) continue;
-
-    const fragment = document.createDocumentFragment();
-    let last = 0;
-    while (index !== -1) {
-      if (index > last) fragment.appendChild(document.createTextNode(text.slice(last, index)));
-      const hit = document.createElement("mark");
-      hit.className = "pdf-search-hit";
-      hit.textContent = text.slice(index, index + trimmed.length);
-      fragment.appendChild(hit);
-      pdfSearchMatches.push(hit);
-      last = index + trimmed.length;
-      index = lowerText.indexOf(lowerQuery, last);
-    }
-    if (last < text.length) fragment.appendChild(document.createTextNode(text.slice(last)));
-    span.replaceChildren(fragment);
-  }
-
-  if (pdfSearchMatches.length) {
-    gotoPdfMatch(0);
-  } else if (countEl) {
-    pdfSearchIndex = -1;
-    countEl.textContent = "No results";
-  }
-}
-
-async function performPdfSearch(query: string) {
-  const token = ++pdfSearchToken;
-  clearPdfSearch();
-  const countEl = document.getElementById("preview-search-count");
-  if (!query.trim()) {
-    if (countEl) countEl.textContent = "";
-    return;
-  }
-  if (countEl) countEl.textContent = "Searching...";
-
-  await renderCurrentPdfPagesForSearch?.();
-  if (token !== pdfSearchToken || !isCurrentPdfPreview()) return;
-  searchPdf(query);
-}
-
-function gotoPdfMatch(index: number) {
-  if (!pdfSearchMatches.length) return;
-  pdfSearchMatches[pdfSearchIndex]?.classList.remove("active");
-  pdfSearchIndex = (index + pdfSearchMatches.length) % pdfSearchMatches.length;
-  const active = pdfSearchMatches[pdfSearchIndex];
-  active.classList.add("active");
-  active.scrollIntoView({ block: "center" });
-  const countEl = document.getElementById("preview-search-count");
-  if (countEl) countEl.textContent = `${pdfSearchIndex + 1} / ${pdfSearchMatches.length}`;
 }
 
 function clearPreviewSearchHighlights() {
@@ -5013,11 +4432,6 @@ function clearPreviewSearchHighlights() {
 }
 
 function performPreviewSearch(query: string) {
-  if (isCurrentPdfPreview()) {
-    void performPdfSearch(query);
-    return;
-  }
-
   clearPreviewSearchHighlights();
   const countEl = document.getElementById("preview-search-count")!;
   if (!query) { countEl.textContent = ""; return; }
@@ -5069,11 +4483,6 @@ function performPreviewSearch(query: string) {
 }
 
 function navigatePreviewSearch(delta: number) {
-  if (isCurrentPdfPreview()) {
-    gotoPdfMatch(pdfSearchIndex + delta);
-    return;
-  }
-
   if (previewSearchMatches.length === 0) return;
   previewSearchMatches[previewSearchIndex]?.classList.remove("active");
   previewSearchIndex = (previewSearchIndex + delta + previewSearchMatches.length) % previewSearchMatches.length;
@@ -5378,10 +4787,6 @@ function saveActiveTabState() {
 
 function switchToTab(tabId: string) {
   if (tabId === activeTabId) return;
-  if (currentFilePath && isPdfPath(currentFilePath) && pdfAnnotationsDirty) {
-    void savePdfAnnotations();
-  }
-
   // Save current tab state
   saveActiveTabState();
 
@@ -5499,14 +4904,6 @@ function updateTabBarVisibility() {
 async function closeTab(tabId: string) {
   const tab = tabs.find(t => t.id === tabId);
   if (!tab) return;
-
-  if (tab.filePath && tab.filePath === currentFilePath && isPdfPath(tab.filePath) && pdfAnnotationsDirty) {
-    try {
-      await savePdfAnnotations();
-    } catch (err) {
-      flashStatus(`Annotation save failed: ${err}`, "var(--error)", 5000);
-    }
-  }
 
   // Check for unsaved changes
   if (tab.isModified) {
@@ -7340,12 +6737,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     if ((e.metaKey || e.ctrlKey) && e.key === "f" && !e.shiftKey && !e.altKey) {
       const previewWrapper = document.getElementById("preview-pane-wrapper");
       if (!previewWrapper || previewWrapper.style.display === "none") return;
-      if (currentFilePath && isPdfPath(currentFilePath)) {
-        e.preventDefault();
-        e.stopPropagation();
-        openPreviewSearch();
-        return;
-      }
       if (currentViewMode === "preview") {
         e.preventDefault();
         e.stopPropagation();
@@ -7633,7 +7024,6 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // Context menu items
   document.getElementById("ctx-open-split")?.addEventListener("click", ctxOpenSplit);
-  document.getElementById("ctx-extract-pdf-md")?.addEventListener("click", ctxExtractPdfToMarkdown);
   document.getElementById("ctx-select-compare")?.addEventListener("click", ctxSelectCompare);
   document.getElementById("ctx-compare-with")?.addEventListener("click", ctxCompareWith);
   document.getElementById("ctx-new-file")?.addEventListener("click", ctxNewFile);

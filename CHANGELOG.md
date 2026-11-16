@@ -4,6 +4,7 @@
 
 ### Changes
 
+- **In-app PDF viewer removed.** PDF viewing, highlights and Extract to Markdown are gone (BugText has a full PDF reader). Existing `.kaelio-annot.json` files are left untouched.
 - **Relative images show in the preview.** Images linked with a path relative to the note (such as `assets/pasted-….png`) are loaded from disk in the preview, the split pane and PNG export.
 - **Menu shortcuts follow your bindings.** The macOS menu bar shows and uses the same keys as Customize Shortcuts; a shortcut you unbind or move no longer also triggers the old menu item.
 - **Reading width.** View → Reading Width (Narrow, Medium, Wide, Full) sets a centred text column for Reading View; the default is Medium (75 characters). Split view is unchanged.
