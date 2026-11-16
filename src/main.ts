@@ -6333,11 +6333,18 @@ async function handleImagePaste(e: ClipboardEvent, view: EditorView, notePath: s
     return;
   }
 
+  // The pane may switch tabs while the image is read and saved; the link then
+  // belongs to the note it was pasted into, not the one now showing.
+  const pastedInto = notePath;
   try {
     const dataBase64 = dataUrlBase64(await readBlobAsDataUrl(blob));
     const rel = await invoke<string>("save_pasted_image", {
-      notePath, dataBase64, mime: blob.type, stamp: pasteStamp(new Date()),
+      notePath: pastedInto, dataBase64, mime: blob.type, stamp: pasteStamp(new Date()),
     });
+    if (viewFilePath(view) !== pastedInto) {
+      flashStatus("Image saved to assets/ (tab changed, link not inserted)", "var(--warning)", 3000);
+      return;
+    }
     const pos = view.state.selection.main.head;
     view.dispatch({ changes: { from: pos, insert: `![](${rel})\n` } });
     flashStatus("Image saved to assets/", "var(--success)");
