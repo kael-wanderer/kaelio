@@ -15,7 +15,6 @@ import mermaid from "mermaid";
 import panzoom from "panzoom";
 import katex from "katex";
 import { toPng } from "html-to-image";
-import { jsPDF } from "jspdf";
 import "katex/dist/katex.min.css";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -24,6 +23,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { migrateKeybindings, nativeMenuAccelerators } from "./lib/keybindings.ts";
+import { exportAvailability } from "./lib/export-availability.ts";
 import { fileKind } from "./lib/file-kind.ts";
 import { resolveLocalImagePath } from "./lib/image-src.ts";
 import { highlightCode } from "./lib/highlight.ts";
@@ -3981,11 +3981,9 @@ function getCommands(): PaletteCommand[] {
     { label: "Reading View", shortcut: sk("view.read-mode"), action: toggleReadMode },
     { label: "Cycle Reading Width", action: cycleReadingWidth },
     { label: "Copy Formatted HTML", shortcut: sk("edit.copy-formatted"), action: copyFormattedHTML },
-    { label: "Export HTML PDF", action: exportHtmlPdf },
-    { label: "Export HTML PNG", action: exportHtmlPng },
-    { label: "Export HTML JPG", action: exportHtmlJpg },
-    { label: "Export Markdown PDF", action: exportMarkdownPdf },
-    { label: "Export Markdown DOCX", action: exportMarkdownDocx },
+    { label: "Export PDF", action: exportPdf },
+    { label: "Export DOCX", action: exportDocx },
+    { label: "Export PNG", action: exportPng },
     { label: "Copy Raw Markdown", action: copyRawMarkdown },
     { label: "Copy Plain Text", action: copyPlainText },
     { label: "Toggle Outline", shortcut: sk("view.toggle-outline"), action: toggleOutline },
@@ -5691,20 +5689,6 @@ async function captureNodeImage(
   return autoCropImageDataUrl(raw.dataUrl, { mime, quality });
 }
 
-async function capturePreviewPng(): Promise<{ dataUrl: string; width: number; height: number }> {
-  return withPreviewAvailable(async () => {
-    const prepared = preparePreviewCaptureNode();
-    const node = prepared.node;
-    try {
-      await waitForPreviewAssets(node);
-      await fitNodeToContentWidth(node);
-      return await captureNodeImage(node, "capturePreviewPng", "image/png");
-    } finally {
-      prepared.cleanup();
-    }
-  });
-}
-
 function loadImageDataUrl(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -5763,29 +5747,6 @@ async function autoCropImageDataUrl(
   return { dataUrl: out.toDataURL(mime, quality), width: cw, height: ch };
 }
 
-async function sliceImageDataUrl(dataUrl: string, maxSliceHeight: number): Promise<{ dataUrl: string; width: number; height: number }[]> {
-  const image = await loadImageDataUrl(dataUrl);
-  const slices: { dataUrl: string; width: number; height: number }[] = [];
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not prepare image export canvas");
-
-  const sliceHeight = Math.max(1, Math.floor(maxSliceHeight));
-  canvas.width = image.naturalWidth;
-  for (let sourceY = 0; sourceY < image.naturalHeight; sourceY += sliceHeight) {
-    const height = Math.min(sliceHeight, image.naturalHeight - sourceY);
-    canvas.height = height;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(image, 0, sourceY, image.naturalWidth, height, 0, 0, image.naturalWidth, height);
-    slices.push({
-      dataUrl: canvas.toDataURL("image/png"),
-      width: image.naturalWidth,
-      height,
-    });
-  }
-  return slices;
-}
-
 function getActiveMarkdownContent(): string {
   if (activePane === "sub" && splitOpen) {
     if (editorSub) {
@@ -5811,11 +5772,10 @@ function defaultExportName(extension: string): string {
   return path ? path.replace(/\.[^.]+$/, `.${extension}`).split("/").pop()! : `export.${extension}`;
 }
 
-async function exportHtmlImage(format: "png" | "jpg") {
-  const defaultName = defaultExportName(format);
+async function exportPng() {
   const outputPath = await save({
-    filters: [{ name: format.toUpperCase(), extensions: [format] }],
-    defaultPath: defaultName,
+    filters: [{ name: "PNG", extensions: ["png"] }],
+    defaultPath: defaultExportName("png"),
   });
   if (!outputPath) return;
 
@@ -5824,15 +5784,10 @@ async function exportHtmlImage(format: "png" | "jpg") {
       const prepared = preparePreviewCaptureNode();
       const node = prepared.node;
       try {
-        flashStatus(`Exporting ${format.toUpperCase()}...`, "var(--accent)");
+        flashStatus("Exporting PNG...", "var(--accent)");
         await waitForPreviewAssets(node);
         await fitNodeToContentWidth(node);
-        const cropped = await captureNodeImage(
-          node,
-          `exportHtmlImage:${format}`,
-          format === "png" ? "image/png" : "image/jpeg",
-          0.95,
-        );
+        const cropped = await captureNodeImage(node, "exportPng", "image/png", 0.95);
         await invoke("save_binary_base64", {
           path: outputPath,
           dataBase64: dataUrlBase64(cropped.dataUrl),
@@ -5841,50 +5796,29 @@ async function exportHtmlImage(format: "png" | "jpg") {
         prepared.cleanup();
       }
     });
-    flashStatus(`${format.toUpperCase()} saved: ${outputPath.split("/").pop()}`, "var(--success)", 3000);
+    flashStatus(`PNG saved: ${outputPath.split("/").pop()}`, "var(--success)", 3000);
   } catch (e) {
-    console.error("Image export failed:", e);
+    console.error("PNG export failed:", e);
     flashStatus(`Export failed: ${e}`, "var(--error)", 8000);
   }
 }
 
-async function exportHtmlPng() {
-  return exportHtmlImage("png");
-}
-
-async function exportHtmlJpg() {
-  return exportHtmlImage("jpg");
-}
-
-async function exportHtmlPdf() {
-  const defaultName = defaultExportName("pdf");
+async function exportPdf() {
+  if (!exportAvailability(getActiveExportPath()).pdf) {
+    flashStatus("PDF export is for Markdown files", "var(--warning)", 3000);
+    return;
+  }
   const outputPath = await save({
     filters: [{ name: "PDF", extensions: ["pdf"] }],
-    defaultPath: defaultName,
+    defaultPath: defaultExportName("pdf"),
   });
   if (!outputPath) return;
 
   try {
-    flashStatus("Capturing preview as PDF...", "var(--accent)");
-    const capture = await capturePreviewPng();
-    const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 24;
-    const printableWidth = pageWidth - margin * 2;
-    const printableHeight = pageHeight - margin * 2;
-    const maxSliceHeight = capture.width * (printableHeight / printableWidth);
-    const slices = await sliceImageDataUrl(capture.dataUrl, maxSliceHeight);
-
-    slices.forEach((slice, index) => {
-      if (index > 0) pdf.addPage();
-      const renderedHeight = slice.height * (printableWidth / slice.width);
-      pdf.addImage(slice.dataUrl, "PNG", margin, margin, printableWidth, renderedHeight);
-    });
-
-    await invoke("save_binary_base64", {
-      path: outputPath,
-      dataBase64: dataUrlBase64(pdf.output("datauristring")),
+    flashStatus("Exporting PDF...", "var(--accent)");
+    await invoke("export_pdf", {
+      markdownContent: getActiveMarkdownContent(),
+      outputPath,
     });
     flashStatus(`PDF saved: ${outputPath.split("/").pop()}`, "var(--success)", 3000);
   } catch (e) {
@@ -5893,28 +5827,11 @@ async function exportHtmlPdf() {
   }
 }
 
-async function exportMarkdownPdf() {
-  const outputPath = await save({
-    filters: [{ name: "PDF", extensions: ["pdf"] }],
-    defaultPath: defaultExportName("pdf"),
-  });
-  if (!outputPath) return;
-
-  try {
-    flashStatus("Exporting Markdown PDF...", "var(--accent)");
-    await invoke("export_pdf", {
-      markdownContent: getActiveMarkdownContent(),
-      outputPath,
-      sourceFormat: "markdown",
-    });
-    flashStatus(`PDF saved: ${outputPath.split("/").pop()}`, "var(--success)", 3000);
-  } catch (e) {
-    console.error("Markdown PDF export failed:", e);
-    flashStatus(`Export failed: ${e}`, "var(--error)", 8000);
+async function exportDocx() {
+  if (!exportAvailability(getActiveExportPath()).docx) {
+    flashStatus("DOCX export is for Markdown files", "var(--warning)", 3000);
+    return;
   }
-}
-
-async function exportMarkdownDocx() {
   const outputPath = await save({
     filters: [{ name: "Word", extensions: ["docx"] }],
     defaultPath: defaultExportName("docx"),
@@ -5922,15 +5839,29 @@ async function exportMarkdownDocx() {
   if (!outputPath) return;
 
   try {
-    flashStatus("Exporting Markdown DOCX...", "var(--accent)");
+    flashStatus("Exporting DOCX...", "var(--accent)");
     await invoke("export_docx", {
       markdownContent: getActiveMarkdownContent(),
       outputPath,
     });
     flashStatus(`DOCX saved: ${outputPath.split("/").pop()}`, "var(--success)", 3000);
   } catch (e) {
-    console.error("Markdown DOCX export failed:", e);
+    console.error("DOCX export failed:", e);
     flashStatus(`Export failed: ${e}`, "var(--error)", 8000);
+  }
+}
+
+/** Greys out PDF and DOCX in an export menu when the active file is HTML. */
+function refreshExportMenuAvailability() {
+  const avail = exportAvailability(getActiveExportPath());
+  for (const [id, ok] of [
+    ["btn-export-pdf", avail.pdf], ["btn-toolbar-export-pdf", avail.pdf],
+    ["btn-export-docx", avail.docx], ["btn-toolbar-export-docx", avail.docx],
+  ] as const) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.classList.toggle("disabled", !ok);
+    if (ok) el.removeAttribute("title"); else el.title = "Markdown only";
   }
 }
 
@@ -6220,11 +6151,9 @@ async function handleNativeMenuCommand(command: string) {
     case "file.new-window": return void invoke("create_window", { filePath: null });
     case "file.save": return saveActivePane();
     case "file.close-tab": return closeActiveTab();
-    case "export.html.png": return exportHtmlPng();
-    case "export.html.jpg": return exportHtmlJpg();
-    case "export.html.pdf": return exportHtmlPdf();
-    case "export.md.pdf": return exportMarkdownPdf();
-    case "export.md.docx": return exportMarkdownDocx();
+    case "export.pdf": return exportPdf();
+    case "export.docx": return exportDocx();
+    case "export.png": return exportPng();
     case "edit.copy-formatted": return copyFormattedHTML();
     case "edit.copy-raw": return copyRawMarkdown();
     case "edit.copy-plain": return copyPlainText();
@@ -6541,6 +6470,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       document.querySelectorAll(".dropdown-menu").forEach(m => {
         if (m !== menu) m.classList.add("hidden");
       });
+      refreshExportMenuAvailability();
       menu.classList.toggle("hidden");
     });
   });
@@ -6562,11 +6492,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-save")?.addEventListener("click", () => saveActivePane());
   document.getElementById("btn-autosave")?.addEventListener("click", () => toggleAutoSave());
   document.getElementById("btn-autosync")?.addEventListener("click", () => toggleAutoSync());
-  document.getElementById("btn-export-html-png")?.addEventListener("click", exportHtmlPng);
-  document.getElementById("btn-export-html-jpg")?.addEventListener("click", exportHtmlJpg);
-  document.getElementById("btn-export-html-pdf")?.addEventListener("click", exportHtmlPdf);
-  document.getElementById("btn-export-md-pdf")?.addEventListener("click", exportMarkdownPdf);
-  document.getElementById("btn-export-md-docx")?.addEventListener("click", exportMarkdownDocx);
+  document.getElementById("btn-export-pdf")?.addEventListener("click", exportPdf);
+  document.getElementById("btn-export-docx")?.addEventListener("click", exportDocx);
+  document.getElementById("btn-export-png")?.addEventListener("click", exportPng);
 
   // View menu items
   document.getElementById("btn-toggle-sidebar")?.addEventListener("click", () => toggleSidebar());
@@ -6655,11 +6583,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // Primary toolbar buttons
   document.getElementById("btn-copy-html")?.addEventListener("click", copyFormattedHTML);
-  document.getElementById("btn-toolbar-export-html-png")?.addEventListener("click", exportHtmlPng);
-  document.getElementById("btn-toolbar-export-html-jpg")?.addEventListener("click", exportHtmlJpg);
-  document.getElementById("btn-toolbar-export-html-pdf")?.addEventListener("click", exportHtmlPdf);
-  document.getElementById("btn-toolbar-export-md-pdf")?.addEventListener("click", exportMarkdownPdf);
-  document.getElementById("btn-toolbar-export-md-docx")?.addEventListener("click", exportMarkdownDocx);
+  document.getElementById("btn-toolbar-export-pdf")?.addEventListener("click", exportPdf);
+  document.getElementById("btn-toolbar-export-docx")?.addEventListener("click", exportDocx);
+  document.getElementById("btn-toolbar-export-png")?.addEventListener("click", exportPng);
   document.getElementById("btn-zoom-in")?.addEventListener("click", zoomIn);
   document.getElementById("btn-split")?.addEventListener("click", () => toggleSplit());
   document.getElementById("btn-sub-mode")?.addEventListener("click", () => toggleSubMode());

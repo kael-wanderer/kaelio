@@ -295,6 +295,27 @@ body {
   background: var(--border);
 }
 
+.dropdown-item .menu-hint {
+  display: none;
+  color: var(--muted);
+  font-size: 11px;
+  margin-left: 16px;
+}
+
+.dropdown-item.disabled {
+  color: var(--muted);
+  opacity: 0.6;
+  cursor: default;
+}
+
+.dropdown-item.disabled:hover {
+  background: transparent;
+}
+
+.dropdown-item.disabled .menu-hint {
+  display: inline;
+}
+
 .dropdown-submenu {
   position: relative;
 }

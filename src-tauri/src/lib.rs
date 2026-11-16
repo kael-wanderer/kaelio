@@ -1382,18 +1382,12 @@ fn style_docx_tables(path: &Path) -> Result<(), String> {
 async fn export_pdf(
     markdown_content: String,
     output_path: String,
-    source_format: Option<String>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
     // Run all blocking work on a separate thread to avoid blocking async runtime
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let result = export_pdf_blocking(
-            markdown_content,
-            output_path,
-            source_format.unwrap_or_else(|| "markdown".to_string()),
-            app,
-        );
+        let result = export_pdf_blocking(markdown_content, output_path, app);
         let _ = tx.send(result);
     });
     rx.recv().map_err(|e| format!("Thread error: {}", e))?
@@ -1402,33 +1396,27 @@ async fn export_pdf(
 fn export_pdf_blocking(
     markdown_content: String,
     output_path: String,
-    source_format: String,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
     use std::io::Write;
     use std::process::Command;
 
     let _ = app.emit("pdf-progress", "Preparing document…");
-    let is_html = source_format == "html";
 
     // Replace emoji/symbols that fonts can't render with text equivalents
-    let markdown_content = if is_html {
-        markdown_content
-    } else {
-        markdown_content
-            .replace("❌", "[X]")
-            .replace("✅", "[v]")
-            .replace("✓", "[v]")
-            .replace("⚠️", "[!]")
-            .replace("📁", "[dir]")
-            .replace('→', "->")
-            .replace('←', "<-")
-            .replace('↓', "v")
-    };
+    let markdown_content = markdown_content
+        .replace("❌", "[X]")
+        .replace("✅", "[v]")
+        .replace("✓", "[v]")
+        .replace("⚠️", "[!]")
+        .replace("📁", "[dir]")
+        .replace('→', "->")
+        .replace('←', "<-")
+        .replace('↓', "v");
 
     let tmp_dir = unique_export_dir("kaelio_export");
     let _ = fs::create_dir_all(&tmp_dir);
-    let tmp_input = tmp_dir.join(if is_html { "export.html" } else { "export.md" });
+    let tmp_input = tmp_dir.join("export.md");
 
     // Build PATH: inherit system PATH and append known Pandoc/Typst locations.
     let sys_path = std::env::var("PATH").unwrap_or_default();
@@ -1575,11 +1563,7 @@ fn export_pdf_blocking(
         "-o".to_string(),
         output_path.clone(),
         "--from".to_string(),
-        if is_html {
-            "html".to_string()
-        } else {
-            PANDOC_MARKDOWN_INPUT_FORMAT.to_string()
-        },
+        PANDOC_MARKDOWN_INPUT_FORMAT.to_string(),
         "--pdf-engine".to_string(),
         typst_path.to_string_lossy().to_string(),
         "--include-in-header".to_string(),
@@ -2932,32 +2916,15 @@ pub fn run() {
                 ],
             )?;
 
-            let export_html_menu = Submenu::with_items(
-                handle,
-                "HTML",
-                true,
-                &[
-                    &MenuItem::with_id(handle, "export.html.png", "PNG...", true, None::<&str>)?,
-                    &MenuItem::with_id(handle, "export.html.jpg", "JPG...", true, None::<&str>)?,
-                    &MenuItem::with_id(handle, "export.html.pdf", "PDF...", true, None::<&str>)?,
-                ],
-            )?;
-
-            let export_markdown_menu = Submenu::with_items(
-                handle,
-                "Markdown",
-                true,
-                &[
-                    &MenuItem::with_id(handle, "export.md.pdf", "PDF...", true, None::<&str>)?,
-                    &MenuItem::with_id(handle, "export.md.docx", "DOCX...", true, None::<&str>)?,
-                ],
-            )?;
-
             let export_menu = Submenu::with_items(
                 handle,
                 "Export",
                 true,
-                &[&export_html_menu, &export_markdown_menu],
+                &[
+                    &MenuItem::with_id(handle, "export.pdf", "PDF...", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "export.docx", "DOCX...", true, None::<&str>)?,
+                    &MenuItem::with_id(handle, "export.png", "PNG...", true, None::<&str>)?,
+                ],
             )?;
 
             let file_menu = Submenu::with_items(

@@ -59,7 +59,6 @@ export default defineConfig(async () => ({
 
           if (id.includes("/mermaid/") || id.includes("/@mermaid-js/")) return;
           if (id.includes("/markdown-it") || id.includes("/katex/")) return "vendor-markdown";
-          if (id.includes("/jspdf/")) return "vendor-jspdf";
           if (id.includes("/html-to-image/") || id.includes("/html2canvas/")) return "vendor-capture";
           if (id.includes("/cytoscape/")) return "vendor-cytoscape";
           if (id.includes("/d3") || id.includes("/dagre") || id.includes("/elkjs/")) return "vendor-graphs";

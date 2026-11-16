@@ -4,6 +4,7 @@
 
 ### Changes
 
+- **One export menu: PDF, DOCX, PNG.** The HTML ▸ and Markdown ▸ submenus are replaced by three items in the File menu, the toolbar, the macOS menu bar and the command palette. PDF and DOCX use Pandoc and are greyed out for HTML files ("Markdown only"). JPG export and the image-based PDF are removed.
 - **PDFs and images open in your default app.** Clicking a PDF, image or SVG in the sidebar or a link in the preview hands it to the system default app instead of a Kaelio tab. The CSV table, JSON and standalone image viewers are gone; JSON and CSV open as plain text, and images inside a note keep their lightbox. File associations are now Markdown, YAML, TXT and HTML.
 - **In-app PDF viewer removed.** PDF viewing, highlights and Extract to Markdown are gone (BugText has a full PDF reader). Existing `.kaelio-annot.json` files are left untouched.
 - **Relative images show in the preview.** Images linked with a path relative to the note (such as `assets/pasted-….png`) are loaded from disk in the preview, the split pane and PNG export.
