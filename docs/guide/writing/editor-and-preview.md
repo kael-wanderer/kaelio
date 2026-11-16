@@ -34,6 +34,17 @@ In Reading View, the text sits in a centred column. Choose its width under **Vie
 
 Above the editor, the formatting bar inserts Markdown for you: **Bold**, **Italic**, **Heading** (a level-3 heading), **Link**, **Code**, **Quote**, **List** and **Horizontal Rule**. Select text first to wrap it, or click with nothing selected to insert an example.
 
+### Smart paste
+
+- **Rich text becomes Markdown.** Copy a formatted page, for example an answer from a chat window or a web article, and paste it into the editor: headings, lists, tables, links, bold, italic, code and quotes arrive as Markdown.
+- **A URL over selected text becomes a link.** Select some words and paste a single `http://` or `https://` address; you get `[the words](address)`.
+- Text copied from a code editor or a terminal pastes as plain text, with its indentation.
+- Inside a code block or inline code, paste is always plain.
+- Press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>V</kbd> (**Paste as Plain Text**) to paste the clipboard's plain text without any conversion.
+- One <kbd>⌘</kbd><kbd>Z</kbd> undoes a whole paste.
+
+Images and data-URL pictures are not converted; paste an image on its own to save it to `assets/`.
+
 ### Find and replace
 
 - In the editor, press <kbd>⌘</kbd><kbd>F</kbd> to open the find bar. It also has a replace field, with buttons to replace one match or all of them.

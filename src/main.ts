@@ -6,7 +6,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { defaultKeymap, indentWithTab, history, historyKeymap } from "@codemirror/commands";
-import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap } from "@codemirror/language";
+import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap, syntaxTree } from "@codemirror/language";
 import { closeBrackets } from "@codemirror/autocomplete";
 import { search, searchKeymap } from "@codemirror/search";
 import MarkdownIt from "markdown-it";
@@ -22,10 +22,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { readText as readClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import { migrateKeybindings, nativeMenuAccelerators } from "./lib/keybindings.ts";
 import { exportAvailability } from "./lib/export-availability.ts";
 import { findMermaidBlocks, applyDiagramPlaceholders, diagramName } from "./lib/mermaid-export.ts";
 import { mergeHistory } from "./lib/history.ts";
+import { decidePaste } from "./lib/smart-paste.ts";
 import { resolveLinkedPath } from "./lib/link-path.ts";
 import { fileKind } from "./lib/file-kind.ts";
 import { resolveLocalImagePath } from "./lib/image-src.ts";
@@ -195,6 +197,7 @@ function getDefaultBindings(): ShortcutDef[] {
     { id: "view.zoom-out", label: "Zoom Out", group: "View", defaultKey: "Mod--", action: actions["view.zoom-out"] },
     { id: "view.zoom-reset", label: "Zoom Reset", group: "View", defaultKey: "Mod-0", action: actions["view.zoom-reset"] },
     { id: "edit.copy-formatted", label: "Copy Formatted", group: "Edit", defaultKey: "Mod-Shift-c", action: actions["edit.copy-formatted"] },
+    { id: "edit.paste-plain", label: "Paste as Plain Text", group: "Edit", defaultKey: "Mod-Shift-v", action: actions["edit.paste-plain"] },
     { id: "search.command-palette", label: "Command Palette", group: "Search", defaultKey: "Mod-Shift-p", action: actions["search.command-palette"] },
     { id: "search.file-search", label: "File Search", group: "Search", defaultKey: "Mod-p", action: actions["search.file-search"] },
     { id: "search.content-search", label: "Content Search", group: "Search", defaultKey: "Mod-Shift-f", action: actions["search.content-search"] },
@@ -210,12 +213,13 @@ function getCustomBindings(): Record<string, string> {
 /** One-time migration (v2): keep saved custom bindings, unbind new defaults that collide with them. */
 function migrateSavedKeybindings() {
   try {
-    if (localStorage.getItem("kaelio-keybindings-migrated") === "2") return;
+    // Bump the marker whenever a default binding is added or changed.
+    if (localStorage.getItem("kaelio-keybindings-migrated") === "3") return;
     const migrated = migrateKeybindings(getCustomBindings(), getDefaultBindings());
     if (Object.keys(migrated).length > 0) {
       localStorage.setItem("kaelio-keybindings", JSON.stringify(migrated));
     }
-    localStorage.setItem("kaelio-keybindings-migrated", "2");
+    localStorage.setItem("kaelio-keybindings-migrated", "3");
   } catch { /* storage unavailable: defaults apply */ }
 }
 
@@ -4460,6 +4464,7 @@ function createEditorExtensions() {
       indentWithTab,
     ]),
     keymapCompartment.of(buildKeymap()),
+    smartPasteExtension(),
     EditorView.updateListener.of((update: ViewUpdate) => {
       if (update.docChanged || update.selectionSet) {
         if (update.docChanged) onContentChange(update.view);
@@ -4500,6 +4505,7 @@ function createSubEditorExtensions() {
     editorFillTheme,
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]),
     buildKeymap(),
+    smartPasteExtension(),
     EditorView.updateListener.of((update: ViewUpdate) => {
       if (!update.docChanged) return;
       const tab = subTabs.find(t => t.id === subActiveTabId);
@@ -5933,6 +5939,63 @@ function readBlobAsDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+// --- Smart paste (spec A1) ---
+
+/** "Paste as Plain Text" (⇧⌘V). The webview fires no paste event for this
+ *  key, so the text is read through the clipboard plugin (read-text only) and
+ *  inserted as one undoable paste. */
+async function pastePlain() {
+  const view = activePane === "sub" && splitOpen && editorSub ? editorSub : editor;
+  let text: string;
+  try {
+    text = await readClipboardText();
+  } catch {
+    return; // no text on the clipboard
+  }
+  if (!text) return;
+  view.dispatch(view.state.replaceSelection(text), { userEvent: "input.paste", scrollIntoView: true });
+  view.focus();
+}
+
+const CODE_NODE_NAMES = new Set(["FencedCode", "CodeBlock", "InlineCode", "CodeText"]);
+
+function cursorInCode(view: EditorView): boolean {
+  const pos = view.state.selection.main.head;
+  for (let node: { name: string; parent: any } | null = syntaxTree(view.state).resolveInner(pos, -1); node; node = node.parent) {
+    if (CODE_NODE_NAMES.has(node.name)) return true;
+  }
+  return false;
+}
+
+/** Rich HTML becomes Markdown and a URL over a selection becomes a link.
+ *  Returns false to let CodeMirror paste the plain text as usual. An image on
+ *  the clipboard is left to handleImagePaste. */
+function handleSmartPaste(e: ClipboardEvent, view: EditorView): boolean {
+  const data = e.clipboardData;
+  if (!data) return false;
+  if (Array.from(data.items).some(item => item.type.startsWith("image/"))) return false;
+  const html = data.types.includes("text/html") ? data.getData("text/html") : null;
+  const text = data.getData("text/plain");
+  const sel = view.state.selection.main;
+  const decision = decidePaste({
+    html,
+    text,
+    selection: view.state.sliceDoc(sel.from, sel.to),
+    inCode: cursorInCode(view),
+    forcePlain: false,
+  });
+  if (decision.kind === "plain") return false;
+  e.preventDefault();
+  view.dispatch(view.state.replaceSelection(decision.text), { userEvent: "input.paste", scrollIntoView: true });
+  return true;
+}
+
+function smartPasteExtension() {
+  return EditorView.domEventHandlers({
+    paste: (e, view) => handleSmartPaste(e, view),
+  });
+}
+
 /** Saves a pasted clipboard image to `assets/` beside the note (Rust validates
  *  type, signature and size) and inserts a relative link at the cursor. */
 async function handleImagePaste(e: ClipboardEvent, view: EditorView, notePath: string | null) {
@@ -6177,6 +6240,7 @@ actions["view.zoom-in"] = () => zoomIn();
 actions["view.zoom-out"] = () => zoomOut();
 actions["view.zoom-reset"] = () => zoomReset();
 actions["edit.copy-formatted"] = () => copyFormattedHTML();
+actions["edit.paste-plain"] = () => { void pastePlain(); };
 actions["search.command-palette"] = () => toggleCommandPalette();
 actions["search.file-search"] = () => openFileSearch();
 actions["search.content-search"] = () => { sidebarSearchMode ? deactivateSidebarSearch() : activateSidebarSearch(); };

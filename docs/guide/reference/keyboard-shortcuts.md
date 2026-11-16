@@ -41,6 +41,7 @@ Press <kbd>⌘</kbd><kbd>/</kbd> at any time to see the shortcuts in Kaelio itse
 | Action | Keys |
 |---|---|
 | Copy Formatted | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>C</kbd> |
+| Paste as Plain Text | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>V</kbd> |
 | Undo / Redo | <kbd>⌘</kbd><kbd>Z</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd> |
 | Indent / Outdent | <kbd>Tab</kbd> / <kbd>⇧</kbd><kbd>Tab</kbd> |
 
