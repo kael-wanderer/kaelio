@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "product": "kaelio",
+  "title": "Kaelio Guide",
+  "groups": [
+    {
+      "title": "Start Here",
+      "pages": [
+        {
+          "slug": "start-here/what-is-kaelio",
+          "title": "What is Kaelio?",
+          "summary": "A one-minute tour: a fast Markdown editor with a live preview, and the parts of the window you will use."
+        },
+        {
+          "slug": "start-here/install",
+          "title": "Install Kaelio",
+          "summary": "Download Kaelio, open it past the macOS warning, and keep it up to date."
+        },
+        {
+          "slug": "start-here/first-five-minutes",
+          "title": "Your first five minutes",
+          "summary": "Open a folder, write a note with a live preview, and switch to Reading View."
+        }
+      ]
+    },
+    {
+      "title": "Recipes",
+      "pages": [
+        {
+          "slug": "recipes/note-to-pdf",
+          "title": "Turn a note into a PDF",
+          "summary": "Choose the right PDF export, install what it needs, and keep private diagrams on your computer."
+        },
+        {
+          "slug": "recipes/sync-two-computers",
+          "title": "Sync notes between two computers",
+          "summary": "Put a notes folder on GitHub from one computer and keep a second computer in step with it."
+        },
+        {
+          "slug": "recipes/compare-two-files",
+          "title": "Compare two files",
+          "summary": "Put two documents side by side, or compare a file with one of its earlier versions."
+        }
+      ]
+    },
+    {
+      "title": "Write and read",
+      "pages": [
+        {
+          "slug": "writing/editor-and-preview",
+          "title": "The editor and the preview",
+          "summary": "Write in the editor, read in the preview, switch between split, editor-only and Reading View, and find text in either."
+        },
+        {
+          "slug": "writing/markdown-features",
+          "title": "Callouts, checklists, diagrams and math",
+          "summary": "Everything the preview renders beyond plain Markdown, with the exact syntax for each."
+        },
+        {
+          "slug": "writing/split-view",
+          "title": "Split view and compare",
+          "summary": "Open a second pane with its own tabs to edit or read another file beside the first, or compare two files side by side."
+        }
+      ]
+    },
+    {
+      "title": "Files",
+      "pages": [
+        {
+          "slug": "files/explorer-and-tabs",
+          "title": "Explorer, tabs and windows",
+          "summary": "Browse a folder in the Explorer, create, rename, move and delete files, work in tabs, and open more windows."
+        },
+        {
+          "slug": "files/search",
+          "title": "Search and the Command Palette",
+          "summary": "Find a file by name, search the text of every note in a folder, and run any command by typing its name."
+        },
+        {
+          "slug": "files/pdf-viewer",
+          "title": "Read and highlight PDFs",
+          "summary": "Open a PDF inside Kaelio, search and select its text, highlight passages, and pull its text into a Markdown note."
+        },
+        {
+          "slug": "files/images-and-other-files",
+          "title": "Images and other files",
+          "summary": "How Kaelio shows images, SVG, HTML, JSON, CSV and plain text files, and which of them you can edit."
+        }
+      ]
+    },
+    {
+      "title": "Git and history",
+      "pages": [
+        {
+          "slug": "git/git-sync",
+          "title": "Sync with Git",
+          "summary": "Connect a folder to a GitHub repository once, and Kaelio commits and pushes each file when you save it."
+        },
+        {
+          "slug": "git/history-and-snapshots",
+          "title": "File history and snapshots",
+          "summary": "See earlier versions of a file, from Git commits or from Kaelio's automatic snapshots, compare them and restore one."
+        }
+      ]
+    },
+    {
+      "title": "Export",
+      "pages": [
+        {
+          "slug": "export/export",
+          "title": "Export and copy",
+          "summary": "Save a document as PNG, JPG, PDF or DOCX, or copy it as formatted text, Markdown or plain text."
+        }
+      ]
+    },
+    {
+      "title": "Reference",
+      "pages": [
+        {
+          "slug": "reference/appearance",
+          "title": "Appearance and settings",
+          "summary": "Themes, fonts, text sizes, soft wrap, auto-save and session restore, and where each one is set."
+        },
+        {
+          "slug": "reference/keyboard-shortcuts",
+          "title": "Keyboard shortcuts",
+          "summary": "Every default shortcut, and how to change them in Customize Shortcuts."
+        },
+        {
+          "slug": "reference/privacy",
+          "title": "Privacy",
+          "summary": "No account and no telemetry. What Kaelio stores on your computer, and the few times it goes online."
+        },
+        {
+          "slug": "reference/troubleshooting",
+          "title": "Troubleshooting",
+          "summary": "Fixes for the macOS warning, missing Pandoc or Typst, Git sign-in and push problems, and other common questions."
+        }
+      ]
+    }
+  ]
+}

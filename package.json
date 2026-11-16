@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "guide:check": "node scripts/check-guide.mjs",
+    "guide:test": "node --test scripts/check-guide.test.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.4",

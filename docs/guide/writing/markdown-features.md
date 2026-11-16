@@ -1,0 +1,100 @@
+---
+title: Callouts, checklists, diagrams and math
+summary: Everything the preview renders beyond plain Markdown, with the exact syntax for each.
+---
+
+Kaelio's preview understands standard Markdown plus a handful of extras: Obsidian-style callouts, clickable checklists, Mermaid diagrams, KaTeX math, footnotes, wikilinks and YAML frontmatter. You write plain text; the preview does the rest.
+
+## When to use it
+
+- When you want a note, tip or warning box that stands out from the text.
+- When you keep a to-do list in a Markdown file and want to tick items off in the preview.
+- When a diagram or a formula explains something better than words.
+
+## How to use it
+
+### Callouts
+
+Start a blockquote with the type in brackets, then put the content on the next lines:
+
+```markdown
+> [!tip] Optional title
+> The content of the callout goes here.
+```
+
+Without a title, the callout is titled after its type. Supported types: `note`, `info`, `tip`, `hint`, `important`, `success`, `check`, `done`, `question`, `help`, `warning`, `caution`, `attention`, `danger`, `failure`, `fail`, `error`, `bug`, `example`, `quote`, `cite`, `abstract`, `summary` and `tldr`. Any other word also works, with a pin icon.
+
+> [!NOTE]
+> Callouts cannot fold (`[!tip]-` and `[!tip]+` are not supported). Give a callout at least one line of content under its title.
+
+### Checklists
+
+Write list items that begin with `- [ ]` (open) or `- [x]` (done). In the preview they become checkboxes. Click one to tick or untick it: Kaelio changes the matching line in the editor, and the change is saved like any other edit.
+
+Use `-` bullets for checklists you want to tick from the preview. Items written with `*` or numbers still show a checkbox, but clicking may change the wrong line.
+
+### Diagrams (Mermaid)
+
+Put a Mermaid diagram in a fenced code block marked `mermaid`:
+
+````markdown
+```mermaid
+flowchart LR
+  Draft --> Review --> Publish
+```
+````
+
+Click a diagram to open it full screen. Scroll or double-click to zoom, drag to move, and press <kbd>Esc</kbd> or click **✕** to close.
+
+### Math (KaTeX)
+
+- Inline math: `$E = mc^2$`
+- A display formula on its own lines: `$$ \int_0^1 x^2 \, dx $$`
+
+If a formula has an error, the preview shows its source in red instead of failing the whole page.
+
+### Frontmatter and tags
+
+A YAML block at the very top of the file, between two `---` lines, is shown as a small table of properties above the text, not as raw YAML.
+
+```markdown
+---
+title: Weekly notes
+tags:
+  - work
+  - planning
+---
+```
+
+Values under `tags`, `tag`, `categories` or `keywords` appear as pills. Click **×** on a pill to remove that tag from the frontmatter (this works for tags written as a list, one per line).
+
+### Links, wikilinks and headings
+
+- A normal link to a web page opens in your browser.
+- A link to another Markdown file opens that file in Kaelio. Add `#heading-name` after the file name to jump to a heading in it.
+- A wikilink `[[My Page]]` opens `My-Page.md` in the same folder as the current file (spaces become hyphens). Aliases (`[[page|alias]]`) are not supported.
+- Hover a heading in the preview and click **¶** (**Copy link to heading**) to copy its anchor, for example `#weekly-goals`, to paste into a link.
+
+### Footnotes, tables and images
+
+- Footnotes use the usual syntax: `text[^1]`, then `[^1]: The note.` at the bottom.
+- Wide tables scroll sideways instead of squeezing.
+- Click an image in the preview to see it larger; click again to close it.
+- Paste an image from the clipboard straight into the editor to add it to the document. The picture is stored inside the Markdown text itself, so the file grows by the size of the image and no separate image file is made.
+- For pictures saved as files, keep them in your folder and link them with the usual Markdown image syntax and a relative path.
+
+### Line breaks
+
+A single new line in your text is a line break in the preview. You do not need two spaces at the end of a line.
+
+## What it will not do
+
+- Diagrams and formulas render on your computer. Nothing is sent online to show them in the preview. (The Markdown PDF export is the one exception, see [Export](../export/export.md).)
+- Raw HTML in a document is cleaned before it is shown: scripts, embedded objects and links that run code are removed.
+- Code blocks in the preview are not colour-highlighted; the editor highlights Markdown syntax as you type.
+
+## Next steps
+
+- [The editor and the preview](editor-and-preview.md)
+- [Export](../export/export.md) to share a finished document.
+- [Keyboard shortcuts](../reference/keyboard-shortcuts.md)
