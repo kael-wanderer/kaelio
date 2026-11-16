@@ -90,29 +90,9 @@
         "description": "Text File"
       },
       {
-        "ext": ["json"],
-        "mimeType": "application/json",
-        "description": "JSON File"
-      },
-      {
-        "ext": ["csv"],
-        "mimeType": "text/csv",
-        "description": "CSV File"
-      },
-      {
         "ext": ["html", "htm"],
         "mimeType": "text/html",
         "description": "HTML File"
-      },
-      {
-        "ext": ["svg"],
-        "mimeType": "image/svg+xml",
-        "description": "SVG File"
-      },
-      {
-        "ext": ["png", "jpg", "jpeg", "gif", "webp"],
-        "mimeType": "image/*",
-        "description": "Image File"
       }
     ]
   }

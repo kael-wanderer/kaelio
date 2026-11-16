@@ -24,6 +24,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { migrateKeybindings, nativeMenuAccelerators } from "./lib/keybindings.ts";
+import { fileKind } from "./lib/file-kind.ts";
 import { resolveLocalImagePath } from "./lib/image-src.ts";
 import { highlightCode } from "./lib/highlight.ts";
 import { extractHeadings, activeHeadingIndex } from "./lib/outline.ts";
@@ -149,10 +150,6 @@ const TEXT_SIZE_OPTIONS = ["12", "14", "16", "18", "20", "24", "Custom..."] as c
 const EXPLORER_SIZE_OPTIONS = ["12", "13", "14", "15", "16", "18"] as const;
 const MARKDOWN_EXTENSIONS = new Set(["md", "markdown"]);
 const HTML_EXTENSIONS = new Set(["html", "htm"]);
-const JSON_EXTENSIONS = new Set(["json"]);
-const CSV_EXTENSIONS = new Set(["csv"]);
-const SVG_EXTENSIONS = new Set(["svg"]);
-const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif"]);
 let currentFont: string = localStorage.getItem("kaelio-font") || "System";
 let currentTextSize = Number(localStorage.getItem("kaelio-text-size")) || 16;
 let currentExplorerTextSize = Number(localStorage.getItem("kaelio-explorer-text-size")) || 12;
@@ -1165,64 +1162,8 @@ function isHtmlPath(path: string | null): boolean {
   return HTML_EXTENSIONS.has(getPathExtension(path));
 }
 
-function isJsonPath(path: string | null): boolean {
-  return JSON_EXTENSIONS.has(getPathExtension(path));
-}
-
-function isCsvPath(path: string | null): boolean {
-  return CSV_EXTENSIONS.has(getPathExtension(path));
-}
-
-function isSvgPath(path: string | null): boolean {
-  return SVG_EXTENSIONS.has(getPathExtension(path));
-}
-
-function isImagePath(path: string | null): boolean {
-  return IMAGE_EXTENSIONS.has(getPathExtension(path));
-}
-
-function isPreviewOnlyPath(path: string | null): boolean {
-  return isImagePath(path) || isSvgPath(path);
-}
-
-function updatePreviewOrRevealPreviewOnly(content: string) {
-  if (currentFilePath && isPreviewOnlyPath(currentFilePath) && currentViewMode !== "preview") {
-    setViewMode("preview");
-    return;
-  }
-  updatePreview(content);
-}
-
 // --- Preview rendering ---
 
-const IMAGE_PREVIEW_MIN_ZOOM = 0.25;
-const IMAGE_PREVIEW_MAX_ZOOM = 5;
-const IMAGE_PREVIEW_ZOOM_STEP = 0.25;
-const imagePreviewZooms = new Map<string, number>();
-
-function clampImagePreviewZoom(zoom: number): number {
-  return Math.min(IMAGE_PREVIEW_MAX_ZOOM, Math.max(IMAGE_PREVIEW_MIN_ZOOM, zoom));
-}
-
-function applyImagePreviewZoom(
-  previewPane: HTMLElement,
-  stage: HTMLElement,
-  image: HTMLImageElement,
-  zoomLabel: HTMLElement,
-  zoom: number,
-) {
-  const naturalWidth = image.naturalWidth || 1;
-  const naturalHeight = image.naturalHeight || 1;
-  const availableWidth = Math.max(previewPane.clientWidth - 56, 1);
-  const availableHeight = Math.max(previewPane.clientHeight - 112, 1);
-  const fitScale = Math.min(1, availableWidth / naturalWidth, availableHeight / naturalHeight);
-  const displayScale = fitScale * zoom;
-
-  image.style.width = `${Math.max(1, Math.round(naturalWidth * displayScale))}px`;
-  image.style.height = "auto";
-  stage.classList.toggle("is-zoomed", zoom > 1);
-  zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
-}
 
 function renderHtmlPreview(previewPane: HTMLElement, content: string) {
   previewPane.innerHTML = "";
@@ -1234,158 +1175,13 @@ function renderHtmlPreview(previewPane: HTMLElement, content: string) {
   previewPane.appendChild(frame);
 }
 
-async function renderImagePreview(previewPane: HTMLElement, path: string) {
-  const filename = path.split("/").pop() || "Image";
-  previewPane.innerHTML = "";
-
-  const wrap = document.createElement("div");
-  wrap.className = "asset-preview";
-  const toolbar = document.createElement("div");
-  toolbar.className = "asset-preview-toolbar";
-  const zoomOut = document.createElement("button");
-  zoomOut.type = "button";
-  zoomOut.className = "asset-preview-tool";
-  zoomOut.textContent = "-";
-  zoomOut.title = "Zoom out";
-  zoomOut.setAttribute("aria-label", "Zoom out");
-  const zoomLabel = document.createElement("span");
-  zoomLabel.className = "asset-preview-zoom-label";
-  zoomLabel.textContent = `${Math.round((imagePreviewZooms.get(path) || 1) * 100)}%`;
-  const zoomIn = document.createElement("button");
-  zoomIn.type = "button";
-  zoomIn.className = "asset-preview-tool";
-  zoomIn.textContent = "+";
-  zoomIn.title = "Zoom in";
-  zoomIn.setAttribute("aria-label", "Zoom in");
-  toolbar.append(zoomOut, zoomLabel, zoomIn);
-
-  const stage = document.createElement("div");
-  stage.className = "asset-preview-stage";
-  const loading = document.createElement("div");
-  loading.className = "asset-preview-message";
-  loading.textContent = "Loading image...";
-  stage.appendChild(loading);
-  wrap.append(toolbar, stage);
-  previewPane.appendChild(wrap);
-
-  try {
-    const file = await invoke<BinaryFileInfo>("read_binary_file", { path });
-    if (currentFilePath !== path) return;
-
-    const image = document.createElement("img");
-    image.className = "asset-preview-image";
-    image.alt = filename;
-    let currentZoom = clampImagePreviewZoom(imagePreviewZooms.get(path) ?? 1);
-    const setZoom = (nextZoom: number) => {
-      const zoom = clampImagePreviewZoom(nextZoom);
-      currentZoom = zoom;
-      imagePreviewZooms.set(path, zoom);
-      applyImagePreviewZoom(previewPane, stage, image, zoomLabel, zoom);
-    };
-    zoomOut.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      setZoom(currentZoom - IMAGE_PREVIEW_ZOOM_STEP);
-    });
-    zoomIn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      setZoom(currentZoom + IMAGE_PREVIEW_ZOOM_STEP);
-    });
-    image.addEventListener("load", () => setZoom(currentZoom), { once: true });
-    image.src = `data:${file.mime_type};base64,${file.data_base64}`;
-    stage.replaceChildren(image);
-  } catch (err) {
-    if (currentFilePath !== path) return;
-    loading.classList.add("error");
-    loading.textContent = `Could not load image: ${err}`;
-  }
-}
-
-function renderJsonPreview(previewPane: HTMLElement, content: string) {
-  try {
-    const parsed = JSON.parse(content);
-    previewPane.innerHTML = `<pre class="structured-preview json-preview">${escapeHtml(JSON.stringify(parsed, null, 2))}</pre>`;
-  } catch {
-    previewPane.innerHTML = `<pre class="plain-text-preview">${escapeHtml(content)}</pre>`;
-  }
-}
-
-function parseCsvRows(content: string, maxRows = 200): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < content.length; i++) {
-    const ch = content[i];
-    const next = content[i + 1];
-    if (ch === '"' && inQuotes && next === '"') {
-      cell += '"';
-      i++;
-    } else if (ch === '"') {
-      inQuotes = !inQuotes;
-    } else if (ch === "," && !inQuotes) {
-      row.push(cell);
-      cell = "";
-    } else if ((ch === "\n" || ch === "\r") && !inQuotes) {
-      if (ch === "\r" && next === "\n") i++;
-      row.push(cell);
-      rows.push(row);
-      if (rows.length >= maxRows) return rows;
-      row = [];
-      cell = "";
-    } else {
-      cell += ch;
-    }
-  }
-  if (cell || row.length) {
-    row.push(cell);
-    rows.push(row);
-  }
-  return rows;
-}
-
-function renderCsvPreview(previewPane: HTMLElement, content: string) {
-  const rows = parseCsvRows(content);
-  if (!rows.length) {
-    previewPane.innerHTML = `<pre class="plain-text-preview"></pre>`;
-    return;
-  }
-  const [header, ...body] = rows;
-  const head = header.map(cell => `<th>${escapeHtml(cell)}</th>`).join("");
-  const bodyHtml = body.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("");
-  previewPane.innerHTML = `
-    <div class="table-preview-wrap">
-      <table class="table-preview">
-        <thead><tr>${head}</tr></thead>
-        <tbody>${bodyHtml}</tbody>
-      </table>
-    </div>`;
-}
-
 async function updatePreview(content: string) {
   const previewPane = $("#preview-pane");
   const previewWrapper = $("#preview-pane-wrapper");
   if (!previewPane || (previewWrapper && previewWrapper.style.display === "none")) return;
 
-  if (currentFilePath && (isImagePath(currentFilePath) || isSvgPath(currentFilePath))) {
-    await renderImagePreview(previewPane, currentFilePath);
-    return;
-  }
-
   if (currentFilePath && isHtmlPath(currentFilePath)) {
     renderHtmlPreview(previewPane, content);
-    return;
-  }
-
-  if (currentFilePath && isJsonPath(currentFilePath)) {
-    renderJsonPreview(previewPane, content);
-    return;
-  }
-
-  if (currentFilePath && isCsvPath(currentFilePath)) {
-    renderCsvPreview(previewPane, content);
     return;
   }
 
@@ -1692,6 +1488,10 @@ async function closeSubTab(id: string) {
 }
 
 async function openInSubPane(path: string, opts: { quiet?: boolean } = {}): Promise<boolean> {
+  if (fileKind(path) === "external") {
+    if (!opts.quiet) await openInDefaultApp(path);
+    return false;
+  }
   const existing = subTabs.find(t => t.filePath === path);
   if (existing) {
     subActiveTabId = existing.id;
@@ -1727,7 +1527,8 @@ function persistSplitChange() {
 async function restoreSplitSession(saved: SplitSession | null) {
   if (!saved || !saved.open || saved.tabs.length === 0) return;
   let opened = 0;
-  for (const t of saved.tabs) {
+  // Never launch an external app at startup for a PDF or image left in an old session.
+  for (const t of saved.tabs.filter(t => fileKind(t.filePath) !== "external")) {
     if (await openInSubPane(t.filePath, { quiet: true })) opened++;
   }
   if (opened === 0) return;
@@ -2021,7 +1822,7 @@ async function reloadCurrentFile() {
 }
 
 async function handleCurrentFileChangedOnDisk() {
-  if (!currentFilePath || isPreviewOnlyPath(currentFilePath)) return;
+  if (!currentFilePath) return;
   if (isEditorDirty()) {
     showFileChangedBanner();
   } else {
@@ -2030,7 +1831,7 @@ async function handleCurrentFileChangedOnDisk() {
 }
 
 async function checkCurrentFileForDiskChanges() {
-  if (!currentFilePath || isPreviewOnlyPath(currentFilePath) || diskChangeCheckInFlight) return;
+  if (!currentFilePath || diskChangeCheckInFlight) return;
   diskChangeCheckInFlight = true;
   try {
     const metadata = await invoke<FileSnapshot>("file_metadata", { path: currentFilePath });
@@ -2144,11 +1945,6 @@ function setFilename(path: string | null) {
 
 async function saveFile() {
   const content = editor.state.doc.toString();
-  if (currentFilePath && isPreviewOnlyPath(currentFilePath)) {
-    flashStatus("Preview-only file. Images and SVG are not editable in Kaelio.", "var(--warning)", 4000);
-    return;
-  }
-
   if (!currentFilePath) {
     const path = await save({
       filters: [{ name: "Markdown", extensions: ["md"] }],
@@ -2220,8 +2016,7 @@ async function openFileDialog() {
   const path = await open({
     filters: [
       { name: "Markdown", extensions: ["md", "markdown"] },
-      { name: "Images", extensions: ["png", "jpg", "jpeg"] },
-      { name: "Text and Code", extensions: ["txt", "yaml", "yml", "json", "toml", "xml", "csv", "log", "html", "htm", "css", "scss", "js", "jsx", "ts", "tsx", "rs", "py", "sh", "bash", "zsh", "sql", "svg", "ini", "conf"] },
+      { name: "Text and Code", extensions: ["txt", "yaml", "yml", "json", "toml", "xml", "csv", "log", "html", "htm", "css", "scss", "js", "jsx", "ts", "tsx", "rs", "py", "sh", "bash", "zsh", "sql", "ini", "conf"] },
       { name: "All Files", extensions: ["*"] },
     ],
     multiple: false,
@@ -2229,34 +2024,25 @@ async function openFileDialog() {
   if (path) openFile(path as string);
 }
 
+/** PDFs, images and SVG open in the system default app; Kaelio never makes a tab for them. */
+async function openInDefaultApp(path: string) {
+  try {
+    await invoke("open_in_default_app", { path });
+    flashStatus("Opened in default app", "var(--success)", 2500);
+  } catch (err) {
+    flashStatus(String(err), "var(--error)", 4000);
+  }
+}
+
 async function openFile(path: string, skipScrollRestore = false) {
+  if (fileKind(path) === "external") {
+    await openInDefaultApp(path);
+    return;
+  }
   // Check if file is already open in a tab
   const existingTab = tabs.find(t => t.filePath === path);
   if (existingTab) {
     switchToTab(existingTab.id);
-    return;
-  }
-  if (isPreviewOnlyPath(path)) {
-    saveScrollPosition();
-    saveActiveTabState();
-
-    const tab = createTab(path, `Preview-only file:\n${path}`);
-    tabs.push(tab);
-    activeTabId = tab.id;
-    currentFilePath = path;
-
-    editor.setState(tab.editorState);
-    setFilename(path);
-    setModified(false);
-    addRecentFile(path);
-    renderTabs();
-    persistOpenTabs();
-    updatePreviewOrRevealPreviewOnly("");
-    updateWordCount("");
-    updateCursorPosition(editor);
-    startFileWatch(path);
-    refreshCurrentFileSnapshot(path);
-    if (!skipScrollRestore) restoreScrollPosition(path);
     return;
   }
 
@@ -3549,7 +3335,7 @@ const editorLightTheme = EditorView.theme({
 
 const SAMPLE_CONTENT = `# About Kaelio
 
-**Kaelio** is a lightweight project file viewer and markdown/document reader. Open Markdown, HTML, JSON, CSV, images, SVG, and PDFs from a project folder with a clean preview-first workflow.
+**Kaelio** is a lightweight project file viewer and markdown/document reader. Open Markdown and HTML from a project folder with a clean preview-first workflow; other text files open as plain text, and PDFs and images open in your default app.
 
 ## Features
 
@@ -4819,7 +4605,7 @@ function switchToTab(tabId: string) {
   updateBreadcrumb();
   startFileWatch(newTab.filePath);
   checkCurrentFileForDiskChanges();
-  updatePreviewOrRevealPreviewOnly(tabContent);
+  updatePreview(tabContent);
   updateWordCount(tabContent);
   updateCursorPosition(editor);
   renderTabs();
@@ -4959,7 +4745,7 @@ async function closeTab(tabId: string) {
     startFileWatch(newTab.filePath);
     checkCurrentFileForDiskChanges();
     const content = editor.state.doc.toString();
-    updatePreviewOrRevealPreviewOnly(content);
+    updatePreview(content);
     updateWordCount(content);
     updateCursorPosition(editor);
   }
@@ -7124,7 +6910,8 @@ window.addEventListener("DOMContentLoaded", async () => {
       const savedSplit = parseSplitSession(sessionData.split);
       // Restore tabs from previous session (from disk)
       try {
-        const fileTabs = (sessionData.openTabs || []).filter(t => t.filePath);
+        // PDFs and images from an older session are skipped: restore must not launch other apps.
+        const fileTabs = (sessionData.openTabs || []).filter(t => t.filePath && fileKind(t.filePath) !== "external");
         if (fileTabs.length > 0) {
           let activeSaved: typeof fileTabs[number] | null = null;
           for (const t of fileTabs) {
@@ -7163,11 +6950,11 @@ window.addEventListener("DOMContentLoaded", async () => {
             }
           }
           renderTabs();
-        } else if (sessionData.lastFile) {
+        } else if (sessionData.lastFile && fileKind(sessionData.lastFile) !== "external") {
           openFile(sessionData.lastFile);
         }
       } catch {
-        if (sessionData.lastFile) openFile(sessionData.lastFile);
+        if (sessionData.lastFile && fileKind(sessionData.lastFile) !== "external") openFile(sessionData.lastFile);
       }
       try {
         await restoreSplitSession(savedSplit);

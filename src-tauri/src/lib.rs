@@ -403,6 +403,40 @@ fn read_binary_file(path: String) -> Result<BinaryFileInfo, String> {
     })
 }
 
+/// File types Kaelio no longer shows itself; they go to the system default app.
+/// Mirrors EXTERNAL in src/lib/file-kind.ts.
+const DEFAULT_APP_EXTENSIONS: &[&str] = &[
+    "pdf", "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif", "svg",
+];
+
+/// Returns the canonical path when `path` is an existing regular file with an
+/// allow-listed extension. Anything else (scripts, app bundles, folders) is refused,
+/// so the frontend cannot use this to launch arbitrary programs.
+fn default_app_target(path: &Path) -> Result<PathBuf, String> {
+    let refused = || "Cannot open this file".to_string();
+    let canonical = fs::canonicalize(path).map_err(|_| refused())?;
+    let metadata = fs::metadata(&canonical).map_err(|_| refused())?;
+    if !metadata.is_file() {
+        return Err(refused());
+    }
+    let ext = canonical
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .ok_or_else(refused)?;
+    if !DEFAULT_APP_EXTENSIONS.contains(&ext.as_str()) {
+        return Err(refused());
+    }
+    Ok(canonical)
+}
+
+#[tauri::command]
+fn open_in_default_app(path: String) -> Result<(), String> {
+    let target = default_app_target(Path::new(&path))?;
+    tauri_plugin_opener::open_path(&target, None::<&str>)
+        .map_err(|_| "Cannot open this file".to_string())
+}
+
 fn metadata_modified_ms(metadata: &fs::Metadata) -> u64 {
     metadata
         .modified()
@@ -3311,6 +3345,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_file,
             read_binary_file,
+            open_in_default_app,
             file_metadata,
             save_binary_base64,
             save_pasted_image,
@@ -3615,5 +3650,42 @@ mod audit_tests {
         assert!(validate_menu_accelerator("app.quit", Some("CmdOrCtrl+Q")).is_err());
         assert!(validate_menu_accelerator("file.save", Some("CmdOrCtrl+S; rm")).is_err());
         assert!(validate_menu_accelerator("file.save", Some(&"A".repeat(100))).is_err());
+    }
+
+    #[test]
+    fn default_app_target_accepts_listed_extension() {
+        let dir = scratch_dir("default_app_ok");
+        let file = dir.join("x.PDF");
+        fs::write(&file, b"%PDF").unwrap();
+        let got = default_app_target(&file).unwrap();
+        assert_eq!(got, fs::canonicalize(&file).unwrap());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn default_app_target_rejects_unlisted_extension() {
+        let dir = scratch_dir("default_app_ext");
+        for name in ["x.sh", "x.command", "x.app"] {
+            let file = dir.join(name);
+            fs::write(&file, b"echo hi").unwrap();
+            assert!(default_app_target(&file).is_err(), "{name} must be refused");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn default_app_target_rejects_missing_file() {
+        let dir = scratch_dir("default_app_missing");
+        assert!(default_app_target(&dir.join("nope.pdf")).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn default_app_target_rejects_directory() {
+        let dir = scratch_dir("default_app_dir");
+        let sub = dir.join("dir.pdf");
+        fs::create_dir_all(&sub).unwrap();
+        assert!(default_app_target(&sub).is_err());
+        let _ = fs::remove_dir_all(&dir);
     }
 }
