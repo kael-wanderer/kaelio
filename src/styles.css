@@ -29,6 +29,12 @@
   --font-ui: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-reading: "Inter", "SF Pro Text", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  --hl-keyword: #8a3f9e;
+  --hl-string: #4a7c3f;
+  --hl-number: #b0652a;
+  --hl-comment: #8a847a;
+  --hl-function: #2f6f9f;
+  --hl-title: #7c5c3e;
 }
 
 /* ── Dark theme ── */
@@ -49,6 +55,12 @@
   --shadow: rgba(0, 0, 0, 0.3);
   --success: #a6e3a1;
   --error: #f38ba8;
+  --hl-keyword: #cba6f7;
+  --hl-string: #a6e3a1;
+  --hl-number: #fab387;
+  --hl-comment: #7f849c;
+  --hl-function: #89b4fa;
+  --hl-title: #f9e2af;
 }
 
 /* ── Built-in themes ── */
@@ -69,6 +81,12 @@
   --shadow: rgba(0, 0, 0, 0.3);
   --success: #a6e3a1;
   --error: #f38ba8;
+  --hl-keyword: #cba6f7;
+  --hl-string: #a6e3a1;
+  --hl-number: #fab387;
+  --hl-comment: #7f849c;
+  --hl-function: #89b4fa;
+  --hl-title: #f9e2af;
 }
 
 [data-theme="everforest-dark"],
@@ -89,6 +107,12 @@
   --shadow: rgba(0, 0, 0, 0.35);
   --success: #a7c080;
   --error: #e67e80;
+  --hl-keyword: #e67e80;
+  --hl-string: #a7c080;
+  --hl-number: #d699b6;
+  --hl-comment: #859289;
+  --hl-function: #7fbbb3;
+  --hl-title: #dbbc7f;
 }
 
 [data-theme="nord"] {
@@ -108,6 +132,12 @@
   --shadow: rgba(0, 0, 0, 0.3);
   --success: #a3be8c;
   --error: #bf616a;
+  --hl-keyword: #81a1c1;
+  --hl-string: #a3be8c;
+  --hl-number: #b48ead;
+  --hl-comment: #8f9bb3;
+  --hl-function: #88c0d0;
+  --hl-title: #ebcb8b;
 }
 
 /* ── Auto: follow system preference ── */
@@ -129,6 +159,12 @@
     --shadow: rgba(0, 0, 0, 0.3);
     --success: #a6e3a1;
     --error: #f38ba8;
+    --hl-keyword: #cba6f7;
+    --hl-string: #a6e3a1;
+    --hl-number: #fab387;
+    --hl-comment: #7f849c;
+    --hl-function: #89b4fa;
+    --hl-title: #f9e2af;
   }
 }
 
@@ -1152,6 +1188,69 @@ body {
   font-size: 14px;
   line-height: 1.6;
 }
+
+/* Code block copy button (preview only; stripped from exports) */
+:is(#preview-pane, #sub-pane) .code-block {
+  position: relative;
+}
+:is(#preview-pane, #sub-pane) .code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1.4;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+:is(#preview-pane, #sub-pane) .code-copy::after { content: "Copy"; }
+:is(#preview-pane, #sub-pane) .code-copy.done::after { content: "Copied"; }
+:is(#preview-pane, #sub-pane) .code-block:hover .code-copy,
+:is(#preview-pane, #sub-pane) .code-copy:focus-visible,
+:is(#preview-pane, #sub-pane) .code-copy.done {
+  opacity: 1;
+}
+:is(#preview-pane, #sub-pane) .code-copy.done {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+/* Syntax highlighting tokens (highlight.js classes, colours from theme variables) */
+:is(#preview-pane, #sub-pane) .hljs-keyword,
+:is(#preview-pane, #sub-pane) .hljs-selector-tag,
+:is(#preview-pane, #sub-pane) .hljs-literal,
+:is(#preview-pane, #sub-pane) .hljs-type,
+:is(#preview-pane, #sub-pane) .hljs-doctag { color: var(--hl-keyword); }
+:is(#preview-pane, #sub-pane) .hljs-string,
+:is(#preview-pane, #sub-pane) .hljs-regexp,
+:is(#preview-pane, #sub-pane) .hljs-addition,
+:is(#preview-pane, #sub-pane) .hljs-template-tag { color: var(--hl-string); }
+:is(#preview-pane, #sub-pane) .hljs-number,
+:is(#preview-pane, #sub-pane) .hljs-symbol,
+:is(#preview-pane, #sub-pane) .hljs-bullet,
+:is(#preview-pane, #sub-pane) .hljs-variable.constant_ { color: var(--hl-number); }
+:is(#preview-pane, #sub-pane) .hljs-comment,
+:is(#preview-pane, #sub-pane) .hljs-quote,
+:is(#preview-pane, #sub-pane) .hljs-meta { color: var(--hl-comment); font-style: italic; }
+:is(#preview-pane, #sub-pane) .hljs-title.function_,
+:is(#preview-pane, #sub-pane) .hljs-built_in,
+:is(#preview-pane, #sub-pane) .hljs-attr,
+:is(#preview-pane, #sub-pane) .hljs-property { color: var(--hl-function); }
+:is(#preview-pane, #sub-pane) .hljs-title,
+:is(#preview-pane, #sub-pane) .hljs-section,
+:is(#preview-pane, #sub-pane) .hljs-name,
+:is(#preview-pane, #sub-pane) .hljs-selector-class,
+:is(#preview-pane, #sub-pane) .hljs-selector-id { color: var(--hl-title); }
+:is(#preview-pane, #sub-pane) .hljs-deletion { color: var(--error); }
+:is(#preview-pane, #sub-pane) .hljs-emphasis { font-style: italic; }
+:is(#preview-pane, #sub-pane) .hljs-strong { font-weight: 600; }
 
 :is(#preview-pane, #sub-pane) .table-scroll {
   overflow-x: auto;

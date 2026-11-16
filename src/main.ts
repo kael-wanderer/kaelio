@@ -28,6 +28,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { migrateKeybindings } from "./lib/keybindings.ts";
+import { highlightCode } from "./lib/highlight.ts";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -737,7 +738,7 @@ const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 
 // --- Markdown-it with KaTeX ---
 
-const md = new MarkdownIt({ html: true, linkify: true, typographer: true, breaks: true }).use(footnote);
+const md = new MarkdownIt({ html: true, linkify: true, typographer: true, breaks: true, highlight: highlightCode }).use(footnote);
 
 // Tag block-level rendered elements with their source line number so the preview
 // can be mapped back to editor positions for scroll-sync and click-to-cursor.
@@ -885,6 +886,45 @@ function processMermaidBlocks(html: string): string {
   });
 
   return template.innerHTML;
+}
+
+/** Wraps each code block in `.code-block` with a hover "Copy" button (preview only, never export). */
+function addCodeCopyButtons(html: string): string {
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  template.content.querySelectorAll("pre").forEach((pre) => {
+    if (!pre.querySelector(":scope > code")) return;
+    if (pre.parentElement?.classList.contains("code-block")) return;
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-block";
+    pre.replaceWith(wrapper);
+    wrapper.appendChild(pre);
+    const btn = document.createElement("button");
+    btn.className = "code-copy";
+    btn.type = "button";
+    // Label comes from CSS ::after so it never shows up in innerText / Copy Formatted
+    btn.setAttribute("aria-label", "Copy code");
+    wrapper.appendChild(btn);
+  });
+  return template.innerHTML;
+}
+
+/** Delegated click handler for `.code-copy` buttons inside a preview pane. */
+function handleCodeCopyClick(e: Event) {
+  const btn = (e.target as HTMLElement).closest(".code-copy") as HTMLButtonElement | null;
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const code = btn.closest(".code-block")?.querySelector("code");
+  if (!code) return;
+  navigator.clipboard.writeText(code.textContent ?? "").then(() => {
+    btn.classList.add("done");
+    btn.setAttribute("aria-label", "Copied");
+    setTimeout(() => {
+      btn.classList.remove("done");
+      btn.setAttribute("aria-label", "Copy code");
+    }, 1500);
+  }).catch(() => flashStatus("Copy failed", "var(--error)"));
 }
 
 async function renderMermaidDivs() {
@@ -1767,6 +1807,7 @@ async function updatePreview(content: string) {
   html = renderChecklists(html);
   html = renderKaTeX(html);
   html = processMermaidBlocks(html);
+  html = addCodeCopyButtons(html);
   html = sanitizeHtmlString(html);
   previewPane.innerHTML = html;
   await renderMermaidDivs();
@@ -1827,6 +1868,7 @@ function renderSubPreview(content: string) {
   html = renderCallouts(html);
   html = renderChecklists(html);
   html = renderKaTeX(html);
+  html = addCodeCopyButtons(html);
   html = sanitizeHtmlString(html);
   pane.innerHTML = html;
   applySubTypography();
@@ -3931,7 +3973,10 @@ async function copyFormattedHTML() {
   const previewPane = $("#preview-pane");
   if (!previewPane) return;
 
-  const html = previewPane.innerHTML;
+  // Strip preview-only controls (code copy buttons) from the copied markup
+  const clone = previewPane.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll(".code-copy").forEach(el => el.remove());
+  const html = clone.innerHTML;
   const text = previewPane.innerText;
 
   try {
@@ -5911,6 +5956,7 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
   } else {
     appendSanitizedHtml(host, previewPane.innerHTML);
   }
+  host.querySelectorAll(".code-copy").forEach(el => el.remove());
   document.body.appendChild(host);
   const fullHeight = Math.max(host.scrollHeight, host.clientHeight, previewPane.scrollHeight, previewPane.clientHeight, 1);
   host.style.height = `${fullHeight}px`;
@@ -5941,6 +5987,12 @@ const EXPORT_LIGHT_THEME_CSS = `
     --strong-color: #111827;
     --code-bg: #f3f4f6;
     --code-color: #9f1239;
+    --hl-keyword: #7c3aed;
+    --hl-string: #15803d;
+    --hl-number: #b45309;
+    --hl-comment: #6b7280;
+    --hl-function: #1d4ed8;
+    --hl-title: #9f1239;
     --preview-bg: #ffffff;
     --preview-text: #111827;
     background: #ffffff !important;
@@ -6031,6 +6083,12 @@ function applyLightExportTheme(node: HTMLElement) {
   node.style.setProperty("--strong-color", "#111827");
   node.style.setProperty("--code-bg", "#f3f4f6");
   node.style.setProperty("--code-color", "#9f1239");
+  node.style.setProperty("--hl-keyword", "#7c3aed");
+  node.style.setProperty("--hl-string", "#15803d");
+  node.style.setProperty("--hl-number", "#b45309");
+  node.style.setProperty("--hl-comment", "#6b7280");
+  node.style.setProperty("--hl-function", "#1d4ed8");
+  node.style.setProperty("--hl-title", "#9f1239");
   node.style.setProperty("--preview-bg", "#ffffff");
   node.style.setProperty("--preview-text", "#111827");
   node.style.background = "#ffffff";
@@ -7579,6 +7637,10 @@ window.addEventListener("DOMContentLoaded", async () => {
       });
     }
   });
+
+  // Copy buttons on code blocks (main and split sub-pane previews)
+  $("#preview-pane")?.addEventListener("click", handleCodeCopyClick);
+  document.getElementById("sub-pane")?.addEventListener("click", handleCodeCopyClick);
 
   // Copy-link buttons on headings — copies #anchor-id to clipboard
   $("#preview-pane")?.addEventListener("click", (e) => {

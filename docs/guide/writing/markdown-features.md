@@ -91,7 +91,7 @@ A single new line in your text is a line break in the preview. You do not need t
 
 - Diagrams and formulas render on your computer. Nothing is sent online to show them in the preview. (The Markdown PDF export is the one exception, see [Export](../export/export.md).)
 - Raw HTML in a document is cleaned before it is shown: scripts, embedded objects and links that run code are removed.
-- Code blocks in the preview are not colour-highlighted; the editor highlights Markdown syntax as you type.
+- Code blocks in the preview are colour-highlighted when the fence names a common language (for example ` ```js ` or ` ```rust `); a block with an unknown or no language stays plain. Hover a code block and click **Copy** to copy its code.
 
 ## Next steps
 
