@@ -2931,6 +2931,17 @@ fn new_html_token() -> Result<String, String> {
 
 /// Grants the folder of an existing .html/.htm file under a fresh token.
 fn grant_html(grants: &mut Vec<(String, PathBuf)>, path: &Path) -> Result<HtmlGrant, String> {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    grant_html_in(grants, path, home.as_deref())
+}
+
+/// A page can load anything below its folder, so a page sitting directly in
+/// the home folder or at the filesystem root is refused.
+fn grant_html_in(
+    grants: &mut Vec<(String, PathBuf)>,
+    path: &Path,
+    home: Option<&Path>,
+) -> Result<HtmlGrant, String> {
     let canonical = fs::canonicalize(path).map_err(|_| "File not found".to_string())?;
     let meta = fs::metadata(&canonical).map_err(|_| "File not found".to_string())?;
     if !meta.is_file() {
@@ -2945,6 +2956,10 @@ fn grant_html(grants: &mut Vec<(String, PathBuf)>, path: &Path) -> Result<HtmlGr
         return Err("Only HTML files can run scripts".to_string());
     }
     let folder = canonical.parent().ok_or("No parent folder")?.to_path_buf();
+    let home = home.and_then(|h| fs::canonicalize(h).ok());
+    if folder.parent().is_none() || home.as_deref() == Some(folder.as_path()) {
+        return Err("Move the page into its own folder to run its scripts".to_string());
+    }
     let file_name = canonical
         .file_name()
         .and_then(|n| n.to_str())
@@ -4138,6 +4153,17 @@ mod audit_tests {
         assert_eq!(g.token.len(), 32);
         assert!(g.token.chars().all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c)));
         assert_eq!(grants, vec![(g.token.clone(), f.root.clone())]);
+    }
+
+    #[test]
+    fn html_grant_refuses_home_and_root_folders() {
+        let f = html_fixture();
+        let mut grants = Vec::new();
+        // A page directly in the home folder would expose all of it
+        assert!(super::grant_html_in(&mut grants, &f.root.join("page.html"), Some(&f.root)).is_err());
+        assert!(grants.is_empty());
+        // A page in a subfolder of home is fine
+        assert!(super::grant_html_in(&mut grants, &f.root.join("page.html"), Some(&f.base)).is_ok());
     }
 
     #[test]

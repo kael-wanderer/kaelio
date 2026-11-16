@@ -6147,7 +6147,7 @@ function tableTab(view: EditorView, dir: 1 | -1): boolean {
   const sel = state.selection.main;
   const line = state.doc.lineAt(sel.head);
   if (state.doc.lineAt(sel.anchor).number !== line.number) return false;
-  if (cursorInFencedCode(view)) return false;
+  if (!viewIsMarkdown(view) || cursorInFencedCode(view)) return false;
   // Lines handed to tabInTable, and the 0-based doc line of lines[0]
   let first = 0;
   let lines: string[];
@@ -6215,6 +6215,12 @@ async function pastePlain() {
   view.focus();
 }
 
+/** Smart paste and table editing act only in Markdown files. */
+function viewIsMarkdown(view: EditorView): boolean {
+  const path = editorSub && view === editorSub ? subFilePath : currentFilePath;
+  return fileKind(path) === "markdown";
+}
+
 const CODE_NODE_NAMES = new Set(["FencedCode", "CodeBlock", "InlineCode", "CodeText"]);
 
 function cursorInCode(view: EditorView): boolean {
@@ -6241,6 +6247,7 @@ function handleSmartPaste(e: ClipboardEvent, view: EditorView): boolean {
     selection: view.state.sliceDoc(sel.from, sel.to),
     inCode: cursorInCode(view),
     forcePlain: false,
+    markdown: viewIsMarkdown(view),
   });
   if (decision.kind === "plain") return false;
   e.preventDefault();

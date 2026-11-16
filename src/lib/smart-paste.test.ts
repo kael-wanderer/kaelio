@@ -60,3 +60,18 @@ test("scripts, styles and data-url images are dropped", () => {
   assert.ok(!md.includes("data:"));
   assert.ok(md.includes("![a](https://e.com/a.png)"));
 });
+// Final review fixes
+test("non-Markdown files always paste plain", () => {
+  assert.deepEqual(decidePaste({ ...base, text: "https://a.com", selection: "docs", markdown: false }), { kind: "plain" });
+  assert.deepEqual(decidePaste({ ...base, text: "x", html: "<h1>x</h1>", markdown: false }), { kind: "plain" });
+});
+test("Google Docs bold wrapper is unwrapped", () => {
+  const html = '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-abc"><h1>Title</h1><p>Hello <span style="font-weight:700">bold</span></p></b>';
+  const md = htmlToMarkdown(html);
+  assert.ok(!md.startsWith("**") && !md.endsWith("**"), md);
+  assert.match(md, /^# Title/);
+});
+test("a pre without code becomes a fenced block, unescaped", () => {
+  const md = htmlToMarkdown('<pre style="color:#000">x = a * b * c\n# comment_with_underscores</pre>');
+  assert.equal(md, "```\nx = a * b * c\n# comment_with_underscores\n```");
+});

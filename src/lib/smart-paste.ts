@@ -43,6 +43,24 @@ function turndown(): TurndownService {
   });
   s.use(gfm);
   s.remove(["script", "style", "meta", "link"]);
+  // Google Docs wraps the whole clipboard in <b style="font-weight:normal" id="docs-internal-guid-…">
+  s.addRule("unwrapDocsWrapper", {
+    filter: (node) =>
+      node.nodeName === "B" &&
+      (/^docs-internal-guid/.test((node as HTMLElement).getAttribute("id") || "") ||
+        /font-weight\s*:\s*(normal|400)/i.test((node as HTMLElement).getAttribute("style") || "")),
+    replacement: (content) => content,
+  });
+  // A <pre> without <code> (JetBrains, many web pages) is code: fence its
+  // text as is, without Markdown escaping.
+  s.addRule("barePre", {
+    filter: (node) => node.nodeName === "PRE" && !(node as HTMLElement).querySelector("code"),
+    replacement: (_content, node) => {
+      const text = ((node as HTMLElement).textContent || "").replace(/\n$/, "");
+      const fence = /```/.test(text) ? "~~~~" : "```";
+      return `\n\n${fence}\n${text}\n${fence}\n\n`;
+    },
+  });
   s.addRule("dropDataImages", {
     filter: (node) =>
       node.nodeName === "IMG" && /^\s*data:/i.test((node as HTMLElement).getAttribute("src") || ""),
@@ -62,9 +80,11 @@ export function decidePaste(input: {
   selection: string;
   inCode: boolean;
   forcePlain: boolean;
+  /** The file is Markdown; other files (HTML, YAML, text) always paste plain. Default true. */
+  markdown?: boolean;
 }): PasteDecision {
   const { html, text, selection, inCode, forcePlain } = input;
-  if (forcePlain || inCode) return { kind: "plain" };
+  if (forcePlain || inCode || input.markdown === false) return { kind: "plain" };
   if (selection.length > 0 && isSingleUrl(text) && !isSingleUrl(selection)) {
     return { kind: "link", text: `[${selection}](${text.trim()})` };
   }
