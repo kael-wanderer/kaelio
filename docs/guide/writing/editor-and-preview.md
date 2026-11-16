@@ -39,7 +39,7 @@ Above the editor, the formatting bar inserts Markdown for you: **Bold**, **Itali
 
 ### Outline and line numbers
 
-- Click **¶** (**Toggle Outline**) at the top of the Explorer to list the document's headings. Click one to jump to it.
+- Click **¶** (**Toggle Outline**) at the top of the Explorer, or press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>O</kbd>, to list the document's headings. Click one to jump to it; in **Reading View** the preview scrolls to that heading. The entry for the heading at the top of the view is highlighted as you scroll.
 - Click **#** on the activity bar (**Show / Hide Line Numbers**) to turn line numbers on or off.
 
 ### Status bar

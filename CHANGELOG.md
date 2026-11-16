@@ -4,6 +4,7 @@
 
 ### Changes
 
+- **Outline works in Reading View.** `Cmd+Shift+O` toggles it; clicking a heading in Reading View scrolls the preview to it, the entry for the heading at the top of the view is highlighted as you scroll, and `#` lines inside code fences or front matter are no longer listed.
 - **Code blocks are syntax-highlighted and have a Copy button.** Common languages are coloured to match the current theme; a fence with an unknown or no language stays plain. Hover a block and click **Copy** to copy its code. The button never appears in PNG export or Copy Formatted.
 - **Pasted images are saved as files.** A pasted image goes to `assets/` beside the note and a relative link is inserted, instead of a base64 blob in the Markdown. PNG, JPEG, GIF and WebP up to 20 MB; files are never overwritten. Works in the split pane too.
 - **Conventional shortcuts.** `Cmd+P` opens file search (quick open), `Cmd+Shift+F` searches in files, `Cmd+Alt+P` shows/hides the preview, and `Cmd+Shift+O` toggles the outline. Custom bindings you saved are kept; a new default that collides with one of them is left unbound.

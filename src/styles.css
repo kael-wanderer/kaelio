@@ -2394,10 +2394,17 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--font-ui);
+  border-left: 2px solid transparent;
 }
 
 .outline-item:hover {
   background: var(--hover-bg);
+}
+
+.outline-item.active {
+  color: var(--text);
+  border-left-color: var(--accent);
+  background: var(--active-bg);
 }
 
 .outline-h1 { padding-left: 12px; font-weight: 600; }

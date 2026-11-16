@@ -29,6 +29,7 @@ import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { migrateKeybindings } from "./lib/keybindings.ts";
 import { highlightCode } from "./lib/highlight.ts";
+import { extractHeadings, activeHeadingIndex } from "./lib/outline.ts";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -3687,6 +3688,7 @@ function setViewMode(mode: ViewMode) {
     updatePreview(editor.state.doc.toString());
   }
   updateActivityBarUI();
+  scheduleOutlineActive();
 }
 
 function togglePreview() {
@@ -4459,14 +4461,8 @@ function updateOutline(content: string) {
   const list = document.getElementById("outline-list");
   if (!list) return;
 
-  const headings: { level: number; text: string; line: number }[] = [];
-  const lines = content.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(/^(#{1,6})\s+(.+)/);
-    if (match) {
-      headings.push({ level: match[1].length, text: match[2].trim(), line: i + 1 });
-    }
-  }
+  const headings = extractHeadings(content);
+  outlineHeadingLines = headings.map(h => h.line);
 
   if (headings.length === 0) {
     list.innerHTML = '<div style="padding: 8px 12px; color: var(--muted); font-size: 11px;">No headings</div>';
@@ -4480,13 +4476,74 @@ function updateOutline(content: string) {
   list.querySelectorAll(".outline-item").forEach(el => {
     el.addEventListener("click", () => {
       const lineNum = parseInt((el as HTMLElement).dataset.line || "1");
-      const line = editor.state.doc.line(lineNum);
+      if (currentViewMode === "preview") {
+        scrollPreviewToSourceLine(lineNum);
+        return;
+      }
+      const line = editor.state.doc.line(Math.min(Math.max(lineNum, 1), editor.state.doc.lines));
       editor.dispatch({
         selection: { anchor: line.from },
         scrollIntoView: true,
       });
       editor.focus();
     });
+  });
+  updateOutlineActive();
+}
+
+let outlineHeadingLines: number[] = [];
+
+/** Reading View: scroll the preview so the block rendered from 1-based `lineNum` is at the top. */
+function scrollPreviewToSourceLine(lineNum: number) {
+  const previewPane = document.getElementById("preview-pane");
+  if (!previewPane) return;
+  const items = getPreviewLineElements(previewPane);
+  let target: HTMLElement | null = null;
+  for (const it of items) {
+    if (it.line <= lineNum - 1) target = it.el;
+    else break;
+  }
+  if (!target) return;
+  previewPane.scrollTop += target.getBoundingClientRect().top - previewPane.getBoundingClientRect().top;
+}
+
+/** 1-based source line at the top of the visible area (preview in Reading View, editor otherwise). */
+function visibleTopSourceLine(): number | null {
+  if (currentViewMode === "preview") {
+    const previewPane = document.getElementById("preview-pane");
+    if (!previewPane) return null;
+    const paneTop = previewPane.getBoundingClientRect().top;
+    for (const it of getPreviewLineElements(previewPane)) {
+      if (it.el.getBoundingClientRect().bottom > paneTop + 1) return it.line + 1;
+    }
+    return null;
+  }
+  if (!editor) return null;
+  const pos = editor.posAtCoords({ x: editor.scrollDOM.getBoundingClientRect().left + 10, y: editor.scrollDOM.getBoundingClientRect().top + 1 }, false);
+  return pos == null ? null : editor.state.doc.lineAt(pos).number;
+}
+
+/** Highlights the outline entry for the heading at the top of the visible area. */
+function updateOutlineActive() {
+  if (!outlineVisible) return;
+  const list = document.getElementById("outline-list");
+  if (!list) return;
+  const top = visibleTopSourceLine();
+  const idx = top == null ? -1 : activeHeadingIndex(outlineHeadingLines, top);
+  list.querySelectorAll<HTMLElement>(".outline-item").forEach((el, i) => {
+    const on = i === idx;
+    if (el.classList.contains("active") === on) return;
+    el.classList.toggle("active", on);
+    if (on) el.scrollIntoView({ block: "nearest" });
+  });
+}
+
+let outlineActiveRaf = 0;
+function scheduleOutlineActive() {
+  if (!outlineVisible || outlineActiveRaf) return;
+  outlineActiveRaf = requestAnimationFrame(() => {
+    outlineActiveRaf = 0;
+    updateOutlineActive();
   });
 }
 
@@ -7092,6 +7149,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     parent: editorPane,
   });
   editor.dom.addEventListener("focusin", () => { activePane = "main"; });
+
+  // Outline: track the heading at the top of the visible area
+  editor.scrollDOM.addEventListener("scroll", scheduleOutlineActive);
+  document.getElementById("preview-pane")?.addEventListener("scroll", scheduleOutlineActive);
 
   // Editor ↔ preview scroll sync wiring
   const previewPaneEl = document.getElementById("preview-pane");
