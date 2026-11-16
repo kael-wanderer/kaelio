@@ -147,10 +147,11 @@ export function tabInTable(lines: string[], lineIndex: number, column: number, d
   let r = lineIndex - t.start;
   let c = cellAt(lines[lineIndex], column);
   if (r === 1) { r = 0; c = ncols - 1; } // on the delimiter row: act as if on the last header cell
+  const inExtra = c >= ncols; // a cell beyond the header's count
   c = Math.min(c, ncols - 1);
 
   let tr = r;
-  let tc = c + dir;
+  let tc = inExtra && dir === -1 ? ncols - 1 : c + dir;
   if (dir === 1 && tc >= ncols) {
     tc = 0;
     tr = r + 1 === 1 ? 2 : r + 1;

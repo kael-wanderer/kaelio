@@ -29,7 +29,7 @@ Scripts in an HTML file are off by default, so a page that draws a chart with Ja
 - A page saved directly in your home folder cannot run scripts: move it into a folder of its own first.
 - The bar reads **Scripts are running in an isolated frame.** Click **Turn off** to go back to the static page.
 - The frame shows the saved file. While you have unsaved edits the bar adds **Showing the last saved version.**; save to see them.
-- The choice lasts until you quit Kaelio. After a restart every page starts with scripts off.
+- The choice lasts until you close the page's last tab or quit Kaelio; after that the page opens with scripts off.
 - **Export PNG** always captures the static page, with scripts off.
 
 Images inside a Markdown note still show in the preview. Click one to see it larger.

@@ -4879,7 +4879,11 @@ async function closeTab(tabId: string) {
   const idx = tabs.findIndex(t => t.id === tabId);
   if (idx === -1) return;
   tabs.splice(idx, 1);
-  if (tab.filePath && !tabs.some(t => t.filePath === tab.filePath)) revokeHtmlGrant(tab.filePath);
+  if (tab.filePath && !tabs.some(t => t.filePath === tab.filePath)) {
+    // Forget the opt-in too, so a grant still pending is revoked when it resolves
+    htmlScriptsAllowed.delete(tab.filePath);
+    revokeHtmlGrant(tab.filePath);
+  }
 
   if (tabs.length === 0) {
     // Create a new untitled tab

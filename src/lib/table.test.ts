@@ -91,3 +91,8 @@ test("extra body cells are kept as written, not turned into new columns", () => 
   assert.deepEqual(r.newLines.length, 4);                                        // next is a new row
   assert.deepEqual([r.selLine, r.selFrom], [3, 2]);
 });
+test("Shift+Tab from an extra cell moves to the last real column", () => {
+  const r = tabInTable(["| a | b |", "|---|---|", "| 1 | 2 | 3 |"], 2, 11, -1)!;  // cursor in "3"
+  assert.equal(r.selLine, 2);
+  assert.equal(r.newLines[2].slice(r.selFrom, r.selTo), "2");
+});
