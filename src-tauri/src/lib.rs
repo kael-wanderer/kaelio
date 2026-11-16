@@ -1862,6 +1862,7 @@ fn watch_file(path: String, window: tauri::Window) -> Result<(), String> {
         move |res: Result<Event, notify::Error>| match res {
             Ok(event) => match event.kind {
                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
+                    emit_paths_changed(&window, &event.paths);
                     let dominated = event.paths.iter().any(|p| {
                         p == &watched_path
                             || p.file_name().map(|n| n.to_os_string()) == watched_name
@@ -1892,9 +1893,31 @@ fn watch_file(path: String, window: tauri::Window) -> Result<(), String> {
             .unwrap()
             .watch(parent, RecursiveMode::NonRecursive)
             .map_err(|e| e.to_string())?;
+        // Pasted images live in assets/ beside the note; watch it too so the
+        // preview drops a replaced image even when no folder is open.
+        let assets = parent.join("assets");
+        if assets.is_dir() {
+            let _ = watchers
+                .get_mut(&label)
+                .unwrap()
+                .watch(&assets, RecursiveMode::NonRecursive);
+        }
     }
 
     Ok(())
+}
+
+/// Tells the frontend which paths changed on disk (the preview's local image
+/// cache drops them). Paths inside `.git` are left out.
+fn emit_paths_changed(window: &tauri::Window, paths: &[PathBuf]) {
+    let list: Vec<String> = paths
+        .iter()
+        .filter(|p| !p.components().any(|c| c.as_os_str() == ".git"))
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    if !list.is_empty() {
+        let _ = window.emit("paths-changed", list);
+    }
 }
 
 #[tauri::command]
@@ -1927,6 +1950,7 @@ fn watch_folder(path: String, window: tauri::Window) -> Result<(), String> {
                         return;
                     }
                     if !matches!(event.kind, EventKind::Access(_)) {
+                        emit_paths_changed(&window, &event.paths);
                         let _ = window.emit("folder-changed", ());
                     }
                 }

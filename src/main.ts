@@ -34,6 +34,7 @@ import { hasScriptTag } from "./lib/html-scripts.ts";
 import { resolveLinkedPath } from "./lib/link-path.ts";
 import { fileKind } from "./lib/file-kind.ts";
 import { resolveLocalImagePath } from "./lib/image-src.ts";
+import { LocalImageCache } from "./lib/image-cache.ts";
 import { highlightCode } from "./lib/highlight.ts";
 import { extractHeadings, activeHeadingIndex } from "./lib/outline.ts";
 import { parseSplitSession, type SplitSession } from "./lib/session.ts";
@@ -939,8 +940,7 @@ function handleCodeCopyClick(e: Event) {
 
 // --- Local images in the preview (relative paths such as assets/pasted-….png) ---
 
-const localImageCache = new Map<string, string>();
-const LOCAL_IMAGE_CACHE_MAX = 100;
+const localImageCache = new LocalImageCache();
 
 function dirOf(path: string | null): string {
   return path ? path.substring(0, path.lastIndexOf("/")) : "";
@@ -958,21 +958,28 @@ async function loadLocalImages(container: HTMLElement, notePath: string | null) 
     img.dataset.localSrc = src;
     let url = localImageCache.get(path);
     if (!url) {
+      const generation = localImageCache.generation;
       try {
         const file = await invoke<BinaryFileInfo>("read_binary_file", { path });
         if (!file.mime_type.startsWith("image/")) return;
         url = `data:${file.mime_type};base64,${file.data_base64}`;
-        if (localImageCache.size >= LOCAL_IMAGE_CACHE_MAX) {
-          const oldest = localImageCache.keys().next().value;
-          if (oldest !== undefined) localImageCache.delete(oldest);
-        }
-        localImageCache.set(path, url);
+        localImageCache.set(path, url, generation);
       } catch {
         return; // missing file: leave the broken image as written
       }
     }
     if (img.isConnected && img.getAttribute("src") === src) img.src = url;
   }));
+}
+
+/** Restores the original relative sources of images already swapped to data
+ *  URLs, then loads them again (from the cache where still valid). */
+async function reloadLocalImages(container: HTMLElement, notePath: string | null) {
+  container.querySelectorAll<HTMLImageElement>("img[data-local-src]").forEach((img) => {
+    const src = img.dataset.localSrc;
+    if (src !== undefined) img.setAttribute("src", src);
+  });
+  await loadLocalImages(container, notePath);
 }
 
 /** Synchronous variant for export capture: uses images already loaded by the preview. */
@@ -2075,11 +2082,28 @@ listen<string>("file-changed", async (event) => {
 let folderWatchDebounce: ReturnType<typeof setTimeout> | null = null;
 
 async function startFolderWatch(path: string | null) {
+  localImageCache.clear();
   try { await invoke("unwatch_folder"); } catch (e) { console.warn("unwatch_folder failed:", e); }
   if (path) {
     try { await invoke("watch_folder", { path }); } catch (e) { console.warn("watch_folder failed:", e); }
   }
 }
+
+// A changed image on disk must not keep showing from the cache: drop it and
+// re-render the panes so the new content is read once.
+listen<string[]>("paths-changed", (event) => {
+  if (!Array.isArray(event.payload)) return;
+  if (!localImageCache.invalidate(event.payload)) return;
+  if (localImageRefresh) clearTimeout(localImageRefresh);
+  localImageRefresh = setTimeout(() => {
+    localImageRefresh = null;
+    const preview = document.getElementById("preview-pane");
+    if (preview) void reloadLocalImages(preview, currentFilePath);
+    const sub = document.getElementById("sub-pane");
+    if (sub) void reloadLocalImages(sub, subFilePath);
+  }, 200);
+});
+let localImageRefresh: ReturnType<typeof setTimeout> | null = null;
 
 listen("folder-changed", () => {
   // Debounce to avoid rapid-fire refreshes

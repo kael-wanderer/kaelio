@@ -31,6 +31,7 @@
 
 ### Fixes
 
+- **Replaced images update in the preview.** An image changed on disk now shows its new content without a restart (the watcher drops it from the image cache); the cache is cleared when you open another folder and is capped at 64 MB.
 - **A reload can no longer land in the wrong tab.** If you switched tabs while Kaelio was re-reading a file changed on disk, that file's text could replace the new tab's content.
 - **PNG export of an HTML page with local images works.** An `<img>` with a relative path made the export fail; images are now read from disk for the capture.
 - **Links with spaces open.** A preview link such as `[Q3](<Q3 report.pdf>)`, or any link from a note in a folder with a space in its name, now opens the file instead of "Cannot open this file".
