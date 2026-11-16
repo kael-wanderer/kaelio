@@ -31,6 +31,7 @@
 
 ### Fixes
 
+- **Images paste into Markdown files only.** Pasting an image into an HTML, YAML or text file no longer saves it to `assets/` or inserts a Markdown link; the status bar says why.
 - **Pasting a URL over a selection makes a valid link.** Brackets in the selected text are escaped and a URL with parentheses is wrapped in `<…>`; a selection spanning several lines pastes the URL as plain text.
 - **Script mode never serves hidden files.** A page running scripts can no longer load `.env`, `.git/…` or anything in a folder whose name starts with a dot, including through a symlink.
 - **Replaced images update in the preview.** An image changed on disk now shows its new content without a restart (the watcher drops it from the image cache); the cache is cleared when you open another folder and is capped at 64 MB.

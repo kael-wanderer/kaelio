@@ -6264,8 +6264,12 @@ async function pastePlain() {
 
 /** Smart paste and table editing act only in Markdown files. */
 function viewIsMarkdown(view: EditorView): boolean {
-  const path = editorSub && view === editorSub ? subFilePath : currentFilePath;
-  return fileKind(path) === "markdown";
+  return fileKind(viewFilePath(view)) === "markdown";
+}
+
+/** The file a pane's editor currently shows. */
+function viewFilePath(view: EditorView): string | null {
+  return editorSub && view === editorSub ? subFilePath : currentFilePath;
 }
 
 const CODE_NODE_NAMES = new Set(["FencedCode", "CodeBlock", "InlineCode", "CodeText"]);
@@ -6317,6 +6321,10 @@ async function handleImagePaste(e: ClipboardEvent, view: EditorView, notePath: s
   if (!imageItem) return;
 
   e.preventDefault();
+  if (!viewIsMarkdown(view)) {
+    flashStatus("Images can be pasted into Markdown files only", "var(--warning)");
+    return;
+  }
   const blob = imageItem.getAsFile();
   if (!blob) return;
 
