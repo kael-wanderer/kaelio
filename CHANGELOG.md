@@ -4,6 +4,7 @@
 
 ### Changes
 
+- **See what changed after a reload.** When an open file changes on disk and Kaelio reloads it, the changed blocks in the preview get a coloured bar, and a status-bar chip ("2 changes ↓") jumps to each one; × clears them, and typing clears them too. Files over 20,000 lines reload without marks.
 - **Table editing.** In a Markdown pipe table, `Tab` and `Shift+Tab` move between cells and select their text, re-aligning the columns and keeping alignment colons; `Tab` in the last cell adds a row. Escaped pipes and pipes in inline code stay inside their cell. Outside a table `Tab` indents as before.
 - **Smart paste.** Pasting formatted text (from a chat window or web page) inserts Markdown: headings, lists, tables, links, bold, italic, code and quotes. Pasting a URL over selected text makes a link. Code-editor text, anything pasted inside code, and HTML over 2 MB stay plain; `Cmd+Shift+V` pastes plain text. One undo reverts a paste.
 - **One history list.** File History shows Git commits and local snapshots in one list, newest first, each with a Commit or Snapshot badge; the two tabs are gone. History now opens for any saved file (command palette → File History), with snapshots only when there is no folder or Git repository.

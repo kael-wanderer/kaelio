@@ -3095,3 +3095,23 @@ mark.preview-search-match.active {
   font-weight: 600;
 }
 .confirm-modal-default:hover { background: var(--accent); filter: brightness(1.08); }
+
+/* Changed-since-reload highlight (spec A3). Outer shadows paint only outside
+   the box, so the bar sits in the left gutter and the text never moves. */
+#preview-pane .changed-block {
+  --changed-tint: color-mix(in srgb, var(--warning) 9%, transparent);
+  background: var(--changed-tint);
+  box-shadow: -9px 0 0 0 var(--changed-tint), -12px 0 0 0 var(--warning);
+}
+#status-changes-wrap {
+  display: inline-flex; align-items: center;
+  border: 1px solid color-mix(in srgb, var(--warning) 60%, transparent);
+  border-radius: 10px; overflow: hidden;
+}
+#status-changes-wrap.hidden { display: none; }
+#status-changes, #status-changes-clear {
+  background: none; border: none; cursor: pointer;
+  color: var(--warning); font-family: var(--font-ui); font-size: 11px; padding: 0 6px; line-height: 16px;
+}
+#status-changes:hover, #status-changes-clear:hover { background: color-mix(in srgb, var(--warning) 15%, transparent); }
+#status-changes-clear { border-left: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); }

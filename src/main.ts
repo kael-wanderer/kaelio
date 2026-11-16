@@ -29,6 +29,7 @@ import { findMermaidBlocks, applyDiagramPlaceholders, diagramName } from "./lib/
 import { mergeHistory } from "./lib/history.ts";
 import { decidePaste } from "./lib/smart-paste.ts";
 import { tabInTable } from "./lib/table.ts";
+import { changedLineRanges, blocksToMark, type LineRange } from "./lib/line-diff.ts";
 import { resolveLinkedPath } from "./lib/link-path.ts";
 import { fileKind } from "./lib/file-kind.ts";
 import { resolveLocalImagePath } from "./lib/image-src.ts";
@@ -1216,6 +1217,7 @@ async function updatePreview(content: string) {
   previewPane.innerHTML = html;
   void loadLocalImages(previewPane, currentFilePath);
   await renderMermaidDivs();
+  applyChangeMarks();
   // Wire up interactive checklists
   previewPane.querySelectorAll(".task-check").forEach(cb => {
     cb.addEventListener("change", () => {
@@ -1812,10 +1814,69 @@ function isEditorDirty(): boolean {
   return indicator ? !indicator.classList.contains("hidden") : false;
 }
 
+// --- Changed-since-reload highlight (spec A3) ---
+
+/** Lines of the current file changed by the last external reload. */
+let reloadChangeRanges: LineRange[] = [];
+let reloadChangePath: string | null = null;
+
+function clearChangeMarks() {
+  reloadChangeRanges = [];
+  reloadChangePath = null;
+  document.querySelectorAll("#preview-pane .changed-block").forEach(el => el.classList.remove("changed-block"));
+  updateChangesChip(0);
+}
+
+function updateChangesChip(count: number) {
+  const wrap = document.getElementById("status-changes-wrap");
+  const chip = document.getElementById("status-changes");
+  if (!wrap || !chip) return;
+  wrap.classList.toggle("hidden", count === 0);
+  chip.textContent = `${count} ${count === 1 ? "change" : "changes"} ↓`;
+  chip.setAttribute("aria-label", `${count} ${count === 1 ? "block" : "blocks"} changed by the last reload. Scroll to the next one`);
+}
+
+/** Marks the preview blocks that overlap reloadChangeRanges. Runs after
+ *  every Markdown preview render, so a re-render keeps the marks. */
+function applyChangeMarks() {
+  const previewPane = document.getElementById("preview-pane");
+  if (!previewPane) return;
+  if (reloadChangeRanges.length === 0 || reloadChangePath !== currentFilePath) {
+    if (reloadChangeRanges.length > 0) clearChangeMarks();
+    return;
+  }
+  previewPane.querySelectorAll(".changed-block").forEach(el => el.classList.remove("changed-block"));
+  const items = getPreviewLineElements(previewPane);
+  const picked = blocksToMark(items.map(it => it.line), reloadChangeRanges);
+  for (const i of picked) items[i].el.classList.add("changed-block");
+  // Keep only the innermost block of a nested pair
+  previewPane.querySelectorAll(".changed-block").forEach(el => {
+    if (el.querySelector(".changed-block")) el.classList.remove("changed-block");
+  });
+  updateChangesChip(previewPane.querySelectorAll(".changed-block").length);
+}
+
+/** Scrolls the preview to the next marked block below the top of the view, wrapping around. */
+function scrollToNextChange() {
+  const previewPane = document.getElementById("preview-pane");
+  if (!previewPane) return;
+  const marks = Array.from(previewPane.querySelectorAll<HTMLElement>(".changed-block"));
+  if (marks.length === 0) return;
+  const viewTop = (document.getElementById("preview-pane-wrapper") ?? previewPane).getBoundingClientRect().top;
+  const next = marks.find(el => el.getBoundingClientRect().top > viewTop + 8) ?? marks[0];
+  next.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
 async function reloadCurrentFile() {
   if (!currentFilePath) return;
+  clearChangeMarks();
   try {
     const result = await invoke<{ path: string; content: string; size: number; modified_ms: number }>("read_file", { path: currentFilePath });
+    const oldText = editor.state.doc.toString();
+    if (fileKind(currentFilePath) === "markdown") {
+      reloadChangeRanges = changedLineRanges(oldText, result.content) ?? [];
+      reloadChangePath = currentFilePath;
+    }
     externalReload = true;
     editor.dispatch({
       changes: { from: 0, to: editor.state.doc.length, insert: result.content },
@@ -1823,7 +1884,7 @@ async function reloadCurrentFile() {
     externalReload = false;
     rememberFileSnapshot(result);
     setModified(false);
-    updatePreview(result.content);
+    await updatePreview(result.content); // applies the change marks
     updateWordCount(result.content);
     updateOutline(result.content);
   } catch { /* file may have been deleted */ }
@@ -2955,6 +3016,7 @@ function showConfirmDialog(message: string, options: ConfirmOptions = {}): Promi
 
 function onContentChange(view: EditorView) {
   if (externalReload) return;
+  if (reloadChangeRanges.length > 0) clearChangeMarks();
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     const content = view.state.doc.toString();
@@ -3397,6 +3459,7 @@ async function copyFormattedHTML() {
   // Strip preview-only controls (code copy buttons) from the copied markup
   const clone = previewPane.cloneNode(true) as HTMLElement;
   clone.querySelectorAll(".code-copy").forEach(el => el.remove());
+  clone.querySelectorAll(".changed-block").forEach(el => el.classList.remove("changed-block"));
   const html = clone.innerHTML;
   const text = previewPane.innerText;
 
@@ -5316,6 +5379,7 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
     appendSanitizedHtml(host, previewPane.innerHTML);
   }
   host.querySelectorAll(".code-copy").forEach(el => el.remove());
+  host.querySelectorAll(".changed-block").forEach(el => el.classList.remove("changed-block"));
   applyCachedLocalImages(host, currentFilePath);
   document.body.appendChild(host);
   const fullHeight = Math.max(host.scrollHeight, host.clientHeight, previewPane.scrollHeight, previewPane.clientHeight, 1);
@@ -6829,6 +6893,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("history-backdrop")?.addEventListener("click", () => {
     document.getElementById("history-modal")?.classList.add("hidden");
   });
+  document.getElementById("status-changes")?.addEventListener("click", scrollToNextChange);
+  document.getElementById("status-changes-clear")?.addEventListener("click", clearChangeMarks);
   document.getElementById("history-diff-back")?.addEventListener("click", () => hideHistoryDiff());
   document.getElementById("history-diff-restore")?.addEventListener("click", () => {
     // Restore from the currently viewed diff (old content)

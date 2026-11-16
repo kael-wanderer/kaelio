@@ -55,6 +55,14 @@ Images and data-URL pictures are not converted; paste an image on its own to sav
 - Click **¶** (**Toggle Outline**) at the top of the Explorer, or press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>O</kbd>, to list the document's headings. Click one to jump to it; in **Reading View** the preview scrolls to that heading. The entry for the heading at the top of the view is highlighted as you scroll.
 - Click **#** on the activity bar (**Show / Hide Line Numbers**) to turn line numbers on or off.
 
+### See what changed on disk
+
+When another program (for example an AI agent) changes the open file and you have no unsaved edits, Kaelio reloads it and marks each changed block in the preview with a coloured bar on its left. If text was only removed, the block after the removal point is marked.
+
+The status bar shows a chip such as **2 changes ↓**. Click it to scroll to the next changed block; it wraps around to the first. Click **×** on the chip to clear the marks. They also clear when you type in the editor, when you switch to another file, and at the next reload.
+
+If you have unsaved edits, the **File changed on disk** banner appears instead; choosing **Reload** there marks the changes the same way. Files longer than 20,000 lines reload without marks.
+
 ### Status bar
 
 The status bar at the bottom shows the cursor's line and column, and the word and character counts, which update as you type.
