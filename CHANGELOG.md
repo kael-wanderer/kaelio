@@ -4,6 +4,8 @@
 
 ### Changes
 
+- **Relative images show in the preview.** Images linked with a path relative to the note (such as `assets/pasted-….png`) are loaded from disk in the preview, the split pane and PNG export.
+- **Menu shortcuts follow your bindings.** The macOS menu bar shows and uses the same keys as Customize Shortcuts; a shortcut you unbind or move no longer also triggers the old menu item.
 - **Reading width.** View → Reading Width (Narrow, Medium, Wide, Full) sets a centred text column for Reading View; the default is Medium (75 characters). Split view is unchanged.
 - **Split view survives a restart.** The second pane's tabs, active tab and edit/preview mode are saved with the session and restored on launch (when "Restore last session" is on). Files that no longer exist are skipped; if none remain, the split stays closed.
 - **Outline works in Reading View.** `Cmd+Shift+O` toggles it; clicking a heading in Reading View scrolls the preview to it, the entry for the heading at the top of the view is highlighted as you scroll, and `#` lines inside code fences or front matter are no longer listed.

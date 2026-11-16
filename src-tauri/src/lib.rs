@@ -449,6 +449,78 @@ fn save_binary_base64(path: String, data_base64: String) -> Result<(), String> {
     fs::write(path, bytes).map_err(|e| e.to_string())
 }
 
+/// Native menu items whose accelerator follows the user's shortcut bindings.
+const BINDABLE_MENU_ITEMS: &[&str] = &[
+    "file.new",
+    "file.open",
+    "file.new-window",
+    "file.save",
+    "file.close-tab",
+    "edit.copy-formatted",
+    "view.explorer",
+    "view.preview",
+    "view.reading",
+    "view.zoom-in",
+    "view.zoom-out",
+    "view.zoom-reset",
+    "search.command-palette",
+    "search.file-search",
+    "search.content-search",
+    "help.shortcuts",
+];
+
+fn validate_menu_accelerator(id: &str, accel: Option<&str>) -> Result<(), String> {
+    if !BINDABLE_MENU_ITEMS.contains(&id) {
+        return Err("Unknown menu item".to_string());
+    }
+    if let Some(a) = accel {
+        let ok = !a.is_empty()
+            && a.len() <= 40
+            && a.chars().all(|c| c.is_ascii_alphanumeric() || "+-=/[];',.`\\".contains(c));
+        if !ok {
+            return Err("Invalid accelerator".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn find_menu_item<R: tauri::Runtime>(
+    items: Vec<tauri::menu::MenuItemKind<R>>,
+    id: &str,
+) -> Option<MenuItem<R>> {
+    for item in items {
+        match item {
+            tauri::menu::MenuItemKind::MenuItem(mi) if mi.id().as_ref() == id => return Some(mi),
+            tauri::menu::MenuItemKind::Submenu(sub) => {
+                if let Some(found) = sub.items().ok().and_then(|it| find_menu_item(it, id)) {
+                    return Some(found);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Keeps native menu accelerators in line with the effective shortcut bindings
+/// (custom bindings win; a key unbound in Kaelio is cleared from the menu too).
+#[tauri::command]
+fn set_menu_accelerators(
+    app: tauri::AppHandle,
+    accels: HashMap<String, Option<String>>,
+) -> Result<(), String> {
+    let Some(menu) = app.menu() else { return Ok(()) };
+    let items = menu.items().map_err(|_| "Menu unavailable".to_string())?;
+    for (id, accel) in &accels {
+        validate_menu_accelerator(id, accel.as_deref())?;
+        if let Some(mi) = find_menu_item(items.clone(), id) {
+            mi.set_accelerator(accel.as_deref())
+                .map_err(|_| "Invalid accelerator".to_string())?;
+        }
+    }
+    Ok(())
+}
+
 const MAX_PASTED_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 
 /// Maps an allowed clipboard image MIME type to its file extension, but only
@@ -3263,6 +3335,7 @@ pub fn run() {
             file_metadata,
             save_binary_base64,
             save_pasted_image,
+            set_menu_accelerators,
             save_file,
             word_count,
             list_directory,
@@ -3549,5 +3622,19 @@ mod audit_tests {
         assert!(save_pasted_image_impl(&dir, PNG, "image/png", "20261116-073501").is_err());
         assert!(!dir.join("assets").exists());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn menu_accelerator_update_accepts_known_items() {
+        assert!(validate_menu_accelerator("search.file-search", Some("CmdOrCtrl+P")).is_ok());
+        assert!(validate_menu_accelerator("view.zoom-out", Some("CmdOrCtrl+-")).is_ok());
+        assert!(validate_menu_accelerator("file.save", None).is_ok());
+    }
+
+    #[test]
+    fn menu_accelerator_update_rejects_unknown_items_and_odd_strings() {
+        assert!(validate_menu_accelerator("app.quit", Some("CmdOrCtrl+Q")).is_err());
+        assert!(validate_menu_accelerator("file.save", Some("CmdOrCtrl+S; rm")).is_err());
+        assert!(validate_menu_accelerator("file.save", Some(&"A".repeat(100))).is_err());
     }
 }

@@ -27,7 +27,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { migrateKeybindings } from "./lib/keybindings.ts";
+import { migrateKeybindings, nativeMenuAccelerators } from "./lib/keybindings.ts";
+import { resolveLocalImagePath } from "./lib/image-src.ts";
 import { highlightCode } from "./lib/highlight.ts";
 import { extractHeadings, activeHeadingIndex } from "./lib/outline.ts";
 import { parseSplitSession, type SplitSession } from "./lib/session.ts";
@@ -329,6 +330,10 @@ function applyBindings() {
   if (editor) {
     editor.dispatch({ effects: keymapCompartment.reconfigure(buildKeymap()) });
   }
+
+  // Native menu accelerators follow the same bindings, so a key unbound or
+  // rebound in Kaelio never also fires a menu item
+  invoke("set_menu_accelerators", { accels: nativeMenuAccelerators(getBinding) }).catch(() => {});
 
   // Replace global keydown handler
   if (globalKeyHandler) {
@@ -929,6 +934,55 @@ function handleCodeCopyClick(e: Event) {
       btn.setAttribute("aria-label", "Copy code");
     }, 1500);
   }).catch(() => flashStatus("Copy failed", "var(--error)"));
+}
+
+// --- Local images in the preview (relative paths such as assets/pasted-….png) ---
+
+const localImageCache = new Map<string, string>();
+const LOCAL_IMAGE_CACHE_MAX = 100;
+
+function dirOf(path: string | null): string {
+  return path ? path.substring(0, path.lastIndexOf("/")) : "";
+}
+
+/** Replaces relative image sources in a rendered preview with data URLs read through Rust. */
+async function loadLocalImages(container: HTMLElement, notePath: string | null) {
+  const dir = dirOf(notePath);
+  if (!dir) return;
+  const imgs = Array.from(container.querySelectorAll<HTMLImageElement>("img[src]"));
+  await Promise.all(imgs.map(async (img) => {
+    const src = img.getAttribute("src") || "";
+    const path = resolveLocalImagePath(src, dir);
+    if (!path) return;
+    img.dataset.localSrc = src;
+    let url = localImageCache.get(path);
+    if (!url) {
+      try {
+        const file = await invoke<BinaryFileInfo>("read_binary_file", { path });
+        if (!file.mime_type.startsWith("image/")) return;
+        url = `data:${file.mime_type};base64,${file.data_base64}`;
+        if (localImageCache.size >= LOCAL_IMAGE_CACHE_MAX) {
+          const oldest = localImageCache.keys().next().value;
+          if (oldest !== undefined) localImageCache.delete(oldest);
+        }
+        localImageCache.set(path, url);
+      } catch {
+        return; // missing file: leave the broken image as written
+      }
+    }
+    if (img.isConnected && img.getAttribute("src") === src) img.src = url;
+  }));
+}
+
+/** Synchronous variant for export capture: uses images already loaded by the preview. */
+function applyCachedLocalImages(container: HTMLElement, notePath: string | null) {
+  const dir = dirOf(notePath);
+  if (!dir) return;
+  container.querySelectorAll<HTMLImageElement>("img[src]").forEach((img) => {
+    const path = resolveLocalImagePath(img.getAttribute("src") || "", dir);
+    const url = path ? localImageCache.get(path) : undefined;
+    if (url) img.src = url;
+  });
 }
 
 async function renderMermaidDivs() {
@@ -1814,6 +1868,7 @@ async function updatePreview(content: string) {
   html = addCodeCopyButtons(html);
   html = sanitizeHtmlString(html);
   previewPane.innerHTML = html;
+  void loadLocalImages(previewPane, currentFilePath);
   await renderMermaidDivs();
   // Wire up interactive checklists
   previewPane.querySelectorAll(".task-check").forEach(cb => {
@@ -1875,6 +1930,7 @@ function renderSubPreview(content: string) {
   html = addCodeCopyButtons(html);
   html = sanitizeHtmlString(html);
   pane.innerHTML = html;
+  void loadLocalImages(pane, subFilePath);
   applySubTypography();
 }
 
@@ -6084,6 +6140,7 @@ function preparePreviewCaptureNode(): { node: HTMLElement; cleanup: () => void }
     appendSanitizedHtml(host, previewPane.innerHTML);
   }
   host.querySelectorAll(".code-copy").forEach(el => el.remove());
+  applyCachedLocalImages(host, currentFilePath);
   document.body.appendChild(host);
   const fullHeight = Math.max(host.scrollHeight, host.clientHeight, previewPane.scrollHeight, previewPane.clientHeight, 1);
   host.style.height = `${fullHeight}px`;
