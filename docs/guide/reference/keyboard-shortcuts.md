@@ -28,8 +28,9 @@ Press <kbd>⌘</kbd><kbd>/</kbd> at any time to see the shortcuts in Kaelio itse
 
 | Action | Keys |
 |---|---|
-| Show/Hide Preview | <kbd>⌘</kbd><kbd>P</kbd> |
+| Show/Hide Preview | <kbd>⌘</kbd><kbd>⌥</kbd><kbd>P</kbd> |
 | Reading View | <kbd>⌘</kbd><kbd>E</kbd> |
+| Toggle Outline | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>O</kbd> |
 | Show/Hide Explorer | <kbd>⌘</kbd><kbd>B</kbd> |
 | Zoom In | <kbd>⌘</kbd><kbd>=</kbd> |
 | Zoom Out | <kbd>⌘</kbd><kbd>-</kbd> |
@@ -48,8 +49,8 @@ Press <kbd>⌘</kbd><kbd>/</kbd> at any time to see the shortcuts in Kaelio itse
 | Action | Keys |
 |---|---|
 | Command Palette | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>P</kbd> |
-| File Search | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>F</kbd> |
-| Search in Files | <kbd>⌘</kbd><kbd>⌥</kbd><kbd>F</kbd> |
+| File Search | <kbd>⌘</kbd><kbd>P</kbd> |
+| Search in Files | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>F</kbd> |
 | Find (and replace) in file | <kbd>⌘</kbd><kbd>F</kbd> |
 
 **Help**

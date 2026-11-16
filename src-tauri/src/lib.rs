@@ -2993,7 +2993,7 @@ pub fn run() {
                         "view.preview",
                         "Show/Hide Preview",
                         true,
-                        Some("CmdOrCtrl+P"),
+                        Some("CmdOrCtrl+Alt+P"),
                     )?,
                     &MenuItem::with_id(
                         handle,
@@ -3057,14 +3057,14 @@ pub fn run() {
                         "search.file-search",
                         "File Search",
                         true,
-                        Some("CmdOrCtrl+Shift+F"),
+                        Some("CmdOrCtrl+P"),
                     )?,
                     &MenuItem::with_id(
                         handle,
                         "search.content-search",
                         "Search in Files",
                         true,
-                        Some("CmdOrCtrl+Alt+F"),
+                        Some("CmdOrCtrl+Shift+F"),
                     )?,
                 ],
             )?;

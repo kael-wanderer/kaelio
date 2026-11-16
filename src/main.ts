@@ -27,6 +27,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { migrateKeybindings } from "./lib/keybindings.ts";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -186,7 +187,8 @@ function getDefaultBindings(): ShortcutDef[] {
     { id: "file.save", label: "Save", group: "File", defaultKey: "Mod-s", action: actions["file.save"] },
     { id: "file.close-tab", label: "Close Tab", group: "File", defaultKey: "Mod-w", action: actions["file.close-tab"] },
     { id: "file.new-window", label: "New Window", group: "File", defaultKey: "Mod-Shift-N", action: actions["file.new-window"], global: true },
-    { id: "view.toggle-preview", label: "Show/Hide Preview", group: "View", defaultKey: "Mod-p", action: actions["view.toggle-preview"] },
+    { id: "view.toggle-preview", label: "Show/Hide Preview", group: "View", defaultKey: "Mod-Alt-p", action: actions["view.toggle-preview"] },
+    { id: "view.toggle-outline", label: "Toggle Outline", group: "View", defaultKey: "Mod-Shift-o", action: actions["view.toggle-outline"] },
     { id: "view.read-mode", label: "Reading View", group: "View", defaultKey: "Mod-e", action: actions["view.read-mode"] },
     { id: "view.toggle-sidebar", label: "Show/Hide Explorer", group: "View", defaultKey: "Mod-b", action: actions["view.toggle-sidebar"] },
     { id: "view.zoom-in", label: "Zoom In", group: "View", defaultKey: "Mod-=", action: actions["view.zoom-in"] },
@@ -194,8 +196,8 @@ function getDefaultBindings(): ShortcutDef[] {
     { id: "view.zoom-reset", label: "Zoom Reset", group: "View", defaultKey: "Mod-0", action: actions["view.zoom-reset"] },
     { id: "edit.copy-formatted", label: "Copy Formatted", group: "Edit", defaultKey: "Mod-Shift-c", action: actions["edit.copy-formatted"] },
     { id: "search.command-palette", label: "Command Palette", group: "Search", defaultKey: "Mod-Shift-p", action: actions["search.command-palette"] },
-    { id: "search.file-search", label: "File Search", group: "Search", defaultKey: "Mod-Shift-f", action: actions["search.file-search"] },
-    { id: "search.content-search", label: "Content Search", group: "Search", defaultKey: "Mod-Alt-f", action: actions["search.content-search"] },
+    { id: "search.file-search", label: "File Search", group: "Search", defaultKey: "Mod-p", action: actions["search.file-search"] },
+    { id: "search.content-search", label: "Content Search", group: "Search", defaultKey: "Mod-Shift-f", action: actions["search.content-search"] },
     { id: "help.shortcuts", label: "Keyboard Shortcuts", group: "Help", defaultKey: "Mod-/", action: actions["help.shortcuts"] },
   ];
 }
@@ -203,6 +205,18 @@ function getDefaultBindings(): ShortcutDef[] {
 function getCustomBindings(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem("kaelio-keybindings") || "{}"); }
   catch { return {}; }
+}
+
+/** One-time migration (v2): keep saved custom bindings, unbind new defaults that collide with them. */
+function migrateSavedKeybindings() {
+  try {
+    if (localStorage.getItem("kaelio-keybindings-migrated") === "2") return;
+    const migrated = migrateKeybindings(getCustomBindings(), getDefaultBindings());
+    if (Object.keys(migrated).length > 0) {
+      localStorage.setItem("kaelio-keybindings", JSON.stringify(migrated));
+    }
+    localStorage.setItem("kaelio-keybindings-migrated", "2");
+  } catch { /* storage unavailable: defaults apply */ }
 }
 
 function getBinding(id: string): string {
@@ -3868,12 +3882,14 @@ const SAMPLE_CONTENT = `# About Kaelio
 | \`Cmd+O\` | Open file |
 | \`Cmd+S\` | Save file |
 | \`Cmd+N\` | New file |
-| \`Cmd+P\` | Toggle preview |
+| \`Cmd+P\` | Quick open (file search) |
+| \`Cmd+Alt+P\` | Toggle preview |
 | \`Cmd+E\` | Read mode (preview only) |
 | \`Cmd+B\` | Toggle file sidebar |
 | \`Cmd+F\` | Search in file |
 | \`Cmd+Shift+P\` | Command palette |
-| \`Cmd+Shift+F\` | File search |
+| \`Cmd+Shift+F\` | Search in files |
+| \`Cmd+Shift+O\` | Toggle outline |
 | \`Cmd+Shift+C\` | Copy formatted HTML |
 
 ## Mermaid Diagrams
@@ -4458,7 +4474,7 @@ function getCommands(): PaletteCommand[] {
     { label: "Export Markdown DOCX", action: exportMarkdownDocx },
     { label: "Copy Raw Markdown", action: copyRawMarkdown },
     { label: "Copy Plain Text", action: copyPlainText },
-    { label: "Toggle Outline", action: toggleOutline },
+    { label: "Toggle Outline", shortcut: sk("view.toggle-outline"), action: toggleOutline },
     { label: "Show/Hide Line Numbers", action: toggleLineNumbers },
     { label: "Toggle Auto-save", action: toggleAutoSave },
     { label: "Cycle Theme", action: cycleTheme },
@@ -6748,6 +6764,7 @@ actions["file.close-tab"] = () => closeActiveTab();
 actions["file.new-window"] = () => invoke("create_window", { filePath: null });
 actions["view.toggle-preview"] = () => togglePreview();
 actions["view.read-mode"] = () => toggleReadMode();
+actions["view.toggle-outline"] = () => toggleOutline();
 actions["view.toggle-sidebar"] = () => toggleSidebar();
 actions["view.zoom-in"] = () => zoomIn();
 actions["view.zoom-out"] = () => zoomOut();
@@ -6957,6 +6974,9 @@ function toggleShortcutsModal() {
 window.addEventListener("DOMContentLoaded", async () => {
   const editorPane = $("#editor-pane");
   if (!editorPane) return;
+
+  // Must run before the editor builds its keymap from the bindings registry
+  migrateSavedKeybindings();
 
   // Load session — compare disk (survives reinstalls) vs localStorage (synchronous, always fresh)
   let diskSession: SessionData = {};

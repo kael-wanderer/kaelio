@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changes
+
+- **Conventional shortcuts.** `Cmd+P` opens file search (quick open), `Cmd+Shift+F` searches in files, `Cmd+Alt+P` shows/hides the preview, and `Cmd+Shift+O` toggles the outline. Custom bindings you saved are kept; a new default that collides with one of them is left unbound.
+
 ### Security
 
 - **Preview no longer runs scripts from a document.** The HTML sanitizer parsed markup inside the live page, so `<img onerror=…>` in a Markdown file ran before it could be stripped, with full access to Kaelio's file and Git commands. It now parses in an inert document, and also blocks `javascript:` URLs written with embedded whitespace, `<object>`, `<embed>`, `<base>` and `<meta>`.

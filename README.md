@@ -34,7 +34,7 @@ Plus the full mx toolkit: Mermaid & KaTeX, Git sync, callouts, command palette, 
 
 - **Editor** — live split preview, multiple tabs, code folding, formatting toolbar, search & replace (`Cmd+F`), line numbers, soft wrap.
 - **Markdown** — Mermaid (click-to-zoom), KaTeX (`$…$`, `$$…$$`), YAML frontmatter, footnotes, wikilinks, anchor navigation, copy-heading-link.
-- **Files** — sidebar browser, context menu, file search (`Cmd+Shift+F`), content search (`Cmd+Opt+F`), command palette, breadcrumbs, recent files. Drag files or folders from Finder onto a sidebar folder to copy them in; drag onto the editor to open.
+- **Files** — sidebar browser, context menu, file search (`Cmd+P`), content search (`Cmd+Shift+F`), command palette, breadcrumbs, recent files. Drag files or folders from Finder onto a sidebar folder to copy them in; drag onto the editor to open.
 - **Image viewing** — open PNG, JPG, GIF, WEBP, BMP, ICO, and AVIF in the preview pane with zoom in/out.
 - **Git sync** — one-click setup, auto commit+push on save, auto-pull on open, conflict resolution, per-file history & snapshots, status dots.
 - **Obsidian-style** — callouts (`> [!tip]`), interactive checklists, tag pills, wikilinks.
@@ -56,11 +56,12 @@ Grab the latest build from the [Releases page](https://github.com/kael-wanderer/
 | Shortcut | Action |
 |----------|--------|
 | `Cmd+O` / `Cmd+S` / `Cmd+N` | Open / Save / New file |
-| `Cmd+P` / `Cmd+E` | Toggle preview / Reading view |
+| `Cmd+Opt+P` / `Cmd+E` | Toggle preview / Reading view |
+| `Cmd+Shift+O` | Toggle outline |
 | `Cmd+B` | Toggle sidebar |
 | `Cmd+F` | Search (with replace) |
 | `Cmd+Shift+P` | Command palette |
-| `Cmd+Shift+F` / `Cmd+Opt+F` | File search / Content search |
+| `Cmd+P` / `Cmd+Shift+F` | File search (quick open) / Search in files |
 | `Cmd+Shift+N` / `Cmd+W` | New window / Close tab |
 | `Cmd+=` / `Cmd+-` | Zoom in / out |
 
