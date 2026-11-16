@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaelio Markdown Focus — Mockup</title>
+<style>
+  :root {
+    --bg: #1e1e2e; --surface: #181825; --panel: #313244; --border: #45475a;
+    --text: #cdd6f4; --muted: #a6adc8; --accent: #89b4fa; --success: #a6e3a1;
+    --warning: #f9e2af; --error: #f38ba8; --mauve: #cba6f7; --peach: #fab387; --teal: #94e2d5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 -apple-system, "SF Pro Text", "Segoe UI", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 44px 0 4px; color: var(--accent); }
+  p.note { color: var(--muted); margin: 0 0 14px; max-width: 72ch; }
+  code, pre, .mono { font-family: "JetBrains Mono", "SF Mono", Menlo, monospace; font-size: 12.5px; }
+  .frame { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); overflow: hidden; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row > * { flex: 1 1 300px; min-width: 0; }
+  .cap { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .pad { padding: 14px; }
+  /* menus */
+  .menu { width: 220px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 4px; }
+  .menu div { padding: 5px 10px; border-radius: 4px; display: flex; justify-content: space-between; }
+  .menu div.dis { color: #a6adc8; }
+  .menu div.hl { background: var(--accent); color: #11111b; }
+  .menu .sub { color: var(--muted); font-size: 11px; padding: 6px 10px 2px; }
+  .old .cap::after { content: " (removed)"; }
+  .menu div.dis { font-style: italic; }
+  /* code block */
+  .codeblock { position: relative; background: #11111b; border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
+  .codeblock pre { margin: 0; white-space: pre; overflow-x: auto; }
+  .copy { position: absolute; top: 8px; right: 8px; font: inherit; font-size: 11px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  .copy.done { color: var(--success); border-color: var(--success); }
+  .k { color: var(--mauve); } .s { color: var(--success); } .f { color: var(--accent); } .n { color: var(--peach); } .c { color: #a6adc8; font-style: italic; }
+  /* bars */
+  .bar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; background: #2a2b3c; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .bar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); flex: none; }
+  .btn { font: inherit; font-size: 12px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  .btn.pri { background: var(--accent); color: #11111b; border-color: var(--accent); }
+  .htmlbody { height: 120px; display: grid; place-items: center; color: var(--muted); background: #fff1; }
+  /* history */
+  .hist div.item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .hist div.item:last-child { border-bottom: 0; }
+  .badge { font-size: 11px; padding: 3px 8px; border-radius: 10px; flex: none; width: 76px; text-align: center; }
+  .badge.commit { background: #89b4fa33; color: var(--accent); }
+  .badge.snap { background: #94e2d533; color: var(--teal); }
+  .hist .msg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hist .ago { color: var(--muted); font-size: 12px; flex: none; }
+  /* reading view */
+  .reading { display: flex; height: 300px; }
+  .outline { width: 190px; flex: none; border-right: 1px solid var(--border); padding: 8px 0; font-size: 12.5px; }
+  .outline div { padding: 3px 12px; color: var(--muted); border-left: 2px solid transparent; }
+  .outline div.h2 { padding-left: 24px; }
+  .outline div.active { color: var(--text); border-left-color: var(--accent); background: #89b4fa14; }
+  .page { flex: 1; overflow: auto; padding: 18px; }
+  .col { margin: 0 auto; transition: max-width .2s ease-out; }
+  .col h3 { margin: 0 0 8px; font-size: 18px; }
+  .col p { margin: 0 0 10px; }
+  .changed { border-left: 3px solid var(--warning); padding: 8px 12px; margin-left: -15px; border-radius: 0 4px 4px 0; background: #f9e2af12; }
+  .status { display: flex; justify-content: flex-end; gap: 12px; align-items: center; padding: 4px 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+  .chip { background: #f9e2af26; color: var(--warning); border-radius: 12px; padding: 4px 8px 4px 10px; display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  .chip b { font-weight: 400; opacity: .7; padding: 0 5px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
+  .seg button { font: inherit; font-size: 12px; background: transparent; color: var(--muted); border: 0; padding: 3px 10px; cursor: pointer; }
+  .seg button.on { background: var(--accent); color: #11111b; }
+  table.keys { border-collapse: collapse; width: 100%; }
+  table.keys td, table.keys th { border-bottom: 1px solid var(--border); padding: 6px 12px; text-align: left; }
+  table.keys th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  kbd { font: inherit; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; }
+  s { color: #a6adc8; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Kaelio Markdown Focus</h1>
+  <p class="note">Mockup for <span class="mono">docs/superpowers/specs/2026-11-16-markdown-focus-design.md</span>. Section labels match the spec (R = remove, I = improve, A = add). Layout and wording are the contract; exact colours follow the active theme.</p>
+
+  <h2>R5 — Export menu, flat</h2>
+  <p class="note">Two submenus become three items. PDF and DOCX are greyed for an HTML file.</p>
+  <div class="row">
+    <div class="frame old"><div class="cap">Before</div><div class="pad">
+      <div class="menu"><div class="sub">HTML ▸</div><div>PNG</div><div>JPG</div><div>PDF</div><div class="sub">Markdown ▸</div><div>PDF</div><div>DOCX</div></div>
+    </div></div>
+    <div class="frame"><div class="cap">After — Markdown file</div><div class="pad">
+      <div class="menu"><div class="hl">PDF…</div><div>DOCX…</div><div>PNG…</div></div>
+    </div></div>
+    <div class="frame"><div class="cap">After — HTML file</div><div class="pad">
+      <div class="menu"><div class="dis" title="Markdown only">PDF… <span>Markdown only</span></div><div class="dis" title="Markdown only">DOCX… <span>Markdown only</span></div><div class="hl">PNG…</div></div>
+    </div></div>
+  </div>
+
+  <h2>I2 — Code block: highlighting and Copy</h2>
+  <p class="note">Copy appears on hover, top right. Click it here to see the confirmed state (1.5 s).</p>
+  <div class="frame"><div class="pad">
+    <div class="codeblock">
+      <button class="copy" id="copy">Copy</button>
+<pre><span class="k">export async function</span> <span class="f">loadNote</span>(path: <span class="n">string</span>) {
+  <span class="c">// read through the Rust command, never fs directly</span>
+  <span class="k">const</span> text = <span class="k">await</span> <span class="f">invoke</span>&lt;<span class="n">string</span>&gt;(<span class="s">"read_file"</span>, { path });
+  <span class="k">return</span> text.<span class="f">split</span>(<span class="s">"\n"</span>);
+}</pre>
+    </div>
+  </div></div>
+
+  <h2>I3 — HTML view: scripts off by default</h2>
+  <p class="note">The bar shows only when the file contains a script tag. The choice lasts for this app session.</p>
+  <div class="row">
+    <div class="frame"><div class="cap">Default</div>
+      <div class="bar"><span class="dot"></span><span>Scripts are off for this page.</span><button class="btn pri">Run scripts</button></div>
+      <div class="htmlbody">report.html — static render, chart area empty</div>
+    </div>
+    <div class="frame"><div class="cap">After "Run scripts"</div>
+      <div class="bar"><span class="dot" style="background:var(--success)"></span><span>Scripts are running in an isolated frame.</span><button class="btn">Turn off</button></div>
+      <div class="htmlbody">report.html — chart drawn</div>
+    </div>
+  </div>
+
+  <h2>I5 — History: one list</h2>
+  <p class="note">Commits and local snapshots together, newest first. Without Git the list shows snapshots only.</p>
+  <div class="frame hist">
+    <div class="cap">History — release-notes.md</div>
+    <div class="item"><span class="badge snap">Snapshot</span><span class="msg">Local snapshot</span><span class="ago">2 min ago</span><button class="btn">View</button><button class="btn">Restore</button></div>
+    <div class="item"><span class="badge snap">Snapshot</span><span class="msg">Local snapshot</span><span class="ago">14 min ago</span><button class="btn">View</button><button class="btn">Restore</button></div>
+    <div class="item"><span class="badge commit">Commit</span><span class="msg">a41c9e2 — auto: release-notes.md</span><span class="ago">1 hour ago</span><button class="btn">View</button><button class="btn">Restore</button></div>
+    <div class="item"><span class="badge commit">Commit</span><span class="msg">77b0d13 — rewrite intro</span><span class="ago">yesterday</span><button class="btn">View</button><button class="btn">Restore</button></div>
+  </div>
+
+  <h2>I7 · A3 · A4 — Reading View: outline, changed blocks, width</h2>
+  <p class="note">Outline marks the heading in view. Blocks changed by the last reload carry a bar on the left; the status chip jumps to the next one, × clears. Try the width control.</p>
+  <div style="margin-bottom:10px">View → Reading Width:
+    <span class="seg" id="seg"><button data-w="60ch">Narrow</button><button data-w="75ch" class="on">Medium</button><button data-w="90ch">Wide</button><button data-w="none">Full</button></span>
+  </div>
+  <div class="frame">
+    <div class="reading">
+      <div class="outline"><div>Release notes</div><div class="h2 active">What changed</div><div class="h2">Upgrade steps</div><div class="h2">Known issues</div></div>
+      <div class="page"><div class="col" id="col" style="max-width:75ch">
+        <h3>What changed</h3>
+        <p>The sync job now retries three times before it reports a failure, and each retry waits twice as long as the one before.</p>
+        <p class="changed">Retries are skipped when the server answers 401 or 403, because a new attempt cannot succeed without new credentials.</p>
+        <p>Logs keep the request id for every attempt so a failed run can be traced end to end.</p>
+        <p class="changed">The default timeout is now 30 seconds (was 10).</p>
+      </div></div>
+    </div>
+    <div class="status"><span class="chip">2 changes ↓ <b>×</b></span><span>412 words</span><span>38 lines</span></div>
+  </div>
+
+  <h2>A2 — Table editing</h2>
+  <p class="note">Tab moves to the next cell and re-aligns the table. Nothing on screen besides the text itself.</p>
+  <div class="row">
+    <div class="frame"><div class="cap">While typing</div><div class="pad"><pre style="margin:0">| Name | Role |
+|---|:---:|
+| An | Lead engineer |
+| Binh|Designer▌</pre></div></div>
+    <div class="frame"><div class="cap">After Tab</div><div class="pad"><pre style="margin:0">| Name | Role          |
+| ---- | :-----------: |
+| An   | Lead engineer |
+| Binh | Designer      |
+| ▌    |               |</pre></div></div>
+  </div>
+
+  <h2>A1 — Smart paste</h2>
+  <div class="row">
+    <div class="frame"><div class="cap">Rich text from a chat or web page</div><div class="pad"><pre style="margin:0">## Plan
+
+1. **Measure** the baseline
+2. Ship behind a flag
+
+See [the doc](https://example.com/doc).</pre></div></div>
+    <div class="frame"><div class="cap">URL pasted over selected "the doc"</div><div class="pad"><pre style="margin:0">See [the doc](https://example.com/doc).</pre>
+      <p class="note" style="margin-top:10px"><kbd>⇧⌘V</kbd> always pastes plain text.</p></div></div>
+  </div>
+
+  <h2>I4 — Shortcuts</h2>
+  <div class="frame">
+    <table class="keys">
+      <tr><th>Action</th><th>Before</th><th>After</th></tr>
+      <tr><td>File Search (quick open)</td><td><s>⇧⌘F</s></td><td><kbd>⌘P</kbd></td></tr>
+      <tr><td>Search in Files</td><td><s>⌥⌘F</s></td><td><kbd>⇧⌘F</kbd></td></tr>
+      <tr><td>Show/Hide Preview</td><td><s>⌘P</s></td><td><kbd>⌥⌘P</kbd></td></tr>
+      <tr><td>Toggle Outline</td><td>none</td><td><kbd>⇧⌘O</kbd></td></tr>
+      <tr><td>Paste as plain text</td><td>none</td><td><kbd>⇧⌘V</kbd></td></tr>
+    </table>
+  </div>
+</main>
+<script>
+  const copy = document.getElementById("copy");
+  copy.addEventListener("click", () => {
+    copy.textContent = "Copied"; copy.classList.add("done");
+    setTimeout(() => { copy.textContent = "Copy"; copy.classList.remove("done"); }, 1500);
+  });
+  const col = document.getElementById("col");
+  document.getElementById("seg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    document.querySelectorAll("#seg button").forEach(x => x.classList.toggle("on", x === b));
+    col.style.maxWidth = b.dataset.w;
+  });
+</script>
+</body>
+</html>
