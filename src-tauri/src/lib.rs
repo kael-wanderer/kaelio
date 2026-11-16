@@ -4034,7 +4034,10 @@ mod audit_tests {
 
     /// root/page.html, root/sub/a.css, sibling secret/key.txt, root/link -> secret
     fn html_fixture() -> HtmlFixture {
-        let base = super::unique_export_dir("kaelio_html_test");
+        // Tests run in parallel and the clock can repeat: add a counter
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let base = super::unique_export_dir(&format!("kaelio_html_test_{}", n));
         let root = base.join("root");
         std::fs::create_dir_all(root.join("sub")).unwrap();
         std::fs::create_dir_all(base.join("secret")).unwrap();
