@@ -1436,6 +1436,32 @@ fn style_docx_tables(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Pandoc arguments for Markdown -> PDF through Typst.
+fn pandoc_pdf_args(input: &Path, output_path: &str, typst_path: &Path, typst_header: &Path) -> Vec<String> {
+    vec![
+        input.to_string_lossy().to_string(),
+        "-o".to_string(),
+        output_path.to_string(),
+        "--from".to_string(),
+        PANDOC_MARKDOWN_INPUT_FORMAT.to_string(),
+        "--pdf-engine".to_string(),
+        typst_path.to_string_lossy().to_string(),
+        // Given a full engine path, Pandoc copies images into an absolute temp media
+        // folder but leaves Typst's root at the working directory, which Typst then
+        // prefixes to the absolute path. Rooting Typst at `/` resolves those paths.
+        "--pdf-engine-opt=--root=/".to_string(),
+        "--include-in-header".to_string(),
+        typst_header.to_string_lossy().to_string(),
+        "-V".to_string(),
+        "geometry:margin=1in".to_string(),
+        "-V".to_string(),
+        "fontsize=11pt".to_string(),
+        "-V".to_string(),
+        "colorlinks=true".to_string(),
+        "--syntax-highlighting=none".to_string(),
+    ]
+}
+
 #[tauri::command]
 async fn export_pdf(
     markdown_content: String,
@@ -1545,24 +1571,7 @@ fn export_pdf_blocking(
     };
     let _ = app.emit("pdf-progress", "Running pandoc (typst)…");
 
-    let args = vec![
-        tmp_input.to_str().unwrap().to_string(),
-        "-o".to_string(),
-        output_path.clone(),
-        "--from".to_string(),
-        PANDOC_MARKDOWN_INPUT_FORMAT.to_string(),
-        "--pdf-engine".to_string(),
-        typst_path.to_string_lossy().to_string(),
-        "--include-in-header".to_string(),
-        typst_header.to_string_lossy().to_string(),
-        "-V".to_string(),
-        "geometry:margin=1in".to_string(),
-        "-V".to_string(),
-        "fontsize=11pt".to_string(),
-        "-V".to_string(),
-        "colorlinks=true".to_string(),
-        "--syntax-highlighting=none".to_string(),
-    ];
+    let args = pandoc_pdf_args(&tmp_input, &output_path, &typst_path, &typst_header);
 
     let pandoc_program = pandoc_path.to_string_lossy().to_string();
     let mut pandoc_command = Command::new(&pandoc_path);
@@ -3759,5 +3768,35 @@ mod audit_tests {
         let abs = PathBuf::from("/tmp/kaelio_export_1/").join(GOOD0);
         let out = link_diagrams(&md, &[(GOOD0.to_string(), abs.clone())]);
         assert_eq!(out, format!("![diagram]({}) and ![x](other.png)", abs.to_string_lossy()));
+    }
+
+    /// Runs the real Pandoc + Typst when both are installed (skips otherwise): a Markdown
+    /// image given by absolute path, as `link_diagrams` writes it, must end up in the PDF.
+    #[test]
+    fn pandoc_pdf_args_embed_an_absolute_path_image() {
+        let (Some(pandoc), Some(typst)) = (find_pandoc(), find_typst()) else {
+            eprintln!("pandoc or typst not installed; skipping");
+            return;
+        };
+        let dir = scratch_dir("pandoc_pdf_image");
+        let png = dir.join(GOOD0);
+        // 1x1 white PNG
+        fs::write(&png, general_purpose::STANDARD.decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC",
+        ).unwrap()).unwrap();
+        let input = dir.join("export.md");
+        fs::write(&input, format!("# T\n\n![diagram]({})\n", png.to_string_lossy())).unwrap();
+        let header = dir.join("kaelio-tables.typ");
+        fs::write(&header, TYPST_TABLE_HEADER).unwrap();
+        let output = dir.join("out.pdf");
+        let out = Command::new(&pandoc)
+            .args(pandoc_pdf_args(&input, &output.to_string_lossy(), &typst, &header))
+            .current_dir(&dir)
+            .env("TMPDIR", &dir)
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+        let _ = fs::remove_dir_all(&dir);
+        assert!(out.status.success(), "pandoc failed: {stderr}");
     }
 }
