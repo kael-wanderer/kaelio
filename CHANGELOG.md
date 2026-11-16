@@ -31,6 +31,7 @@
 
 ### Fixes
 
+- **A reload can no longer land in the wrong tab.** If you switched tabs while Kaelio was re-reading a file changed on disk, that file's text could replace the new tab's content.
 - **PNG export of an HTML page with local images works.** An `<img>` with a relative path made the export fail; images are now read from disk for the capture.
 - **Links with spaces open.** A preview link such as `[Q3](<Q3 report.pdf>)`, or any link from a note in a folder with a space in its name, now opens the file instead of "Cannot open this file".
 - **PDF export shows images again.** Images, including diagrams, failed with "file not found" because Typst looked for Pandoc's temporary image files under the wrong folder. Raw ```` ```{=typst} ```` blocks in a note are now printed as text in PDF export, so a note cannot make the export read other files.

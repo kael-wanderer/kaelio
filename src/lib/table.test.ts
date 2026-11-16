@@ -75,3 +75,19 @@ test("wide characters are counted as one and selection uses string offsets", () 
 test("header and delimiter with different column counts is not a table", () => {
   assert.equal(findTable(["| a | b |", "|---|", "| 1 | 2 |"], 0), null);
 });
+// Plan C deferred minors (KL-0039)
+test("a prose line with a pipe directly above a table does not hide the table", () => {
+  const lines = ["see a | b here", "| a | b |", "|---|---|", "| 1 | 2 |"];
+  assert.deepEqual(findTable(lines, 2), { start: 1, end: 3 });
+  assert.deepEqual(findTable(lines, 3), { start: 1, end: 3 });
+  assert.equal(findTable(lines, 0), null);
+  const r = tabInTable(lines, 3, 3, 1)!;
+  assert.equal(r.start, 1);
+  assert.deepEqual([r.selLine, r.selFrom, r.selTo], [3, 8, 9]);
+});
+test("extra body cells are kept as written, not turned into new columns", () => {
+  assert.deepEqual(formatTable(["| a | b |", "|---|---|", "| 1 | 2 | 3 |"]), ["| a   | b   |", "| --- | --- |", "| 1   | 2   | 3 |"]);
+  const r = tabInTable(["| a | b |", "|---|---|", "| 1 | 2 | 3 |"], 2, 7, 1)!;    // cursor in "2": last real column
+  assert.deepEqual(r.newLines.length, 4);                                        // next is a new row
+  assert.deepEqual([r.selLine, r.selFrom], [3, 2]);
+});

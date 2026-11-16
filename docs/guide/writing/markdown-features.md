@@ -91,6 +91,7 @@ With the cursor on a line of a pipe table (a header row followed by a `|---|` ro
 - <kbd>⇧</kbd><kbd>Tab</kbd> selects the previous cell.
 - Each press lines the columns up and rebuilds the `---` row, keeping alignment colons (`:---`, `:---:`, `---:`).
 - `\|` and a pipe inside `` `code` `` stay part of the cell.
+- A row with more cells than the header keeps the extra cells as written; they are not turned into new columns.
 
 One <kbd>⌘</kbd><kbd>Z</kbd> undoes one press. Outside a table, and inside a code block, <kbd>Tab</kbd> indents as usual. Column widths are counted in characters, so wide characters such as Chinese or emoji can look slightly off.
 

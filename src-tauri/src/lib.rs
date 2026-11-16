@@ -2912,10 +2912,8 @@ fn load_session() -> Result<String, String> {
 // Each token grants read access to one folder, the folder of the HTML file
 // the user chose to run; nothing outside it is served.
 
-/// (token, canonical folder), newest last.
+/// (token, canonical folder), newest last. Revoked by html_revoke.
 pub struct HtmlGrants(Mutex<Vec<(String, PathBuf)>>);
-
-const MAX_HTML_GRANTS: usize = 32;
 
 #[derive(Debug, Serialize)]
 pub struct HtmlGrant {
@@ -2966,10 +2964,9 @@ fn grant_html_in(
         .ok_or("Invalid file name")?
         .to_string();
     let token = new_html_token()?;
+    // No cap: an evicted token would leave its open frame blank. The frontend
+    // revokes a grant when its tab closes or scripts are turned off.
     grants.push((token.clone(), folder));
-    while grants.len() > MAX_HTML_GRANTS {
-        grants.remove(0);
-    }
     Ok(HtmlGrant { token, file_name })
 }
 
@@ -4167,16 +4164,20 @@ mod audit_tests {
     }
 
     #[test]
-    fn html_grants_evict_oldest_beyond_32() {
+    fn html_grants_are_kept_until_revoked() {
+        // No cap: an evicted token left its open frame blank (KL-0037).
+        // Grants are revoked when the tab closes or scripts are turned off.
         let f = html_fixture();
         let mut grants = Vec::new();
         let first = super::grant_html(&mut grants, &f.root.join("page.html")).unwrap();
-        for _ in 0..32 {
+        for _ in 0..40 {
             super::grant_html(&mut grants, &f.root.join("page.html")).unwrap();
         }
-        assert_eq!(grants.len(), 32);
-        assert!(!grants.iter().any(|(t, _)| *t == first.token));
-        assert_eq!(super::resolve_html_request(&grants, &format!("/{}/page.html", first.token)), Err(404));
+        assert_eq!(grants.len(), 41);
+        assert_eq!(
+            super::resolve_html_request(&grants, &format!("/{}/page.html", first.token)),
+            Ok(f.root.join("page.html"))
+        );
     }
 
     #[test]

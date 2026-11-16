@@ -1184,6 +1184,8 @@ const htmlGrantTokens = new Map<string, { token: string; fileName: string }>();
 /** The isolation spike ran on macOS only; Windows and Linux webviews stay
  *  static until the probe has been run there. */
 const htmlScriptsSupported = /Mac/i.test(navigator.userAgent);
+/** html_grant requests in flight, per file path. */
+const htmlGrantPending = new Map<string, Promise<{ token: string; fileName: string }>>();
 /** Set during PNG export so the static render is captured. */
 let htmlForceStatic = false;
 /** Identifies what the script frame shows, so typing does not reload it. */
@@ -1255,8 +1257,20 @@ async function renderHtmlScriptMode(previewPane: HTMLElement, path: string) {
   let grant = htmlGrantTokens.get(path);
   if (!grant) {
     try {
-      const g = await invoke<{ token: string; file_name: string }>("html_grant", { path });
-      grant = { token: g.token, fileName: g.file_name };
+      // Renders that arrive while a grant is pending share it (KL-0036)
+      let pending = htmlGrantPending.get(path);
+      if (!pending) {
+        pending = invoke<{ token: string; file_name: string }>("html_grant", { path })
+          .then(g => ({ token: g.token, fileName: g.file_name }))
+          .finally(() => htmlGrantPending.delete(path));
+        htmlGrantPending.set(path, pending);
+      }
+      grant = await pending;
+      // Turned off or closed while pending: give the token back
+      if (!htmlScriptsAllowed.has(path)) {
+        invoke("html_revoke", { token: grant.token }).catch(() => {});
+        return;
+      }
       htmlGrantTokens.set(path, grant);
     } catch (e) {
       htmlScriptsAllowed.delete(path);
@@ -1282,6 +1296,8 @@ async function renderHtmlScriptMode(previewPane: HTMLElement, path: string) {
 }
 
 async function updatePreview(content: string) {
+  // Marks belong to one file; any other current file clears them, whatever its kind (KL-0035)
+  if (reloadChangePath !== null && reloadChangePath !== currentFilePath) clearChangeMarks();
   const previewPane = $("#preview-pane");
   const previewWrapper = $("#preview-pane-wrapper");
   if (!previewPane || (previewWrapper && previewWrapper.style.display === "none")) return;
@@ -1965,14 +1981,17 @@ function scrollToNextChange() {
 }
 
 async function reloadCurrentFile() {
-  if (!currentFilePath) return;
+  const path = currentFilePath;
+  if (!path) return;
   clearChangeMarks();
   try {
-    const result = await invoke<{ path: string; content: string; size: number; modified_ms: number }>("read_file", { path: currentFilePath });
+    const result = await invoke<{ path: string; content: string; size: number; modified_ms: number }>("read_file", { path });
+    // Another tab became current during the read: its editor must not get this file's text
+    if (currentFilePath !== path) return;
     const oldText = editor.state.doc.toString();
-    if (fileKind(currentFilePath) === "markdown") {
+    if (fileKind(path) === "markdown") {
       reloadChangeRanges = changedLineRanges(oldText, result.content) ?? [];
-      reloadChangePath = currentFilePath;
+      reloadChangePath = path;
     }
     externalReload = true;
     editor.dispatch({

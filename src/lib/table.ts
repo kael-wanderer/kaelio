@@ -72,28 +72,43 @@ export function findTable(lines: string[], lineIndex: number): { start: number; 
   while (start > 0 && hasSeparator(lines[start - 1])) start--;
   let end = lineIndex;
   while (end + 1 < lines.length && hasSeparator(lines[end + 1])) end++;
-  if (start + 1 > end) return null;
-  if (!isDelimiterRow(lines[start + 1])) return null;
-  if (splitRow(lines[start]).length !== splitRow(lines[start + 1]).length) return null;
-  return { start, end };
+  // The header is the row right above the first delimiter row with the same
+  // number of cells; a prose line with a pipe may sit above it.
+  let header = -1;
+  for (let h = start; h < end; h++) {
+    if (isDelimiterRow(lines[h + 1]) && splitRow(lines[h]).length === splitRow(lines[h + 1]).length) {
+      header = h;
+      break;
+    }
+  }
+  if (header < 0 || lineIndex < header) return null;
+  return { start: header, end };
 }
 
 const width = (s: string) => [...s].length;
 
-interface Layout { indent: string; widths: number[]; rows: string[][]; aligns: [boolean, boolean][] }
+interface Layout {
+  indent: string;
+  widths: number[];
+  rows: string[][];
+  aligns: [boolean, boolean][];
+  /** Cells beyond the header's count, kept as written (GFM ignores them). */
+  extras: string[][];
+}
 
 function layout(rows: string[]): Layout {
   const indent = /^\s*/.exec(rows[0] ?? "")![0];
   const cells = rows.map(splitRow);
-  const ncols = Math.max(...cells.map(c => c.length));
+  const ncols = cells[0].length;
   const aligns = Array.from({ length: ncols }, (_, k): [boolean, boolean] => {
     const d = cells[1]?.[k] ?? "";
     return [d.startsWith(":"), d.length > 1 && d.endsWith(":")];
   });
   const padded = cells.map(r => Array.from({ length: ncols }, (_, k) => r[k] ?? ""));
+  const extras = cells.map(r => r.slice(ncols));
   const widths = Array.from({ length: ncols }, (_, k) =>
     Math.max(3, ...padded.filter((_, r) => r !== 1).map(r => width(r[k]))));
-  return { indent, widths, rows: padded, aligns };
+  return { indent, widths, rows: padded, aligns, extras };
 }
 
 function renderRow(l: Layout, r: number): string {
@@ -105,7 +120,8 @@ function renderRow(l: Layout, r: number): string {
     }
     return cell + " ".repeat(l.widths[k] - width(cell));
   });
-  return `${l.indent}| ${parts.join(" | ")} |`;
+  const extra = (l.extras[r] ?? []).map(cell => ` ${cell} |`).join("");
+  return `${l.indent}| ${parts.join(" | ")} |${extra}`;
 }
 
 export function formatTable(rows: string[]): string[] {
@@ -145,6 +161,7 @@ export function tabInTable(lines: string[], lineIndex: number, column: number, d
   }
   if (tr > lastRow) {
     l.rows.push(Array.from({ length: ncols }, () => ""));
+    l.extras.push([]);
   }
   const newLines = l.rows.map((_, k) => renderRow(l, k));
   const before = `${l.indent}| ` + l.rows[tr].slice(0, tc).map((cell, k) => cell + " ".repeat(l.widths[k] - width(cell)) + " | ").join("");
