@@ -24,7 +24,7 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 **Tauri 2 IPC-first**: all file/system ops go through Rust commands, no direct Node.js access from frontend.
 
 ### Frontend (`src/`)
-- **Mostly monolithic**: app wiring in `src/main.ts` (~7200 lines) + `src/styles.css` + `index.html`; pure, tested helpers in `src/lib/` (`file-kind`, `export-availability`, `mermaid-export`, `keybindings`, `outline`, `session`, …)
+- **Mostly monolithic**: app wiring in `src/main.ts` (~7500 lines) + `src/styles.css` + `index.html`; pure, tested helpers in `src/lib/` (`file-kind`, `export-availability`, `mermaid-export`, `keybindings`, `outline`, `session`, `history` (merged commit/snapshot list), `smart-paste` (turndown + GFM), `table` (pipe-table Tab/align), `line-diff` (changed-since-reload marks), `html-scripts`, …)
 - Vanilla TypeScript, no framework (CodeMirror 6 for editor, markdown-it for preview)
 - Rendering pipeline: markdown-it → callouts → checklists → KaTeX (math) → Mermaid (diagrams) → YAML frontmatter extraction
 - File kinds (`fileKind` in `src/lib/file-kind.ts`): Markdown and HTML preview; other text opens as plain text; PDF, images and SVG are `external` and go to the system default app via `open_in_default_app` (no tab; session restore skips them). There is no in-app PDF, image, CSV or JSON viewer (removed for the Markdown focus; BugText covers PDFs)
@@ -38,7 +38,7 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 - Key bindings: Cmd+O (open), Cmd+S (save), Cmd+P (toggle preview), Cmd+E (read mode), Cmd+B (sidebar), Cmd+F (search — editor or preview depending on view mode)
 
 ### Backend (`src-tauri/`)
-- `src/lib.rs` (~3300 lines): all Tauri commands. Sync commands run on the main thread; only the exports are async
+- `src/lib.rs` (~3600 lines): all Tauri commands. Sync commands run on the main thread; only the exports are async
 - File commands: `read_file`, `save_file`, `word_count`, `list_directory`, `get_home_dir`, `get_initial_file`, `delete_entry` (Trash → `~/.kaelio/trash` fallback), `copy_into_folder` (drag-to-copy into a sidebar folder), `read_binary_file` (raw bytes + MIME; loads relative images in the preview), `save_pasted_image` (pasted image → `assets/` beside the note), `open_in_default_app` (allow-listed extensions only: pdf and images; canonical regular file, else refused)
 - Export: one menu, **PDF / DOCX / PNG** (`exportPdf`, `exportDocx`, `exportPng`; native menu ids `export.pdf|docx|png`). PNG captures the preview (`html-to-image`). PDF/DOCX go through Rust `export_pdf`/`export_docx` and are Markdown-only (`exportAvailability`). Mermaid blocks are rendered to PNG in the frontend (`renderDiagramsForExport`) and passed as `diagrams`; Rust validates names/size/PNG signature (`write_diagrams`) and links them (`link_diagrams`) — no network. Pandoc runs Typst with `--root=/` (non-Windows) so absolute image paths resolve; PDF input disables `raw_attribute` so a note cannot inject Typst `#read`. Pandoc is **NOT bundled** — it's resolved from the system (`find_pandoc()`: Homebrew `/opt/homebrew/bin`, `/usr/local/bin`, then PATH). PDF/DOCX export requires `brew install pandoc`; PDF also requires `brew install typst`. MacTeX is not required. (Bundling pandoc as a Tauri sidecar was removed — exec'ing the build-machine path failed on end-user installs; `export_html` also removed.)
 - Git commands (git2 crate): `git_repo_info`, `git_status`, `git_diff_file`, `git_log`, `git_commit`, `git_push`, `git_pull`, `git_auto_sync`, `git_setup_sync`, `git_check_auth`, `git_init`, `git_discard_file`, `git_stage_file`, `git_file_at_commit`, `git_restore_file`, `git_conflict_info`, `git_resolve_conflict`
@@ -47,6 +47,8 @@ Release: push a `v*` tag to trigger `.github/workflows/release.yml` (builds macO
 - Credential handling: SSH agent → SSH key files → system `git credential fill` (HTTPS)
 - Plugins: dialog, process, opener, updater
 - `save_file` and `git_restore_file` write through `write_atomic` (temp file + rename); other writes are still plain `fs::write`
+- HTML script mode (macOS only): `kaelio-html` URI scheme (`register_uri_scheme_protocol`) serves `kaelio-html://localhost/<token>/<path>` from the one folder a token grants; commands `html_grant` (path of an .html/.htm → `{token, file_name}`, 32 grants max) and `html_revoke`; core logic `resolve_html_request` (decode once, canonicalise, outside folder → 403) and `html_content_type`. The frame is `sandbox="allow-scripts"` with no `allow-same-origin`; the response carries its own CSP; the app CSP only adds the scheme to `frame-src`. Default HTML preview stays a static `srcdoc` frame
+- Clipboard: `tauri-plugin-clipboard-manager` with only `clipboard-manager:allow-read-text`, for Paste as Plain Text (⇧⌘V fires no paste event in the webview)
 - Security: CSP is set in `tauri.conf.json` (`csp` / `devCsp`); `withGlobalTauri` is on, so anything written to `innerHTML` must pass `escapeHtml` or `sanitizeHtmlString` (inert `DOMParser` parse)
 
 ### Running and testing the dev app

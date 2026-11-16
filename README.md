@@ -38,10 +38,10 @@ Plus the full mx toolkit: Mermaid & KaTeX, Git sync, callouts, command palette, 
 - **Editor** — live split preview, multiple tabs, code folding, formatting toolbar, search & replace (`Cmd+F`), line numbers, soft wrap.
 - **Markdown** — Mermaid (click-to-zoom), KaTeX (`$…$`, `$$…$$`), YAML frontmatter, footnotes, wikilinks, anchor navigation, copy-heading-link.
 - **Files** — sidebar browser, context menu, file search (`Cmd+P`), content search (`Cmd+Shift+F`), command palette, breadcrumbs, recent files. Drag files or folders from Finder onto a sidebar folder to copy them in; drag onto the editor to open.
-- **Other files** — HTML renders in the preview; JSON, CSV, YAML and other text open as plain text; PDFs, images and SVG open in your default app.
+- **Other files** — HTML renders in the preview, with its scripts off until you click **Run scripts** (then it runs in an isolated frame; macOS); JSON, CSV, YAML and other text open as plain text; PDFs, images and SVG open in your default app.
 - **Git sync** — one-click setup, auto commit+push on save, auto-pull on open, conflict resolution, per-file history & snapshots, status dots.
 - **Obsidian-style** — callouts (`> [!tip]`), interactive checklists, tag pills, wikilinks.
-- **Writing** — auto-save, crash recovery, 60s version snapshots, external-change detection, image paste & lightbox.
+- **Writing** — smart paste (formatted text becomes Markdown, a URL over a selection becomes a link, `Cmd+Shift+V` pastes plain), table editing (`Tab`/`Shift+Tab` move between cells and re-align the table), auto-save, crash recovery, 60s version snapshots, one history list of commits and snapshots, external-change detection with the changed blocks highlighted after a reload, image paste & lightbox.
 - **Export** — one menu: PDF and DOCX via Pandoc (+ Typst for PDF), PNG from the preview; copy as formatted HTML / raw / plain.
 - **Platform** — multiple windows, real-time word/char count, weekly auto-update, file associations, macOS / Windows / Linux.
 
@@ -67,6 +67,8 @@ Grab the latest build from the [Releases page](https://github.com/kael-wanderer/
 | `Cmd+P` / `Cmd+Shift+F` | File search (quick open) / Search in files |
 | `Cmd+Shift+N` / `Cmd+W` | New window / Close tab |
 | `Cmd+=` / `Cmd+-` | Zoom in / out |
+| `Cmd+Shift+V` | Paste as plain text |
+| `Tab` / `Shift+Tab` in a table | Next / previous cell |
 
 ## Development
 
