@@ -86,7 +86,11 @@ export function decidePaste(input: {
   const { html, text, selection, inCode, forcePlain } = input;
   if (forcePlain || inCode || input.markdown === false) return { kind: "plain" };
   if (selection.length > 0 && isSingleUrl(text) && !isSingleUrl(selection)) {
-    return { kind: "link", text: `[${selection}](${text.trim()})` };
+    if (/[\r\n]/.test(selection)) return { kind: "plain" };
+    const label = selection.replace(/[[\]]/g, "\\$&");
+    const url = text.trim();
+    const target = /[()]/.test(url) ? `<${url}>` : url;
+    return { kind: "link", text: `[${label}](${target})` };
   }
   if (html !== null && html.length <= MAX_PASTE_HTML && hasStructure(html)) {
     const md = htmlToMarkdown(html);

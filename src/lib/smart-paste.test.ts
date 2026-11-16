@@ -20,6 +20,20 @@ test("url over a selection becomes a link", () => {
   assert.deepEqual(decidePaste({ ...base, text: "https://example.com/doc", selection: "the doc" }),
     { kind: "link", text: "[the doc](https://example.com/doc)" });
 });
+test("url over a selection spanning lines is plain", () => {
+  assert.deepEqual(decidePaste({ ...base, text: "https://a.com", selection: "one\ntwo" }), { kind: "plain" });
+  assert.deepEqual(decidePaste({ ...base, text: "https://a.com", selection: "one\r\ntwo" }), { kind: "plain" });
+});
+test("brackets in the link text are escaped", () => {
+  assert.deepEqual(decidePaste({ ...base, text: "https://a.com", selection: "see [1] and ]x[" }),
+    { kind: "link", text: "[see \\[1\\] and \\]x\\[](https://a.com)" });
+});
+test("a url with parentheses is wrapped in angle brackets", () => {
+  assert.deepEqual(decidePaste({ ...base, text: "https://en.wikipedia.org/wiki/Foo_(bar)", selection: "Foo" }),
+    { kind: "link", text: "[Foo](<https://en.wikipedia.org/wiki/Foo_(bar)>)" });
+  assert.deepEqual(decidePaste({ ...base, text: "https://a.com/x)y", selection: "x" }),
+    { kind: "link", text: "[x](<https://a.com/x)y>)" });
+});
 test("url over a selected url is plain", () => {
   assert.deepEqual(decidePaste({ ...base, text: "https://b.com", selection: "https://a.com" }), { kind: "plain" });
 });
