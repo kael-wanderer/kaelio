@@ -24,6 +24,7 @@ import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { migrateKeybindings, nativeMenuAccelerators } from "./lib/keybindings.ts";
 import { exportAvailability } from "./lib/export-availability.ts";
+import { findMermaidBlocks, applyDiagramPlaceholders, diagramName } from "./lib/mermaid-export.ts";
 import { fileKind } from "./lib/file-kind.ts";
 import { resolveLocalImagePath } from "./lib/image-src.ts";
 import { highlightCode } from "./lib/highlight.ts";
@@ -5803,6 +5804,55 @@ async function exportPng() {
   }
 }
 
+function exportNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Renders one Mermaid source to PNG off-screen, always on the light theme so it reads on a white page. */
+async function renderMermaidToPng(source: string, index: number): Promise<string> {
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:-20000px;top:0;width:1200px;background:#ffffff;color:#000000;";
+  const div = document.createElement("div");
+  div.className = "mermaid";
+  div.id = `kaelio-export-mermaid-${index}`;
+  div.style.background = "#ffffff";
+  div.textContent = source.includes("%%{init") ? source : `%%{init: {'theme':'default'}}%%\n${source}`;
+  host.appendChild(div);
+  document.body.appendChild(host);
+  try {
+    await mermaid.run({ nodes: [div] });
+    if (!div.querySelector("svg") || div.querySelector("[aria-roledescription='error']")) {
+      throw new Error("Mermaid did not produce a diagram");
+    }
+    const image = await captureNodeImage(div, `exportMermaid:${index}`, "image/png");
+    return dataUrlBase64(image.dataUrl);
+  } finally {
+    host.remove();
+  }
+}
+
+/** Replaces Mermaid blocks with local PNG diagrams for Pandoc. A block that fails stays as plain code. */
+async function renderDiagramsForExport(markdown: string): Promise<{ markdown: string; diagrams: { name: string; data_base64: string }[] }> {
+  const blocks = findMermaidBlocks(markdown);
+  if (blocks.length === 0) return { markdown, diagrams: [] };
+  const nonce = exportNonce();
+  const rendered: boolean[] = [];
+  const diagrams: { name: string; data_base64: string }[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    flashStatus(`Rendering diagram ${i + 1}/${blocks.length}…`, "var(--accent)");
+    try {
+      const data = await renderMermaidToPng(blocks[i].source, i);
+      diagrams.push({ name: diagramName(nonce, i), data_base64: data });
+      rendered.push(true);
+    } catch (err) {
+      console.warn(`Mermaid diagram ${i + 1} could not be rendered for export`, err);
+      rendered.push(false);
+    }
+  }
+  return { markdown: applyDiagramPlaceholders(markdown, blocks, rendered, nonce), diagrams };
+}
+
 async function exportPdf() {
   if (!exportAvailability(getActiveExportPath()).pdf) {
     flashStatus("PDF export is for Markdown files", "var(--warning)", 3000);
@@ -5815,10 +5865,12 @@ async function exportPdf() {
   if (!outputPath) return;
 
   try {
+    const prepared = await renderDiagramsForExport(getActiveMarkdownContent());
     flashStatus("Exporting PDF...", "var(--accent)");
     await invoke("export_pdf", {
-      markdownContent: getActiveMarkdownContent(),
+      markdownContent: prepared.markdown,
       outputPath,
+      diagrams: prepared.diagrams,
     });
     flashStatus(`PDF saved: ${outputPath.split("/").pop()}`, "var(--success)", 3000);
   } catch (e) {
@@ -5839,10 +5891,12 @@ async function exportDocx() {
   if (!outputPath) return;
 
   try {
+    const prepared = await renderDiagramsForExport(getActiveMarkdownContent());
     flashStatus("Exporting DOCX...", "var(--accent)");
     await invoke("export_docx", {
-      markdownContent: getActiveMarkdownContent(),
+      markdownContent: prepared.markdown,
       outputPath,
+      diagrams: prepared.diagrams,
     });
     flashStatus(`DOCX saved: ${outputPath.split("/").pop()}`, "var(--success)", 3000);
   } catch (e) {

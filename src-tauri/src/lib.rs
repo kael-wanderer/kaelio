@@ -51,7 +51,7 @@ fn raise_file_descriptor_limit() {}
 
 /// Apps launched from Finder/LaunchServices can start with stdin/stdout/stderr
 /// (fds 0/1/2) closed. Later file opens then take those low fd numbers, and when
-/// we spawn a child process (pandoc, typst, curl) the stdio redirection collides
+/// we spawn a child process (pandoc, typst) the stdio redirection collides
 /// and `posix_spawn` fails with "Bad file descriptor (os error 9)". Guarantee
 /// 0/1/2 are valid by pointing any closed ones at /dev/null before anything else.
 #[cfg(unix)]
@@ -79,7 +79,7 @@ fn ensure_std_fds() {}
 /// When launched from a dev shell, the app can inherit thousands of open file
 /// descriptors (e.g. another project's node_modules held by a running dev
 /// server). That bloated descriptor table later breaks child-process spawning
-/// (pandoc/typst/curl) with "Bad file descriptor (os error 9)" or, under a finite
+/// (pandoc/typst) with "Bad file descriptor (os error 9)" or, under a finite
 /// limit, "too many open files (os error 24)". Close every inherited descriptor
 /// above stderr at startup, before Tauri opens anything of its own. Reading
 /// /dev/fd touches only descriptors that are actually open.
@@ -117,7 +117,7 @@ fn close_inherited_fds() {}
 /// Rust may use macOS `posix_spawn` for simple `Command`s. Finder-launched apps
 /// can still hit EBADF inside that fast path even after fd 0/1/2 and RLIMIT are
 /// sane. A no-op `pre_exec` forces the older fork/exec path for fragile external
-/// tools such as pandoc and curl.
+/// tools such as pandoc and typst.
 #[cfg(unix)]
 fn force_fork_exec(command: &mut Command) {
     use std::os::unix::process::CommandExt;
@@ -1191,24 +1191,82 @@ fn delete_recovery(recovery_path: String) -> Result<(), String> {
     Ok(())
 }
 
-fn base64url_encode(data: &[u8]) -> String {
-    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    let mut result = String::new();
-    for chunk in data.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
-        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
-        let triple = (b0 << 16) | (b1 << 8) | b2;
-        result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
-        result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
-        if chunk.len() > 1 {
-            result.push(CHARS[((triple >> 6) & 0x3F) as usize] as char);
-        }
-        if chunk.len() > 2 {
-            result.push(CHARS[(triple & 0x3F) as usize] as char);
-        }
+/// A Mermaid diagram the frontend rendered to PNG for PDF/DOCX export.
+#[derive(Deserialize)]
+struct DiagramImage {
+    name: String,
+    data_base64: String,
+}
+
+const MAX_DIAGRAMS: usize = 200;
+const MAX_DIAGRAM_BYTES: usize = 10 * 1024 * 1024;
+const PNG_SIGNATURE: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+/// `kaelio-diagram-<16 lowercase hex>-<1..4 digits>.png`, nothing else (no separators, no other extension).
+fn is_valid_diagram_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix("kaelio-diagram-") else { return false };
+    let Some(rest) = rest.strip_suffix(".png") else { return false };
+    let Some((nonce, index)) = rest.split_once('-') else { return false };
+    nonce.len() == 16
+        && nonce.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        && (1..=4).contains(&index.len())
+        && index.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn decode_diagram(diagram: &DiagramImage) -> Option<Vec<u8>> {
+    if !is_valid_diagram_name(&diagram.name) {
+        return None;
     }
-    result
+    // Reject before decoding: base64 is 4 chars per 3 bytes.
+    if diagram.data_base64.len() > MAX_DIAGRAM_BYTES / 3 * 4 + 8 {
+        return None;
+    }
+    let bytes = general_purpose::STANDARD.decode(&diagram.data_base64).ok()?;
+    if bytes.len() > MAX_DIAGRAM_BYTES || !bytes.starts_with(&PNG_SIGNATURE) {
+        return None;
+    }
+    Some(bytes)
+}
+
+/// Writes validated diagram PNGs into `dir`. Any invalid entry fails the whole call and
+/// removes the files this call already wrote.
+fn write_diagrams(dir: &Path, diagrams: &[DiagramImage]) -> Result<Vec<(String, PathBuf)>, String> {
+    use std::io::Write;
+    let invalid = || "Invalid diagram data".to_string();
+    if diagrams.len() > MAX_DIAGRAMS {
+        return Err(invalid());
+    }
+    let mut written: Vec<(String, PathBuf)> = Vec::new();
+    let result = (|| {
+        for diagram in diagrams {
+            let bytes = decode_diagram(diagram).ok_or_else(invalid)?;
+            let path = dir.join(&diagram.name);
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .map_err(|_| invalid())?;
+            written.push((diagram.name.clone(), path));
+            file.write_all(&bytes).map_err(|_| invalid())?;
+        }
+        Ok(())
+    })();
+    if let Err(e) = result {
+        for (_, path) in &written {
+            let _ = fs::remove_file(path);
+        }
+        return Err(e);
+    }
+    Ok(written)
+}
+
+/// Points each `](<name>)` image target at the absolute path of the written diagram.
+fn link_diagrams(markdown: &str, written: &[(String, PathBuf)]) -> String {
+    let mut out = markdown.to_string();
+    for (name, path) in written {
+        out = out.replace(&format!("]({name})"), &format!("]({})", path.to_string_lossy()));
+    }
+    out
 }
 
 /// Locate a usable pandoc. Kaelio does NOT bundle pandoc — users install it via
@@ -1382,12 +1440,13 @@ fn style_docx_tables(path: &Path) -> Result<(), String> {
 async fn export_pdf(
     markdown_content: String,
     output_path: String,
+    diagrams: Vec<DiagramImage>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
     // Run all blocking work on a separate thread to avoid blocking async runtime
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let result = export_pdf_blocking(markdown_content, output_path, app);
+        let result = export_pdf_blocking(markdown_content, output_path, diagrams, app);
         let _ = tx.send(result);
     });
     rx.recv().map_err(|e| format!("Thread error: {}", e))?
@@ -1396,6 +1455,7 @@ async fn export_pdf(
 fn export_pdf_blocking(
     markdown_content: String,
     output_path: String,
+    diagrams: Vec<DiagramImage>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
     use std::io::Write;
@@ -1448,92 +1508,19 @@ fn export_pdf_blocking(
         }
     };
 
-    // Step 1: Extract mermaid blocks, render to PNG via mermaid.ink API
-    let mut processed = String::new();
-    let mut mermaid_idx = 0u32;
-    let mut in_mermaid = false;
-    let mut mermaid_buf = String::new();
-    let mut in_code = false;
-    let mut code_lang = String::new();
-
-    // Count mermaid blocks for progress
-    let mermaid_total = markdown_content
-        .lines()
-        .filter(|l| l.trim() == "```mermaid")
-        .count();
-
-    for line in markdown_content.lines() {
-        if line.starts_with("```") && !in_code {
-            in_code = true;
-            code_lang = line.trim_start_matches('`').trim().to_string();
-            if code_lang == "mermaid" {
-                in_mermaid = true;
-                mermaid_buf.clear();
-                continue;
-            }
-            processed.push_str(line);
-            processed.push('\n');
-        } else if line.starts_with("```") && in_code {
-            in_code = false;
-            if in_mermaid {
-                let _ = app.emit(
-                    "pdf-progress",
-                    format!("Rendering diagram {}/{}…", mermaid_idx + 1, mermaid_total),
-                );
-
-                let png_file = tmp_dir.join(format!("diagram_{}.jpg", mermaid_idx));
-                let encoded = base64url_encode(mermaid_buf.trim().as_bytes());
-                let url = format!("https://mermaid.ink/img/{}", encoded);
-
-                let mut curl_command = Command::new("curl");
-                force_fork_exec(&mut curl_command);
-                let download = curl_command
-                    .args([
-                        "-sL",
-                        "--max-time",
-                        "30",
-                        "-o",
-                        png_file.to_str().unwrap(),
-                        &url,
-                    ])
-                    .env("PATH", &path_env)
-                    .output();
-
-                if let Ok(r) = download {
-                    if r.status.success()
-                        && png_file.exists()
-                        && fs::metadata(&png_file)
-                            .map(|m| m.len() > 100)
-                            .unwrap_or(false)
-                    {
-                        processed
-                            .push_str(&format!("![diagram]({})\n", png_file.to_string_lossy()));
-                    } else {
-                        processed.push_str("```\n");
-                        processed.push_str(&mermaid_buf);
-                        processed.push_str("```\n");
-                    }
-                } else {
-                    processed.push_str("```\n");
-                    processed.push_str(&mermaid_buf);
-                    processed.push_str("```\n");
-                }
-
-                in_mermaid = false;
-                mermaid_idx += 1;
-            } else {
-                processed.push_str(line);
-                processed.push('\n');
-            }
-            code_lang.clear();
-        } else if in_mermaid {
-            mermaid_buf.push_str(line);
-            mermaid_buf.push('\n');
-        } else {
-            processed.push_str(line);
-            processed.push('\n');
-        }
+    // Step 1: Mermaid diagrams were rendered locally by the frontend; write them and
+    // point the placeholders at them. Nothing leaves the machine.
+    if !diagrams.is_empty() {
+        let _ = app.emit("pdf-progress", "Writing diagrams…");
     }
+    let written = match write_diagrams(&tmp_dir, &diagrams) {
+        Ok(w) => w,
+        Err(e) => {
+            let _ = fs::remove_dir_all(&tmp_dir);
+            return Err(e);
+        }
+    };
+    let processed = link_diagrams(&markdown_content, &written);
 
     // Step 2: Write processed input
     let mut f = fs::File::create(&tmp_input).map_err(|e| e.to_string())?;
@@ -1622,6 +1609,7 @@ fn export_pdf_blocking(
 async fn export_docx(
     markdown_content: String,
     output_path: String,
+    diagrams: Vec<DiagramImage>,
     _app: tauri::AppHandle,
 ) -> Result<String, String> {
     use std::io::Write;
@@ -1632,6 +1620,16 @@ async fn export_docx(
             let tmp_dir = unique_export_dir("kaelio_export_docx");
             let _ = fs::create_dir_all(&tmp_dir);
             let tmp_md = tmp_dir.join("export.md");
+
+            // Mermaid diagrams arrive pre-rendered from the frontend (no network).
+            let written = match write_diagrams(&tmp_dir, &diagrams) {
+                Ok(w) => w,
+                Err(e) => {
+                    let _ = fs::remove_dir_all(&tmp_dir);
+                    return Err(e);
+                }
+            };
+            let markdown_content = link_diagrams(&markdown_content, &written);
 
             let mut f = fs::File::create(&tmp_md).map_err(|e| e.to_string())?;
             f.write_all(markdown_content.as_bytes())
@@ -3654,5 +3652,112 @@ mod audit_tests {
         fs::create_dir_all(&sub).unwrap();
         assert!(default_app_target(&sub).is_err());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    const PNG_SIG: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    fn png_b64(extra: &[u8]) -> String {
+        let mut bytes = PNG_SIG.to_vec();
+        bytes.extend_from_slice(extra);
+        general_purpose::STANDARD.encode(bytes)
+    }
+
+    fn diagram(name: &str, data_base64: String) -> DiagramImage {
+        DiagramImage { name: name.to_string(), data_base64 }
+    }
+
+    const GOOD0: &str = "kaelio-diagram-0123456789abcdef-0.png";
+    const GOOD1: &str = "kaelio-diagram-0123456789abcdef-1.png";
+
+    #[test]
+    fn write_diagrams_writes_valid_png_and_returns_its_path() {
+        let dir = scratch_dir("diagrams_ok");
+        let written = write_diagrams(&dir, &[diagram(GOOD0, png_b64(b"body"))]).unwrap();
+        assert_eq!(written.len(), 1);
+        assert_eq!(written[0].0, GOOD0);
+        assert_eq!(written[0].1, dir.join(GOOD0));
+        assert!(fs::read(&written[0].1).unwrap().starts_with(&PNG_SIG));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_diagrams_rejects_name_with_path_separator() {
+        let dir = scratch_dir("diagrams_sep");
+        let inner = dir.join("inner");
+        fs::create_dir_all(&inner).unwrap();
+        let bad = format!("../{GOOD0}");
+        assert_eq!(
+            write_diagrams(&inner, &[diagram(&bad, png_b64(b"x"))]).unwrap_err(),
+            "Invalid diagram data"
+        );
+        assert!(!dir.join(GOOD0).exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_diagrams_rejects_name_not_matching_pattern() {
+        let dir = scratch_dir("diagrams_pattern");
+        for bad in [
+            "x.png",
+            "kaelio-diagram-XYZ-0.png",
+            "kaelio-diagram-0123456789abcdef-0.jpg",
+            "kaelio-diagram-0123456789ABCDEF-0.png",
+            "kaelio-diagram-0123456789abcdef-12345.png",
+            "kaelio-diagram-0123456789abcdef-.png",
+        ] {
+            assert!(write_diagrams(&dir, &[diagram(bad, png_b64(b"x"))]).is_err(), "{bad}");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_diagrams_rejects_non_png_bytes() {
+        let dir = scratch_dir("diagrams_notpng");
+        let jpeg = general_purpose::STANDARD.encode([0xFF, 0xD8, 0xFF, 0xE0, 0, 0, 0, 0]);
+        assert!(write_diagrams(&dir, &[diagram(GOOD0, jpeg)]).is_err());
+        assert!(write_diagrams(&dir, &[diagram(GOOD0, "not base64!".to_string())]).is_err());
+        assert!(!dir.join(GOOD0).exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_diagrams_rejects_oversize() {
+        let dir = scratch_dir("diagrams_big");
+        let big = png_b64(&vec![0u8; 10 * 1024 * 1024]);
+        assert!(write_diagrams(&dir, &[diagram(GOOD0, big)]).is_err());
+        assert!(!dir.join(GOOD0).exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_diagrams_rejects_too_many() {
+        let dir = scratch_dir("diagrams_many");
+        let many: Vec<DiagramImage> = (0..201)
+            .map(|i| diagram(&format!("kaelio-diagram-0123456789abcdef-{i}.png"), png_b64(b"x")))
+            .collect();
+        assert!(write_diagrams(&dir, &many).is_err());
+        assert!(fs::read_dir(&dir).unwrap().next().is_none());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_diagrams_removes_earlier_files_when_a_later_one_fails() {
+        let dir = scratch_dir("diagrams_rollback");
+        let res = write_diagrams(
+            &dir,
+            &[diagram(GOOD0, png_b64(b"ok")), diagram(GOOD1, "AAAA".to_string())],
+        );
+        assert!(res.is_err());
+        assert!(!dir.join(GOOD0).exists());
+        assert!(!dir.join(GOOD1).exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn link_diagrams_replaces_only_listed_names() {
+        let md = format!("![diagram]({GOOD0}) and ![x](other.png)");
+        let abs = PathBuf::from("/tmp/kaelio_export_1/").join(GOOD0);
+        let out = link_diagrams(&md, &[(GOOD0.to_string(), abs.clone())]);
+        assert_eq!(out, format!("![diagram]({}) and ![x](other.png)", abs.to_string_lossy()));
     }
 }
